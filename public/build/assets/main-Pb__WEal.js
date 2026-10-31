@@ -12695,7 +12695,7 @@ function deserializeFormData(data) {
   }
   return fd;
 }
-const API_URL = "http://localhost:8000/api";
+const API_URL = "https://orangered-oryx-492151.hostingersite.com/api";
 const headers = () => ({
   Accept: "application/json",
   "Content-Type": "application/json",
@@ -48236,4 +48236,4 @@ startSyncEngine();
 ReactDOM.createRoot(document.getElementById("root")).render(
   /* @__PURE__ */ jsxRuntimeExports.jsx(React.StrictMode, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(App, {}) })
 );
-//# sourceMappingURL=main-BQ4QdTAR.js.map
+//# sourceMappingURL=main-Pb__WEal.js.map
