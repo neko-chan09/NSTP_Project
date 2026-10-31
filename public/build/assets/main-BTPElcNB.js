@@ -38512,7 +38512,8 @@ const CreateAttendanceSession = () => {
     scheduled_start: getDefaultStart(),
     scheduled_end: getDefaultEnd(),
     grace_period_minutes: 15,
-    require_location: false,
+    require_location: true,
+    // location is mandatory
     latitude: null,
     longitude: null,
     geofence_radius: 100,
@@ -38584,22 +38585,6 @@ const CreateAttendanceSession = () => {
       { enableHighAccuracy: true }
     );
   };
-  reactExports.useEffect(() => {
-    if (formData.require_location && !formData.latitude) {
-      setFormData((prev) => ({
-        ...prev,
-        latitude: 8.521826076323629,
-        longitude: 124.57249491758405
-      }));
-    }
-    if (!formData.require_location && formData.latitude) {
-      setFormData((prev) => ({
-        ...prev,
-        latitude: null,
-        longitude: null
-      }));
-    }
-  }, [formData.require_location]);
   const getComponentLabel2 = (component) => {
     const labels = {
       cwts: "CWTS",
@@ -38619,13 +38604,22 @@ const CreateAttendanceSession = () => {
   const handleChange = (e2) => {
     const { name, value, type } = e2.target;
     const checked = e2.target.checked;
+    const numericFields = ["geofence_radius", "grace_period_minutes"];
     setFormData((prev) => ({
       ...prev,
-      [name]: type === "checkbox" ? checked : value
+      [name]: type === "checkbox" ? checked : numericFields.includes(name) ? value === "" ? 0 : parseInt(value, 10) : value
     }));
   };
   const handleSubmit = async (e2) => {
     e2.preventDefault();
+    if (!hasLocation) {
+      zt.error("Please pick and confirm a location first");
+      return;
+    }
+    if (formData.geofence_radius < 10) {
+      zt.error("Geofence radius must be at least 10 meters");
+      return;
+    }
     if (!formData.component) {
       zt.error(
         "No component assigned to your account. Please contact an administrator."
@@ -38646,16 +38640,6 @@ const CreateAttendanceSession = () => {
       zt.error("Start time must be in the future");
       return;
     }
-    if (formData.require_location) {
-      if (!formData.latitude || !formData.longitude) {
-        zt.error("Please set a location for attendance");
-        return;
-      }
-      if (formData.geofence_radius < 10) {
-        zt.error("Geofence radius must be at least 10 meters");
-        return;
-      }
-    }
     setIsSubmitting(true);
     try {
       const descriptionValue = formData.description ? formData.description : null;
@@ -38667,7 +38651,7 @@ const CreateAttendanceSession = () => {
         scheduled_end: formData.scheduled_end,
         grace_period_minutes: formData.grace_period_minutes,
         is_scheduled: true,
-        require_location: formData.require_location,
+        require_location: true,
         latitude: formData.latitude,
         longitude: formData.longitude,
         geofence_radius: formData.geofence_radius
@@ -38678,8 +38662,8 @@ const CreateAttendanceSession = () => {
       await createMut.mutateAsync(payload);
       const startTime = new Date(formData.scheduled_start).toLocaleString();
       const endTime = new Date(formData.scheduled_end).toLocaleString();
-      const locationMessage = formData.require_location ? `
-📍 Location restricted: ${formData.geofence_radius}m radius` : "";
+      const locationMessage = `
+📍 Location restricted: ${formData.geofence_radius}m radius`;
       zt.success(
         `Attendance session scheduled!
 📅 ${startTime} - ${endTime}${locationMessage}`
@@ -38730,7 +38714,8 @@ const CreateAttendanceSession = () => {
   const lateCutoff = new Date(
     new Date(formData.scheduled_start).getTime() + (formData.grace_period_minutes || 15) * 6e4
   ).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  const canSubmit = !isSubmitting && !!formData.component && !!formData.section;
+  const hasLocation = formData.latitude !== null && formData.longitude !== null && !isNaN(formData.latitude) && !isNaN(formData.longitude);
+  const canSubmit = !isSubmitting && hasLocation && !!formData.component && !!formData.section;
   const SectionHeading = ({
     step,
     icon,
@@ -38772,7 +38757,7 @@ const CreateAttendanceSession = () => {
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "w-12 h-12 rounded-xl bg-gradient-to-br from-gold-400 to-gold-600 flex items-center justify-center text-white shadow-sm shrink-0", children: /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-calendar-plus text-lg" }) }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "min-w-0", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("h1", { className: "text-3xl font-bold text-navy-900 tracking-tight", children: "Schedule Attendance Session" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-slate-500 mt-1", children: preselectedClass ? `Creating a session for ${preselectedClass.name}` : "Set the time window and optional location rules for student check-in" })
+          /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-slate-500 mt-1", children: preselectedClass ? `Creating a session for ${preselectedClass.name}` : "Pick the venue first, then set the time window for student check-in" })
         ] })
       ] }),
       preselectedClass && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2.5 shrink-0", children: [
@@ -38802,243 +38787,26 @@ const CreateAttendanceSession = () => {
                 SectionHeading,
                 {
                   step: 1,
-                  icon: "fa-info-circle",
-                  title: "Session details",
-                  desc: "Which group of students is this attendance for?"
-                }
-              ),
-              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid grid-cols-1 md:grid-cols-2 gap-5 lg:pl-[50px]", children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "block text-sm font-medium text-slate-700 mb-1.5", children: [
-                    "Component ",
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-red-500", children: "*" })
-                  ] }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "relative", children: [
-                    /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                      "select",
-                      {
-                        name: "component",
-                        value: formData.component,
-                        onChange: handleChange,
-                        className: "input pr-24 bg-slate-50 cursor-not-allowed text-slate-600",
-                        disabled: true,
-                        children: [
-                          /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "", children: "Select Component" }),
-                          /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "cwts", children: "CWTS" }),
-                          /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "rotc", children: "ROTC" }),
-                          /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "lts", children: "LTS" })
-                        ]
-                      }
-                    ),
-                    formData.component && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-                      "span",
-                      {
-                        className: `inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium text-white ${getComponentColor(
-                          formData.component
-                        )}`,
-                        children: getComponentLabel2(formData.component)
-                      }
-                    ) })
-                  ] }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mt-1.5 text-xs text-slate-400", children: "Auto-detected from your faculty profile" })
-                ] }),
-                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "block text-sm font-medium text-slate-700 mb-1.5", children: [
-                    "Section ",
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-red-500", children: "*" })
-                  ] }),
-                  sectionsLoading ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2 h-10 text-sm text-slate-500", children: [
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-spinner fa-spin" }),
-                    "Loading sections…"
-                  ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
-                    /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                      "select",
-                      {
-                        name: "section",
-                        value: formData.section,
-                        onChange: handleChange,
-                        className: "input",
-                        required: true,
-                        disabled: sections.length === 0,
-                        children: [
-                          /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "", children: "Select Section" }),
-                          sections.map((section) => /* @__PURE__ */ jsxRuntimeExports.jsxs("option", { value: section, children: [
-                            "Section ",
-                            section
-                          ] }, section))
-                        ]
-                      }
-                    ),
-                    sections.length === 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "mt-1.5 text-xs text-amber-600 flex items-center gap-1.5", children: [
-                      /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-exclamation-triangle" }),
-                      "No sections found. Please add sections first."
-                    ] }),
-                    formData.section && /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "mt-1.5 text-xs text-emerald-600 flex items-center gap-1.5", children: [
-                      /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-check-circle" }),
-                      "Selected: Section ",
-                      formData.section
-                    ] })
-                  ] })
-                ] }),
-                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "md:col-span-2", children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "block text-sm font-medium text-slate-700 mb-1.5", children: [
-                    "Description",
-                    " ",
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-slate-400 font-normal", children: "(optional)" })
-                  ] }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx(
-                    "textarea",
-                    {
-                      name: "description",
-                      value: formData.description,
-                      onChange: handleChange,
-                      placeholder: "e.g. Morning formation, Training Day 1, Field activity…",
-                      className: "input min-h-[96px] resize-y",
-                      rows: 3
-                    }
-                  )
-                ] })
-              ] })
-            ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "py-10", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                SectionHeading,
-                {
-                  step: 2,
-                  icon: "fa-clock",
-                  title: "Schedule",
-                  desc: "When can students check in, and when are they marked late?"
-                }
-              ),
-              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-6 lg:pl-[50px]", children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid grid-cols-1 md:grid-cols-2 gap-5", children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                    /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "block text-sm font-medium text-slate-700 mb-1.5", children: [
-                      "Start date & time ",
-                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-red-500", children: "*" })
-                    ] }),
-                    /* @__PURE__ */ jsxRuntimeExports.jsx(
-                      "input",
-                      {
-                        type: "datetime-local",
-                        name: "scheduled_start",
-                        value: formData.scheduled_start,
-                        onChange: handleChange,
-                        className: "input",
-                        required: true,
-                        min: (/* @__PURE__ */ new Date()).toISOString().slice(0, 16)
-                      }
-                    )
-                  ] }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                    /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "block text-sm font-medium text-slate-700 mb-1.5", children: [
-                      "End date & time ",
-                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-red-500", children: "*" })
-                    ] }),
-                    /* @__PURE__ */ jsxRuntimeExports.jsx(
-                      "input",
-                      {
-                        type: "datetime-local",
-                        name: "scheduled_end",
-                        value: formData.scheduled_end,
-                        onChange: handleChange,
-                        className: "input",
-                        required: true,
-                        min: formData.scheduled_start
-                      }
-                    )
-                  ] })
-                ] }),
-                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "block text-sm font-medium text-slate-700 mb-2", children: [
-                    "Quick duration",
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "ml-1.5 text-xs font-normal text-slate-400", children: "sets End from current Start" })
-                  ] }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex flex-wrap gap-2", children: [
-                    { label: "30 min", minutes: 30 },
-                    { label: "1 hr", minutes: 60 },
-                    { label: "1.5 hr", minutes: 90 },
-                    { label: "2 hrs", minutes: 120 },
-                    { label: "3 hrs", minutes: 180 },
-                    { label: "4 hrs", minutes: 240 }
-                  ].map((preset) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                    "button",
-                    {
-                      type: "button",
-                      onClick: () => applyDurationPreset(preset.minutes),
-                      disabled: isSubmitting,
-                      className: "inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-medium\r\n                                 bg-white text-slate-700 border border-slate-200\r\n                                 hover:bg-gold-50 hover:border-gold-300 hover:text-gold-800\r\n                                 focus:outline-none focus:ring-2 focus:ring-gold-200\r\n                                 disabled:opacity-50 transition-colors",
-                      children: [
-                        /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-bolt text-[10px] opacity-60" }),
-                        preset.label
-                      ]
-                    },
-                    preset.minutes
-                  )) })
-                ] }),
-                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "block text-sm font-medium text-slate-700 mb-1.5", children: "Grace period" }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-wrap items-center gap-4", children: [
-                    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "relative", children: [
-                      /* @__PURE__ */ jsxRuntimeExports.jsx(
-                        "input",
-                        {
-                          type: "number",
-                          name: "grace_period_minutes",
-                          value: formData.grace_period_minutes,
-                          onChange: handleChange,
-                          min: 0,
-                          max: 120,
-                          className: "input w-32 pr-12"
-                        }
-                      ),
-                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 pointer-events-none", children: "min" })
-                    ] }),
-                    /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-sm text-slate-500 flex-1 min-w-[220px]", children: [
-                      "Check-ins within this window after start are marked",
-                      " ",
-                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-medium text-emerald-600", children: "Present" }),
-                      ". After that →",
-                      " ",
-                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-medium text-amber-600", children: "Late" }),
-                      "."
-                    ] })
-                  ] })
-                ] })
-              ] })
-            ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "pt-10", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                SectionHeading,
-                {
-                  step: 3,
                   icon: "fa-map-marker-alt",
-                  title: "Location restriction",
-                  desc: "Optional — require students to be at the venue to check in.",
-                  right: /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "relative inline-flex items-center cursor-pointer shrink-0 mt-1", children: [
-                    /* @__PURE__ */ jsxRuntimeExports.jsx(
-                      "input",
-                      {
-                        type: "checkbox",
-                        id: "require_location",
-                        name: "require_location",
-                        checked: formData.require_location,
-                        onChange: handleChange,
-                        className: "sr-only peer"
-                      }
-                    ),
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-gold-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gold-500" }),
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "sr-only", children: "Require location" })
+                  title: "Pick the venue location",
+                  desc: "Required — choose and confirm where students must be to check in.",
+                  right: hasLocation ? /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0", children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-check-circle" }),
+                    "Location set"
+                  ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-red-50 text-red-600 border border-red-200 shrink-0", children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-exclamation-circle" }),
+                    "Required"
                   ] })
                 }
               ),
-              !formData.require_location ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "lg:pl-[50px]", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-3 p-4 rounded-xl border border-dashed border-slate-300 text-sm text-slate-500", children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-location-dot text-slate-400" }),
-                "Location check is off — students can check in from anywhere during the session."
-              ] }) }) : /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-5 lg:pl-[50px] animate-in fade-in duration-200", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-5 lg:pl-[50px]", children: [
                 /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-start gap-3 p-3.5 rounded-xl bg-blue-50/70 border border-blue-100", children: [
                   /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-info-circle text-blue-500 mt-0.5 shrink-0" }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-blue-700 leading-relaxed", children: "Choose the venue on the map or use your current position. Only students within the radius will be allowed to mark attendance." })
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-sm text-blue-700 leading-relaxed", children: [
+                    "Click the map (or search / use your current position), then press ",
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("strong", { children: "Confirm Location" }),
+                    ". The rest of the form unlocks once a location is confirmed. Only students within the radius can mark attendance."
+                  ] })
                 ] }),
                 /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid grid-cols-1 xl:grid-cols-5 gap-6", children: [
                   /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "xl:col-span-3 rounded-xl overflow-hidden border border-slate-200", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -39059,7 +38827,7 @@ const CreateAttendanceSession = () => {
                         type: "button",
                         onClick: handleGetCurrentLocation,
                         disabled: isGettingLocation,
-                        className: "w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl\r\n                                 text-sm font-medium text-slate-700 bg-white border border-slate-200\r\n                                 hover:bg-slate-50 hover:border-slate-300\r\n                                 focus:outline-none focus:ring-2 focus:ring-slate-200\r\n                                 disabled:opacity-60 transition-colors",
+                        className: "w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl\r\n                               text-sm font-medium text-slate-700 bg-white border border-slate-200\r\n                               hover:bg-slate-50 hover:border-slate-300\r\n                               focus:outline-none focus:ring-2 focus:ring-slate-200\r\n                               disabled:opacity-60 transition-colors",
                         children: [
                           /* @__PURE__ */ jsxRuntimeExports.jsx(
                             "i",
@@ -39087,10 +38855,10 @@ const CreateAttendanceSession = () => {
                           max: 500,
                           step: 10,
                           value: formData.geofence_radius,
-                          onChange: (e2) => setFormData({
-                            ...formData,
+                          onChange: (e2) => setFormData((prev) => ({
+                            ...prev,
                             geofence_radius: parseInt(e2.target.value)
-                          }),
+                          })),
                           className: "w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-gold-500"
                         }
                       ),
@@ -39114,7 +38882,7 @@ const CreateAttendanceSession = () => {
                         /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-slate-500", children: "Students inside this circle can check in" })
                       ] })
                     ] }),
-                    formData.latitude && formData.longitude && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between gap-3 p-4 rounded-xl bg-emerald-50 border border-emerald-100", children: [
+                    hasLocation ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between gap-3 p-4 rounded-xl bg-emerald-50 border border-emerald-100", children: [
                       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "min-w-0", children: [
                         /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-sm font-medium text-emerald-800 flex items-center gap-2", children: [
                           /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-check-circle" }),
@@ -39133,18 +38901,247 @@ const CreateAttendanceSession = () => {
                           href: `https://www.google.com/maps?q=${formData.latitude},${formData.longitude}`,
                           target: "_blank",
                           rel: "noopener noreferrer",
-                          className: "shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium\r\n                                     text-emerald-800 bg-emerald-100 hover:bg-emerald-200 transition-colors",
+                          className: "shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium\r\n                                   text-emerald-800 bg-emerald-100 hover:bg-emerald-200 transition-colors",
                           children: [
                             /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-external-link-alt" }),
                             "Maps"
                           ]
                         }
                       )
+                    ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-start gap-3 p-4 rounded-xl bg-red-50 border border-red-100", children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-lock text-red-400 mt-0.5" }),
+                      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-red-700", children: "No location confirmed yet. You can't schedule a session until you pick one." })
                     ] })
                   ] })
                 ] })
               ] })
-            ] })
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs(
+              "fieldset",
+              {
+                disabled: !hasLocation,
+                className: `min-w-0 border-0 m-0 p-0 transition-opacity ${hasLocation ? "" : "opacity-50 pointer-events-none select-none"}`,
+                "aria-disabled": !hasLocation,
+                children: [
+                  !hasLocation && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "pt-8 pb-2 flex items-center gap-2 text-sm text-slate-500", children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-lock text-slate-400" }),
+                    "Confirm a location above to unlock the steps below."
+                  ] }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "divide-y divide-slate-200", children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "pt-10 pb-10", children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        SectionHeading,
+                        {
+                          step: 2,
+                          icon: "fa-info-circle",
+                          title: "Session details",
+                          desc: "Which group of students is this attendance for?"
+                        }
+                      ),
+                      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid grid-cols-1 md:grid-cols-2 gap-5 lg:pl-[50px]", children: [
+                        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "block text-sm font-medium text-slate-700 mb-1.5", children: [
+                            "Component ",
+                            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-red-500", children: "*" })
+                          ] }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "relative", children: [
+                            /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                              "select",
+                              {
+                                name: "component",
+                                value: formData.component,
+                                onChange: handleChange,
+                                className: "input pr-24 bg-slate-50 cursor-not-allowed text-slate-600",
+                                disabled: true,
+                                children: [
+                                  /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "", children: "Select Component" }),
+                                  /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "cwts", children: "CWTS" }),
+                                  /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "rotc", children: "ROTC" }),
+                                  /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "lts", children: "LTS" })
+                                ]
+                              }
+                            ),
+                            formData.component && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                              "span",
+                              {
+                                className: `inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium text-white ${getComponentColor(
+                                  formData.component
+                                )}`,
+                                children: getComponentLabel2(formData.component)
+                              }
+                            ) })
+                          ] }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "mt-1.5 text-xs text-slate-400", children: "Auto-detected from your faculty profile" })
+                        ] }),
+                        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "block text-sm font-medium text-slate-700 mb-1.5", children: [
+                            "Section ",
+                            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-red-500", children: "*" })
+                          ] }),
+                          sectionsLoading ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2 h-10 text-sm text-slate-500", children: [
+                            /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-spinner fa-spin" }),
+                            "Loading sections…"
+                          ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+                            /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                              "select",
+                              {
+                                name: "section",
+                                value: formData.section,
+                                onChange: handleChange,
+                                className: "input",
+                                required: true,
+                                disabled: sections.length === 0,
+                                children: [
+                                  /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "", children: "Select Section" }),
+                                  sections.map((section) => /* @__PURE__ */ jsxRuntimeExports.jsxs("option", { value: section, children: [
+                                    "Section ",
+                                    section
+                                  ] }, section))
+                                ]
+                              }
+                            ),
+                            sections.length === 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "mt-1.5 text-xs text-amber-600 flex items-center gap-1.5", children: [
+                              /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-exclamation-triangle" }),
+                              "No sections found. Please add sections first."
+                            ] }),
+                            formData.section && /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "mt-1.5 text-xs text-emerald-600 flex items-center gap-1.5", children: [
+                              /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-check-circle" }),
+                              "Selected: Section ",
+                              formData.section
+                            ] })
+                          ] })
+                        ] }),
+                        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "md:col-span-2", children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "block text-sm font-medium text-slate-700 mb-1.5", children: [
+                            "Description",
+                            " ",
+                            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-slate-400 font-normal", children: "(optional)" })
+                          ] }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsx(
+                            "textarea",
+                            {
+                              name: "description",
+                              value: formData.description,
+                              onChange: handleChange,
+                              placeholder: "e.g. Morning formation, Training Day 1, Field activity…",
+                              className: "input min-h-[96px] resize-y",
+                              rows: 3
+                            }
+                          )
+                        ] })
+                      ] })
+                    ] }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "pt-10", children: [
+                      /* @__PURE__ */ jsxRuntimeExports.jsx(
+                        SectionHeading,
+                        {
+                          step: 3,
+                          icon: "fa-clock",
+                          title: "Schedule",
+                          desc: "When can students check in, and when are they marked late?"
+                        }
+                      ),
+                      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-6 lg:pl-[50px]", children: [
+                        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid grid-cols-1 md:grid-cols-2 gap-5", children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                            /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "block text-sm font-medium text-slate-700 mb-1.5", children: [
+                              "Start date & time ",
+                              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-red-500", children: "*" })
+                            ] }),
+                            /* @__PURE__ */ jsxRuntimeExports.jsx(
+                              "input",
+                              {
+                                type: "datetime-local",
+                                name: "scheduled_start",
+                                value: formData.scheduled_start,
+                                onChange: handleChange,
+                                className: "input",
+                                required: true,
+                                min: (/* @__PURE__ */ new Date()).toISOString().slice(0, 16)
+                              }
+                            )
+                          ] }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                            /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "block text-sm font-medium text-slate-700 mb-1.5", children: [
+                              "End date & time ",
+                              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-red-500", children: "*" })
+                            ] }),
+                            /* @__PURE__ */ jsxRuntimeExports.jsx(
+                              "input",
+                              {
+                                type: "datetime-local",
+                                name: "scheduled_end",
+                                value: formData.scheduled_end,
+                                onChange: handleChange,
+                                className: "input",
+                                required: true,
+                                min: formData.scheduled_start
+                              }
+                            )
+                          ] })
+                        ] }),
+                        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "block text-sm font-medium text-slate-700 mb-2", children: [
+                            "Quick duration",
+                            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "ml-1.5 text-xs font-normal text-slate-400", children: "sets End from current Start" })
+                          ] }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex flex-wrap gap-2", children: [
+                            { label: "30 min", minutes: 30 },
+                            { label: "1 hr", minutes: 60 },
+                            { label: "1.5 hr", minutes: 90 },
+                            { label: "2 hrs", minutes: 120 },
+                            { label: "3 hrs", minutes: 180 },
+                            { label: "4 hrs", minutes: 240 }
+                          ].map((preset) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                            "button",
+                            {
+                              type: "button",
+                              onClick: () => applyDurationPreset(preset.minutes),
+                              disabled: isSubmitting,
+                              className: "inline-flex items-center gap-1.5 px-3.5 py-2 rounded-full text-xs font-medium\r\n                                 bg-white text-slate-700 border border-slate-200\r\n                                 hover:bg-gold-50 hover:border-gold-300 hover:text-gold-800\r\n                                 focus:outline-none focus:ring-2 focus:ring-gold-200\r\n                                 disabled:opacity-50 transition-colors",
+                              children: [
+                                /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-bolt text-[10px] opacity-60" }),
+                                preset.label
+                              ]
+                            },
+                            preset.minutes
+                          )) })
+                        ] }),
+                        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                          /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "block text-sm font-medium text-slate-700 mb-1.5", children: "Grace period" }),
+                          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-wrap items-center gap-4", children: [
+                            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "relative", children: [
+                              /* @__PURE__ */ jsxRuntimeExports.jsx(
+                                "input",
+                                {
+                                  type: "number",
+                                  name: "grace_period_minutes",
+                                  value: formData.grace_period_minutes,
+                                  onChange: handleChange,
+                                  min: 0,
+                                  max: 120,
+                                  className: "input w-32 pr-12"
+                                }
+                              ),
+                              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 pointer-events-none", children: "min" })
+                            ] }),
+                            /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-sm text-slate-500 flex-1 min-w-[220px]", children: [
+                              "Check-ins within this window after start are marked",
+                              " ",
+                              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-medium text-emerald-600", children: "Present" }),
+                              ". After that →",
+                              " ",
+                              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-medium text-amber-600", children: "Late" }),
+                              "."
+                            ] })
+                          ] })
+                        ] })
+                      ] })
+                    ] })
+                  ] })
+                ]
+              }
+            )
           ] }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("aside", { className: "lg:col-span-4", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "lg:sticky lg:top-6 space-y-5", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden", children: [
@@ -39184,8 +39181,8 @@ const CreateAttendanceSession = () => {
                   /* @__PURE__ */ jsxRuntimeExports.jsx(
                     "dd",
                     {
-                      className: `font-medium text-right ${formData.require_location && formData.latitude ? "text-emerald-700" : "text-slate-400"}`,
-                      children: formData.require_location && formData.latitude ? `${formData.geofence_radius} m geofence` : "Anywhere"
+                      className: `font-medium text-right ${hasLocation ? "text-emerald-700" : "text-red-500"}`,
+                      children: hasLocation ? `${formData.geofence_radius} m geofence` : "Not set"
                     }
                   )
                 ] }),
@@ -39201,6 +39198,7 @@ const CreateAttendanceSession = () => {
                     type: "submit",
                     disabled: !canSubmit,
                     className: "btn btn-primary w-full",
+                    title: !hasLocation ? "Pick a location first" : void 0,
                     children: isSubmitting ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
                       /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-spinner fa-spin" }),
                       "Scheduling…"
@@ -39247,7 +39245,7 @@ const CreateAttendanceSession = () => {
                   /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
                     "Identity verified with ",
                     /* @__PURE__ */ jsxRuntimeExports.jsx("strong", { children: "face recognition" }),
-                    formData.require_location && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
                       " + location (inside ",
                       formData.geofence_radius,
                       " m)"
@@ -39274,6 +39272,7 @@ const CreateAttendanceSession = () => {
                 type: "submit",
                 disabled: !canSubmit,
                 className: "btn btn-primary flex-1",
+                title: !hasLocation ? "Pick a location first" : void 0,
                 children: isSubmitting ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
                   /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-spinner fa-spin" }),
                   "Scheduling…"
@@ -48873,4 +48872,4 @@ startSyncEngine();
 ReactDOM.createRoot(document.getElementById("root")).render(
   /* @__PURE__ */ jsxRuntimeExports.jsx(React.StrictMode, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(App, {}) })
 );
-//# sourceMappingURL=main-Dsn8eVIQ.js.map
+//# sourceMappingURL=main-BTPElcNB.js.map

@@ -77,7 +77,7 @@ const CreateAttendanceSession: React.FC = () => {
     scheduled_start: getDefaultStart(),
     scheduled_end: getDefaultEnd(),
     grace_period_minutes: 15,
-    require_location: false,
+    require_location: true, // location is mandatory
     latitude: null,
     longitude: null,
     geofence_radius: 100,
@@ -179,23 +179,6 @@ const CreateAttendanceSession: React.FC = () => {
     );
   };
 
-  useEffect(() => {
-    if (formData.require_location && !formData.latitude) {
-      setFormData((prev) => ({
-        ...prev,
-        latitude: 8.521826076323629,
-        longitude: 124.57249491758405,
-      }));
-    }
-    if (!formData.require_location && formData.latitude) {
-      setFormData((prev) => ({
-        ...prev,
-        latitude: null,
-        longitude: null,
-      }));
-    }
-  }, [formData.require_location]);
-
   const getComponentLabel = (component: string) => {
     const labels: Record<string, string> = {
       cwts: "CWTS",
@@ -222,14 +205,34 @@ const CreateAttendanceSession: React.FC = () => {
     const { name, value, type } = e.target;
     const checked = (e.target as HTMLInputElement).checked;
 
+    const numericFields = ["geofence_radius", "grace_period_minutes"];
+
     setFormData((prev) => ({
       ...prev,
-      [name]: type === "checkbox" ? checked : value,
+      [name]:
+        type === "checkbox"
+          ? checked
+          : numericFields.includes(name)
+            ? value === ""
+              ? 0
+              : parseInt(value, 10)
+            : value,
     }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Location is checked FIRST
+    if (!hasLocation) {
+      toast.error("Please pick and confirm a location first");
+      return;
+    }
+
+    if (formData.geofence_radius < 10) {
+      toast.error("Geofence radius must be at least 10 meters");
+      return;
+    }
 
     if (!formData.component) {
       toast.error(
@@ -256,17 +259,6 @@ const CreateAttendanceSession: React.FC = () => {
       return;
     }
 
-    if (formData.require_location) {
-      if (!formData.latitude || !formData.longitude) {
-        toast.error("Please set a location for attendance");
-        return;
-      }
-      if (formData.geofence_radius < 10) {
-        toast.error("Geofence radius must be at least 10 meters");
-        return;
-      }
-    }
-
     setIsSubmitting(true);
 
     try {
@@ -282,7 +274,7 @@ const CreateAttendanceSession: React.FC = () => {
         scheduled_end: formData.scheduled_end,
         grace_period_minutes: formData.grace_period_minutes,
         is_scheduled: true,
-        require_location: formData.require_location,
+        require_location: true,
         latitude: formData.latitude,
         longitude: formData.longitude,
         geofence_radius: formData.geofence_radius,
@@ -297,9 +289,7 @@ const CreateAttendanceSession: React.FC = () => {
       const startTime = new Date(formData.scheduled_start).toLocaleString();
       const endTime = new Date(formData.scheduled_end).toLocaleString();
 
-      const locationMessage = formData.require_location
-        ? `\n📍 Location restricted: ${formData.geofence_radius}m radius`
-        : "";
+      const locationMessage = `\n📍 Location restricted: ${formData.geofence_radius}m radius`;
 
       toast.success(
         `Attendance session scheduled!\n` +
@@ -358,7 +348,15 @@ const CreateAttendanceSession: React.FC = () => {
       (formData.grace_period_minutes || 15) * 60000,
   ).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
-  const canSubmit = !isSubmitting && !!formData.component && !!formData.section;
+  // Location must be picked & confirmed before anything else can be filled in
+  const hasLocation =
+    formData.latitude !== null &&
+    formData.longitude !== null &&
+    !isNaN(formData.latitude) &&
+    !isNaN(formData.longitude);
+
+  const canSubmit =
+    !isSubmitting && hasLocation && !!formData.component && !!formData.section;
 
   // Reusable section heading
   const SectionHeading = ({
@@ -420,7 +418,7 @@ const CreateAttendanceSession: React.FC = () => {
             <p className="text-slate-500 mt-1">
               {preselectedClass
                 ? `Creating a session for ${preselectedClass.name}`
-                : "Set the time window and optional location rules for student check-in"}
+                : "Pick the venue first, then set the time window for student check-in"}
             </p>
           </div>
         </div>
@@ -451,10 +449,177 @@ const CreateAttendanceSession: React.FC = () => {
       >
         {/* ════════════ MAIN COLUMN ════════════ */}
         <div className="lg:col-span-8 divide-y divide-slate-200">
-          {/* ── 1. Session details ───────────────────────────── */}
+          {/* ── 1. Location (REQUIRED, first) ───────────────── */}
           <section className="pb-10">
             <SectionHeading
               step={1}
+              icon="fa-map-marker-alt"
+              title="Pick the venue location"
+              desc="Required — choose and confirm where students must be to check in."
+              right={
+                hasLocation ? (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
+                    <i className="fas fa-check-circle" />
+                    Location set
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-red-50 text-red-600 border border-red-200 shrink-0">
+                    <i className="fas fa-exclamation-circle" />
+                    Required
+                  </span>
+                )
+              }
+            />
+
+            <div className="space-y-5 lg:pl-[50px]">
+              <div className="flex items-start gap-3 p-3.5 rounded-xl bg-blue-50/70 border border-blue-100">
+                <i className="fas fa-info-circle text-blue-500 mt-0.5 shrink-0" />
+                <p className="text-sm text-blue-700 leading-relaxed">
+                  Click the map (or search / use your current position), then
+                  press <strong>Confirm Location</strong>. The rest of the form
+                  unlocks once a location is confirmed. Only students within the
+                  radius can mark attendance.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
+                <div className="xl:col-span-3 rounded-xl overflow-hidden border border-slate-200">
+                  <LocationPicker
+                    latitude={formData.latitude}
+                    longitude={formData.longitude}
+                    onLocationSelect={handleLocationSelect}
+                    venueName="Attendance Venue"
+                    radius={formData.geofence_radius}
+                    onRadiusChange={(r) =>
+                      setFormData((prev) => ({ ...prev, geofence_radius: r }))
+                    }
+                  />
+                </div>
+
+                <div className="xl:col-span-2 space-y-5">
+                  <button
+                    type="button"
+                    onClick={handleGetCurrentLocation}
+                    disabled={isGettingLocation}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl
+                               text-sm font-medium text-slate-700 bg-white border border-slate-200
+                               hover:bg-slate-50 hover:border-slate-300
+                               focus:outline-none focus:ring-2 focus:ring-slate-200
+                               disabled:opacity-60 transition-colors"
+                  >
+                    <i
+                      className={`fas ${
+                        isGettingLocation
+                          ? "fa-spinner fa-spin"
+                          : "fa-location-crosshairs"
+                      }`}
+                    />
+                    {isGettingLocation
+                      ? "Getting location…"
+                      : "Use my current location"}
+                  </button>
+
+                  {/* Geofence radius */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-sm font-medium text-slate-700">
+                        Geofence radius
+                      </label>
+                      <span className="text-sm font-semibold text-navy-800 tabular-nums">
+                        {formData.geofence_radius} m
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min={10}
+                      max={500}
+                      step={10}
+                      value={formData.geofence_radius}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          geofence_radius: parseInt(e.target.value),
+                        }))
+                      }
+                      className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-gold-500"
+                    />
+                    <div className="flex justify-between text-xs text-slate-400 mt-1">
+                      <span>10 m</span>
+                      <span>500 m</span>
+                    </div>
+                    <div className="mt-3 flex items-center gap-3">
+                      <input
+                        type="number"
+                        min={10}
+                        max={1000}
+                        name="geofence_radius"
+                        value={formData.geofence_radius}
+                        onChange={handleChange}
+                        className="input w-28"
+                      />
+                      <span className="text-xs text-slate-500">
+                        Students inside this circle can check in
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Location confirmation */}
+                  {hasLocation ? (
+                    <div className="flex items-center justify-between gap-3 p-4 rounded-xl bg-emerald-50 border border-emerald-100">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-emerald-800 flex items-center gap-2">
+                          <i className="fas fa-check-circle" />
+                          Location set
+                        </p>
+                        <p className="text-xs text-emerald-700/80 mt-0.5 font-mono truncate">
+                          {formData.latitude!.toFixed(6)},{" "}
+                          {formData.longitude!.toFixed(6)}
+                        </p>
+                      </div>
+                      <a
+                        href={`https://www.google.com/maps?q=${formData.latitude},${formData.longitude}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium
+                                   text-emerald-800 bg-emerald-100 hover:bg-emerald-200 transition-colors"
+                      >
+                        <i className="fas fa-external-link-alt" />
+                        Maps
+                      </a>
+                    </div>
+                  ) : (
+                    <div className="flex items-start gap-3 p-4 rounded-xl bg-red-50 border border-red-100">
+                      <i className="fas fa-lock text-red-400 mt-0.5" />
+                      <p className="text-sm text-red-700">
+                        No location confirmed yet. You can't schedule a session
+                        until you pick one.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </section>
+
+          {/* ── Locked until location is confirmed ───────────── */}
+          <fieldset
+            disabled={!hasLocation}
+            className={`min-w-0 border-0 m-0 p-0 transition-opacity ${
+              hasLocation ? "" : "opacity-50 pointer-events-none select-none"
+            }`}
+            aria-disabled={!hasLocation}
+          >
+            {!hasLocation && (
+              <div className="pt-8 pb-2 flex items-center gap-2 text-sm text-slate-500">
+                <i className="fas fa-lock text-slate-400" />
+                Confirm a location above to unlock the steps below.
+              </div>
+            )}
+            <div className="divide-y divide-slate-200">
+          {/* ── 1. Session details ───────────────────────────── */}
+          <section className="pt-10 pb-10">
+            <SectionHeading
+              step={2}
               icon="fa-info-circle"
               title="Session details"
               desc="Which group of students is this attendance for?"
@@ -558,9 +723,9 @@ const CreateAttendanceSession: React.FC = () => {
           </section>
 
           {/* ── 2. Schedule ──────────────────────────────────── */}
-          <section className="py-10">
+          <section className="pt-10">
             <SectionHeading
-              step={2}
+              step={3}
               icon="fa-clock"
               title="Schedule"
               desc="When can students check in, and when are they marked late?"
@@ -664,159 +829,8 @@ const CreateAttendanceSession: React.FC = () => {
             </div>
           </section>
 
-          {/* ── 3. Location (optional) ───────────────────────── */}
-          <section className="pt-10">
-            <SectionHeading
-              step={3}
-              icon="fa-map-marker-alt"
-              title="Location restriction"
-              desc="Optional — require students to be at the venue to check in."
-              right={
-                <label className="relative inline-flex items-center cursor-pointer shrink-0 mt-1">
-                  <input
-                    type="checkbox"
-                    id="require_location"
-                    name="require_location"
-                    checked={formData.require_location}
-                    onChange={handleChange}
-                    className="sr-only peer"
-                  />
-                  <div className="w-11 h-6 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-gold-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-gold-500" />
-                  <span className="sr-only">Require location</span>
-                </label>
-              }
-            />
-
-            {!formData.require_location ? (
-              <div className="lg:pl-[50px]">
-                <div className="flex items-center gap-3 p-4 rounded-xl border border-dashed border-slate-300 text-sm text-slate-500">
-                  <i className="fas fa-location-dot text-slate-400" />
-                  Location check is off — students can check in from anywhere
-                  during the session.
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-5 lg:pl-[50px] animate-in fade-in duration-200">
-                <div className="flex items-start gap-3 p-3.5 rounded-xl bg-blue-50/70 border border-blue-100">
-                  <i className="fas fa-info-circle text-blue-500 mt-0.5 shrink-0" />
-                  <p className="text-sm text-blue-700 leading-relaxed">
-                    Choose the venue on the map or use your current position.
-                    Only students within the radius will be allowed to mark
-                    attendance.
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
-                  <div className="xl:col-span-3 rounded-xl overflow-hidden border border-slate-200">
-                    <LocationPicker
-  latitude={formData.latitude}
-  longitude={formData.longitude}
-  onLocationSelect={handleLocationSelect}
-  venueName="Attendance Venue"
-  radius={formData.geofence_radius}
-  onRadiusChange={(r) =>
-    setFormData((prev) => ({ ...prev, geofence_radius: r }))
-  }
-/>
-                  </div>
-
-                  <div className="xl:col-span-2 space-y-5">
-                    <button
-                      type="button"
-                      onClick={handleGetCurrentLocation}
-                      disabled={isGettingLocation}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl
-                                 text-sm font-medium text-slate-700 bg-white border border-slate-200
-                                 hover:bg-slate-50 hover:border-slate-300
-                                 focus:outline-none focus:ring-2 focus:ring-slate-200
-                                 disabled:opacity-60 transition-colors"
-                    >
-                      <i
-                        className={`fas ${
-                          isGettingLocation
-                            ? "fa-spinner fa-spin"
-                            : "fa-location-crosshairs"
-                        }`}
-                      />
-                      {isGettingLocation
-                        ? "Getting location…"
-                        : "Use my current location"}
-                    </button>
-
-                    {/* Geofence radius */}
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <label className="text-sm font-medium text-slate-700">
-                          Geofence radius
-                        </label>
-                        <span className="text-sm font-semibold text-navy-800 tabular-nums">
-                          {formData.geofence_radius} m
-                        </span>
-                      </div>
-                      <input
-                        type="range"
-                        min={10}
-                        max={500}
-                        step={10}
-                        value={formData.geofence_radius}
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            geofence_radius: parseInt(e.target.value),
-                          })
-                        }
-                        className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-gold-500"
-                      />
-                      <div className="flex justify-between text-xs text-slate-400 mt-1">
-                        <span>10 m</span>
-                        <span>500 m</span>
-                      </div>
-                      <div className="mt-3 flex items-center gap-3">
-                        <input
-                          type="number"
-                          min={10}
-                          max={1000}
-                          name="geofence_radius"
-                          value={formData.geofence_radius}
-                          onChange={handleChange}
-                          className="input w-28"
-                        />
-                        <span className="text-xs text-slate-500">
-                          Students inside this circle can check in
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Location confirmation */}
-                    {formData.latitude && formData.longitude && (
-                      <div className="flex items-center justify-between gap-3 p-4 rounded-xl bg-emerald-50 border border-emerald-100">
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium text-emerald-800 flex items-center gap-2">
-                            <i className="fas fa-check-circle" />
-                            Location set
-                          </p>
-                          <p className="text-xs text-emerald-700/80 mt-0.5 font-mono truncate">
-                            {formData.latitude.toFixed(6)},{" "}
-                            {formData.longitude.toFixed(6)}
-                          </p>
-                        </div>
-                        <a
-                          href={`https://www.google.com/maps?q=${formData.latitude},${formData.longitude}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium
-                                     text-emerald-800 bg-emerald-100 hover:bg-emerald-200 transition-colors"
-                        >
-                          <i className="fas fa-external-link-alt" />
-                          Maps
-                        </a>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-          </section>
+            </div>
+          </fieldset>
         </div>
 
         {/* ════════════ SIDEBAR ════════════ */}
@@ -865,14 +879,12 @@ const CreateAttendanceSession: React.FC = () => {
                   <dt className="text-slate-500">Location</dt>
                   <dd
                     className={`font-medium text-right ${
-                      formData.require_location && formData.latitude
-                        ? "text-emerald-700"
-                        : "text-slate-400"
+                      hasLocation ? "text-emerald-700" : "text-red-500"
                     }`}
                   >
-                    {formData.require_location && formData.latitude
+                    {hasLocation
                       ? `${formData.geofence_radius} m geofence`
-                      : "Anywhere"}
+                      : "Not set"}
                   </dd>
                 </div>
                 {preselectedClass && (
@@ -891,6 +903,7 @@ const CreateAttendanceSession: React.FC = () => {
                   type="submit"
                   disabled={!canSubmit}
                   className="btn btn-primary w-full"
+                  title={!hasLocation ? "Pick a location first" : undefined}
                 >
                   {isSubmitting ? (
                     <>
@@ -939,9 +952,7 @@ const CreateAttendanceSession: React.FC = () => {
                   <i className="fas fa-face-smile mt-0.5 text-amber-500" />
                   <span>
                     Identity verified with <strong>face recognition</strong>
-                    {formData.require_location && (
-                      <> + location (inside {formData.geofence_radius} m)</>
-                    )}
+                    <> + location (inside {formData.geofence_radius} m)</>
                   </span>
                 </li>
               </ul>
@@ -963,6 +974,7 @@ const CreateAttendanceSession: React.FC = () => {
             type="submit"
             disabled={!canSubmit}
             className="btn btn-primary flex-1"
+            title={!hasLocation ? "Pick a location first" : undefined}
           >
             {isSubmitting ? (
               <>
