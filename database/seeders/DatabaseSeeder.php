@@ -685,7 +685,6 @@ class DatabaseSeeder extends Seeder
 
     /**
      * Seed Classes
-     * ✅ join_code now uses the faculty's class_code
      */
     private function seedClasses(): void
     {
@@ -697,7 +696,6 @@ class DatabaseSeeder extends Seeder
                 'name' => 'CWTS Section A - 2025',
                 'description' => 'CWTS class for BSIT students. Focus on community service and civic welfare training.',
                 'component_type' => 'cwts',
-                'join_code' => 'CWTS-A1',
                 'status' => 'active',
                 'created_at' => now(),
                 'updated_at' => now(),
@@ -708,7 +706,6 @@ class DatabaseSeeder extends Seeder
                 'name' => 'CWTS Section B - 2025',
                 'description' => 'CWTS class for BSBA students. Focus on community service and civic welfare training.',
                 'component_type' => 'cwts',
-                'join_code' => 'CWTS-A1',
                 'status' => 'active',
                 'created_at' => now(),
                 'updated_at' => now(),
@@ -719,7 +716,6 @@ class DatabaseSeeder extends Seeder
                 'name' => 'CWTS Section C - 2025',
                 'description' => 'CWTS class for BEED students. Focus on community service and civic welfare training.',
                 'component_type' => 'cwts',
-                'join_code' => 'CWTS-A1',
                 'status' => 'active',
                 'created_at' => now(),
                 'updated_at' => now(),
@@ -731,7 +727,6 @@ class DatabaseSeeder extends Seeder
                 'name' => 'ROTC Basic Training - 2025',
                 'description' => 'ROTC class for BSIT students. Focus on military training and discipline.',
                 'component_type' => 'rotc',
-                'join_code' => 'ROTC-A1',
                 'status' => 'active',
                 'created_at' => now(),
                 'updated_at' => now(),
@@ -742,7 +737,6 @@ class DatabaseSeeder extends Seeder
                 'name' => 'ROTC Basic Training - Section B - 2025',
                 'description' => 'ROTC class for BEED students. Focus on military training and discipline.',
                 'component_type' => 'rotc',
-                'join_code' => 'ROTC-A1',
                 'status' => 'active',
                 'created_at' => now(),
                 'updated_at' => now(),
@@ -754,7 +748,6 @@ class DatabaseSeeder extends Seeder
                 'name' => 'LTS Literacy Program - 2025',
                 'description' => 'LTS class for BSBA students. Focus on literacy training and community outreach.',
                 'component_type' => 'lts',
-                'join_code' => 'LTS-A1',
                 'status' => 'active',
                 'created_at' => now(),
                 'updated_at' => now(),
@@ -765,7 +758,6 @@ class DatabaseSeeder extends Seeder
                 'name' => 'LTS Literacy Program - Section B - 2025',
                 'description' => 'LTS class for BSIT students. Focus on literacy training and community outreach.',
                 'component_type' => 'lts',
-                'join_code' => 'LTS-A1',
                 'status' => 'active',
                 'created_at' => now(),
                 'updated_at' => now(),
