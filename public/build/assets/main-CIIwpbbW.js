@@ -15610,12 +15610,12 @@ const Sidebar = ({
           path: "/faculty/classes",
           roles: ["faculty"]
         },
-        {
-          label: "Learning Materials",
-          icon: "fa-folder-open",
-          path: "/faculty/materials",
-          roles: ["faculty"]
-        },
+        // {
+        //   label: "Learning Materials",
+        //   icon: "fa-folder-open",
+        //   path: "/faculty/materials",
+        //   roles: ["faculty"],
+        // },
         {
           label: "New Attendance Session",
           icon: "fa-plus-circle",
@@ -48780,4 +48780,4 @@ startSyncEngine();
 ReactDOM.createRoot(document.getElementById("root")).render(
   /* @__PURE__ */ jsxRuntimeExports.jsx(React.StrictMode, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(App, {}) })
 );
-//# sourceMappingURL=main-C1rVXI5m.js.map
+//# sourceMappingURL=main-CIIwpbbW.js.map

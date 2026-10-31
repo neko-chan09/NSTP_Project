@@ -236,12 +236,12 @@ const Sidebar: React.FC<SidebarProps> = ({
           path: "/faculty/classes",
           roles: ["faculty"],
         },
-        {
-          label: "Learning Materials",
-          icon: "fa-folder-open",
-          path: "/faculty/materials",
-          roles: ["faculty"],
-        },
+        // {
+        //   label: "Learning Materials",
+        //   icon: "fa-folder-open",
+        //   path: "/faculty/materials",
+        //   roles: ["faculty"],
+        // },
         {
           label: "New Attendance Session",
           icon: "fa-plus-circle",
