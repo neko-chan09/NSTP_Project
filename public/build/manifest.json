@@ -1,0 +1,423 @@
+{
+  "_scribe-CYVc3XHg.js": {
+    "file": "assets/scribe-CYVc3XHg.js",
+    "name": "scribe",
+    "isDynamicEntry": true,
+    "dynamicImports": [
+      "resources/js/lib/stubs/scribe-canvas-stub.js",
+      "resources/js/lib/stubs/scribe-canvas-stub.js",
+      "resources/js/lib/stubs/scribe-canvas-stub.js"
+    ],
+    "assets": [
+      "assets/generalWorker-DjzhOErF.js",
+      "assets/Carlito-Bold-QV4GmJlZ.woff",
+      "assets/Carlito-BoldItalic-DRKAP2PM.woff",
+      "assets/Carlito-Italic-ChIsWcn0.woff",
+      "assets/Carlito-Regular-p4GuTuSR.woff",
+      "assets/Century-Bold-DMjxmf0V.woff",
+      "assets/Century-BoldItalic-CU-PwGyk.woff",
+      "assets/Century-Italic-k3bG8RE6.woff",
+      "assets/Century-Regular-DFOiv-ts.woff",
+      "assets/Garamond-Bold-BKK83CPO.woff",
+      "assets/Garamond-BoldItalic-hDFc3yR6.woff",
+      "assets/Garamond-Italic-C85v8seW.woff",
+      "assets/Garamond-Regular-xFP9TX4h.woff",
+      "assets/NimbusMono-Bold-Co7FdSNv.woff",
+      "assets/NimbusMono-BoldItalic-tRO9G_81.woff",
+      "assets/NimbusMono-Italic-tApRM9t-.woff",
+      "assets/NimbusMono-Regular-DwFPudxB.woff",
+      "assets/NimbusRoman-Bold-Rij5UgsG.woff",
+      "assets/NimbusRoman-BoldItalic-CKX4EHJt.woff",
+      "assets/NimbusRoman-Italic-CjJpFfun.woff",
+      "assets/NimbusRoman-Regular-hqBrORT2.woff",
+      "assets/NimbusSans-Bold-DJk2vBLk.woff",
+      "assets/NimbusSans-BoldItalic-Nomr0ja2.woff",
+      "assets/NimbusSans-Italic-B_tH2vjC.woff",
+      "assets/NimbusSans-Regular-MjdHSzYZ.woff",
+      "assets/Palatino-Bold-Dc6y-RTT.woff",
+      "assets/Palatino-BoldItalic-d6mt1J5w.woff",
+      "assets/Palatino-Italic-CP1rYP9s.woff",
+      "assets/Palatino-Regular-CAgyRpMG.woff",
+      "assets/URWGothicBook-Bold-w5B3OBTf.woff",
+      "assets/URWGothicBook-BoldItalic-DJTvy0Zd.woff",
+      "assets/URWGothicBook-Italic-C1TVBLMr.woff",
+      "assets/URWGothicBook-Regular-CJxnsX1r.woff",
+      "assets/Dingbats-CNHMogMN.woff",
+      "assets/StandardSymbolsPS-DhoUQ5nQ.woff",
+      "assets/Carlito-Regular-DInUCNKb.woff",
+      "assets/Carlito-Italic-xBjY9JRH.woff",
+      "assets/Carlito-Bold-WKIuPYHu.woff",
+      "assets/Carlito-BoldItalic-CQJvDhov.woff",
+      "assets/Century-Regular-DPAtlFpJ.woff",
+      "assets/Century-Italic-BcWL3vt1.woff",
+      "assets/Century-Bold-D7ZTYjEC.woff",
+      "assets/Century-BoldItalic-Cc-7e7Tc.woff",
+      "assets/Garamond-Regular-CSRIPgy8.woff",
+      "assets/Garamond-Italic-Bm_TBBhn.woff",
+      "assets/Garamond-Bold-DDnQsKOq.woff",
+      "assets/Garamond-BoldItalic-JSS8xsid.woff",
+      "assets/Palatino-Regular-Dobr44z-.woff",
+      "assets/Palatino-Italic-CX23M9G6.woff",
+      "assets/Palatino-Bold-CylBc1y-.woff",
+      "assets/Palatino-BoldItalic-H2CPKMou.woff",
+      "assets/NimbusRoman-Regular-B8HcfELg.woff",
+      "assets/NimbusRoman-Italic-Bmvo8uUx.woff",
+      "assets/NimbusRoman-Bold-D3sOjOfE.woff",
+      "assets/NimbusRoman-BoldItalic-BYYASIzM.woff",
+      "assets/NimbusSans-Regular-Dlrw-Qz6.woff",
+      "assets/NimbusSans-Italic-DLjhR417.woff",
+      "assets/NimbusSans-Bold-CFhawHsX.woff",
+      "assets/NimbusSans-BoldItalic-CYzp7l2w.woff",
+      "assets/NimbusMono-Regular-Be9UCu2P.woff",
+      "assets/NimbusMono-Italic-CRBjQfxh.woff",
+      "assets/NimbusMono-Bold-GJdzBIrE.woff",
+      "assets/NimbusMono-BoldItalic-g1olxxyA.woff",
+      "assets/URWGothicBook-Regular-miQX95dt.woff",
+      "assets/URWGothicBook-Italic-DZaq9UFk.woff",
+      "assets/URWGothicBook-Bold-BcaoiUbc.woff",
+      "assets/URWGothicBook-BoldItalic-zxjGfZNY.woff",
+      "assets/NotoSansSC-Regular-BKwOv2lU.ttf",
+      "assets/pdfWorker-CBoEartg.js",
+      "assets/extractTextDirWorker-BT1KwVuG.js"
+    ]
+  },
+  "node_modules/leaflet/dist/images/layers-2x.png": {
+    "file": "assets/layers-2x-Bpkbi35X.png",
+    "src": "node_modules/leaflet/dist/images/layers-2x.png"
+  },
+  "node_modules/leaflet/dist/images/layers.png": {
+    "file": "assets/layers-BWBAp2CZ.png",
+    "src": "node_modules/leaflet/dist/images/layers.png"
+  },
+  "node_modules/leaflet/dist/images/marker-icon.png": {
+    "file": "assets/marker-icon-hN30_KVU.png",
+    "src": "node_modules/leaflet/dist/images/marker-icon.png"
+  },
+  "node_modules/scribe.js-ocr/fonts/Dingbats.woff": {
+    "file": "assets/Dingbats-CNHMogMN.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/Dingbats.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/NotoSansSC-Regular.ttf": {
+    "file": "assets/NotoSansSC-Regular-BKwOv2lU.ttf",
+    "src": "node_modules/scribe.js-ocr/fonts/NotoSansSC-Regular.ttf"
+  },
+  "node_modules/scribe.js-ocr/fonts/StandardSymbolsPS.woff": {
+    "file": "assets/StandardSymbolsPS-DhoUQ5nQ.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/StandardSymbolsPS.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/all/Carlito-Bold.woff": {
+    "file": "assets/Carlito-Bold-QV4GmJlZ.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/all/Carlito-Bold.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/all/Carlito-BoldItalic.woff": {
+    "file": "assets/Carlito-BoldItalic-DRKAP2PM.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/all/Carlito-BoldItalic.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/all/Carlito-Italic.woff": {
+    "file": "assets/Carlito-Italic-ChIsWcn0.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/all/Carlito-Italic.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/all/Carlito-Regular.woff": {
+    "file": "assets/Carlito-Regular-p4GuTuSR.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/all/Carlito-Regular.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/all/Century-Bold.woff": {
+    "file": "assets/Century-Bold-DMjxmf0V.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/all/Century-Bold.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/all/Century-BoldItalic.woff": {
+    "file": "assets/Century-BoldItalic-CU-PwGyk.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/all/Century-BoldItalic.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/all/Century-Italic.woff": {
+    "file": "assets/Century-Italic-k3bG8RE6.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/all/Century-Italic.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/all/Century-Regular.woff": {
+    "file": "assets/Century-Regular-DFOiv-ts.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/all/Century-Regular.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/all/Garamond-Bold.woff": {
+    "file": "assets/Garamond-Bold-BKK83CPO.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/all/Garamond-Bold.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/all/Garamond-BoldItalic.woff": {
+    "file": "assets/Garamond-BoldItalic-hDFc3yR6.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/all/Garamond-BoldItalic.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/all/Garamond-Italic.woff": {
+    "file": "assets/Garamond-Italic-C85v8seW.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/all/Garamond-Italic.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/all/Garamond-Regular.woff": {
+    "file": "assets/Garamond-Regular-xFP9TX4h.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/all/Garamond-Regular.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/all/NimbusMono-Bold.woff": {
+    "file": "assets/NimbusMono-Bold-Co7FdSNv.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/all/NimbusMono-Bold.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/all/NimbusMono-BoldItalic.woff": {
+    "file": "assets/NimbusMono-BoldItalic-tRO9G_81.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/all/NimbusMono-BoldItalic.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/all/NimbusMono-Italic.woff": {
+    "file": "assets/NimbusMono-Italic-tApRM9t-.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/all/NimbusMono-Italic.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/all/NimbusMono-Regular.woff": {
+    "file": "assets/NimbusMono-Regular-DwFPudxB.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/all/NimbusMono-Regular.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/all/NimbusRoman-Bold.woff": {
+    "file": "assets/NimbusRoman-Bold-Rij5UgsG.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/all/NimbusRoman-Bold.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/all/NimbusRoman-BoldItalic.woff": {
+    "file": "assets/NimbusRoman-BoldItalic-CKX4EHJt.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/all/NimbusRoman-BoldItalic.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/all/NimbusRoman-Italic.woff": {
+    "file": "assets/NimbusRoman-Italic-CjJpFfun.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/all/NimbusRoman-Italic.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/all/NimbusRoman-Regular.woff": {
+    "file": "assets/NimbusRoman-Regular-hqBrORT2.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/all/NimbusRoman-Regular.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/all/NimbusSans-Bold.woff": {
+    "file": "assets/NimbusSans-Bold-DJk2vBLk.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/all/NimbusSans-Bold.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/all/NimbusSans-BoldItalic.woff": {
+    "file": "assets/NimbusSans-BoldItalic-Nomr0ja2.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/all/NimbusSans-BoldItalic.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/all/NimbusSans-Italic.woff": {
+    "file": "assets/NimbusSans-Italic-B_tH2vjC.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/all/NimbusSans-Italic.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/all/NimbusSans-Regular.woff": {
+    "file": "assets/NimbusSans-Regular-MjdHSzYZ.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/all/NimbusSans-Regular.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/all/Palatino-Bold.woff": {
+    "file": "assets/Palatino-Bold-Dc6y-RTT.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/all/Palatino-Bold.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/all/Palatino-BoldItalic.woff": {
+    "file": "assets/Palatino-BoldItalic-d6mt1J5w.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/all/Palatino-BoldItalic.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/all/Palatino-Italic.woff": {
+    "file": "assets/Palatino-Italic-CP1rYP9s.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/all/Palatino-Italic.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/all/Palatino-Regular.woff": {
+    "file": "assets/Palatino-Regular-CAgyRpMG.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/all/Palatino-Regular.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/all/URWGothicBook-Bold.woff": {
+    "file": "assets/URWGothicBook-Bold-w5B3OBTf.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/all/URWGothicBook-Bold.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/all/URWGothicBook-BoldItalic.woff": {
+    "file": "assets/URWGothicBook-BoldItalic-DJTvy0Zd.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/all/URWGothicBook-BoldItalic.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/all/URWGothicBook-Italic.woff": {
+    "file": "assets/URWGothicBook-Italic-C1TVBLMr.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/all/URWGothicBook-Italic.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/all/URWGothicBook-Regular.woff": {
+    "file": "assets/URWGothicBook-Regular-CJxnsX1r.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/all/URWGothicBook-Regular.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/latin/Carlito-Bold.woff": {
+    "file": "assets/Carlito-Bold-WKIuPYHu.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/latin/Carlito-Bold.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/latin/Carlito-BoldItalic.woff": {
+    "file": "assets/Carlito-BoldItalic-CQJvDhov.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/latin/Carlito-BoldItalic.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/latin/Carlito-Italic.woff": {
+    "file": "assets/Carlito-Italic-xBjY9JRH.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/latin/Carlito-Italic.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/latin/Carlito-Regular.woff": {
+    "file": "assets/Carlito-Regular-DInUCNKb.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/latin/Carlito-Regular.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/latin/Century-Bold.woff": {
+    "file": "assets/Century-Bold-D7ZTYjEC.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/latin/Century-Bold.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/latin/Century-BoldItalic.woff": {
+    "file": "assets/Century-BoldItalic-Cc-7e7Tc.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/latin/Century-BoldItalic.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/latin/Century-Italic.woff": {
+    "file": "assets/Century-Italic-BcWL3vt1.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/latin/Century-Italic.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/latin/Century-Regular.woff": {
+    "file": "assets/Century-Regular-DPAtlFpJ.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/latin/Century-Regular.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/latin/Garamond-Bold.woff": {
+    "file": "assets/Garamond-Bold-DDnQsKOq.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/latin/Garamond-Bold.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/latin/Garamond-BoldItalic.woff": {
+    "file": "assets/Garamond-BoldItalic-JSS8xsid.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/latin/Garamond-BoldItalic.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/latin/Garamond-Italic.woff": {
+    "file": "assets/Garamond-Italic-Bm_TBBhn.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/latin/Garamond-Italic.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/latin/Garamond-Regular.woff": {
+    "file": "assets/Garamond-Regular-CSRIPgy8.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/latin/Garamond-Regular.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/latin/NimbusMono-Bold.woff": {
+    "file": "assets/NimbusMono-Bold-GJdzBIrE.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/latin/NimbusMono-Bold.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/latin/NimbusMono-BoldItalic.woff": {
+    "file": "assets/NimbusMono-BoldItalic-g1olxxyA.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/latin/NimbusMono-BoldItalic.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/latin/NimbusMono-Italic.woff": {
+    "file": "assets/NimbusMono-Italic-CRBjQfxh.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/latin/NimbusMono-Italic.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/latin/NimbusMono-Regular.woff": {
+    "file": "assets/NimbusMono-Regular-Be9UCu2P.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/latin/NimbusMono-Regular.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/latin/NimbusRoman-Bold.woff": {
+    "file": "assets/NimbusRoman-Bold-D3sOjOfE.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/latin/NimbusRoman-Bold.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/latin/NimbusRoman-BoldItalic.woff": {
+    "file": "assets/NimbusRoman-BoldItalic-BYYASIzM.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/latin/NimbusRoman-BoldItalic.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/latin/NimbusRoman-Italic.woff": {
+    "file": "assets/NimbusRoman-Italic-Bmvo8uUx.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/latin/NimbusRoman-Italic.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/latin/NimbusRoman-Regular.woff": {
+    "file": "assets/NimbusRoman-Regular-B8HcfELg.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/latin/NimbusRoman-Regular.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/latin/NimbusSans-Bold.woff": {
+    "file": "assets/NimbusSans-Bold-CFhawHsX.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/latin/NimbusSans-Bold.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/latin/NimbusSans-BoldItalic.woff": {
+    "file": "assets/NimbusSans-BoldItalic-CYzp7l2w.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/latin/NimbusSans-BoldItalic.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/latin/NimbusSans-Italic.woff": {
+    "file": "assets/NimbusSans-Italic-DLjhR417.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/latin/NimbusSans-Italic.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/latin/NimbusSans-Regular.woff": {
+    "file": "assets/NimbusSans-Regular-Dlrw-Qz6.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/latin/NimbusSans-Regular.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/latin/Palatino-Bold.woff": {
+    "file": "assets/Palatino-Bold-CylBc1y-.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/latin/Palatino-Bold.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/latin/Palatino-BoldItalic.woff": {
+    "file": "assets/Palatino-BoldItalic-H2CPKMou.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/latin/Palatino-BoldItalic.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/latin/Palatino-Italic.woff": {
+    "file": "assets/Palatino-Italic-CX23M9G6.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/latin/Palatino-Italic.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/latin/Palatino-Regular.woff": {
+    "file": "assets/Palatino-Regular-Dobr44z-.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/latin/Palatino-Regular.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/latin/URWGothicBook-Bold.woff": {
+    "file": "assets/URWGothicBook-Bold-BcaoiUbc.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/latin/URWGothicBook-Bold.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/latin/URWGothicBook-BoldItalic.woff": {
+    "file": "assets/URWGothicBook-BoldItalic-zxjGfZNY.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/latin/URWGothicBook-BoldItalic.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/latin/URWGothicBook-Italic.woff": {
+    "file": "assets/URWGothicBook-Italic-DZaq9UFk.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/latin/URWGothicBook-Italic.woff"
+  },
+  "node_modules/scribe.js-ocr/fonts/latin/URWGothicBook-Regular.woff": {
+    "file": "assets/URWGothicBook-Regular-miQX95dt.woff",
+    "src": "node_modules/scribe.js-ocr/fonts/latin/URWGothicBook-Regular.woff"
+  },
+  "node_modules/scribe.js-ocr/js/worker/extractTextDirWorker.js": {
+    "file": "assets/extractTextDirWorker-BT1KwVuG.js",
+    "src": "node_modules/scribe.js-ocr/js/worker/extractTextDirWorker.js"
+  },
+  "node_modules/scribe.js-ocr/js/worker/generalWorker.js": {
+    "file": "assets/generalWorker-DjzhOErF.js",
+    "src": "node_modules/scribe.js-ocr/js/worker/generalWorker.js"
+  },
+  "node_modules/scribe.js-ocr/js/worker/pdfWorker.js": {
+    "file": "assets/pdfWorker-CBoEartg.js",
+    "src": "node_modules/scribe.js-ocr/js/worker/pdfWorker.js"
+  },
+  "node_modules/workbox-window/build/workbox-window.prod.es5.mjs": {
+    "file": "assets/workbox-window.prod.es5-BAA1jQbh.js",
+    "name": "workbox-window.prod.es5",
+    "src": "node_modules/workbox-window/build/workbox-window.prod.es5.mjs",
+    "isDynamicEntry": true
+  },
+  "resources/css/app.css": {
+    "file": "assets/app-Ck1C3DJL.css",
+    "src": "resources/css/app.css",
+    "isEntry": true,
+    "name": "app",
+    "names": [
+      "app.css"
+    ]
+  },
+  "resources/js/assets/nstpLogo.png": {
+    "file": "assets/nstpLogo-B4AumqtN.png",
+    "src": "resources/js/assets/nstpLogo.png"
+  },
+  "resources/js/lib/stubs/scribe-canvas-stub.js": {
+    "file": "assets/scribe-canvas-stub-BNTJOULw.js",
+    "name": "scribe-canvas-stub",
+    "src": "resources/js/lib/stubs/scribe-canvas-stub.js",
+    "isDynamicEntry": true
+  },
+  "resources/js/main.tsx": {
+    "file": "assets/main-BQ4QdTAR.js",
+    "name": "main",
+    "src": "resources/js/main.tsx",
+    "isEntry": true,
+    "imports": [
+      "_scribe-CYVc3XHg.js"
+    ],
+    "dynamicImports": [
+      "_scribe-CYVc3XHg.js",
+      "node_modules/workbox-window/build/workbox-window.prod.es5.mjs"
+    ],
+    "css": [
+      "assets/main-C9RfRVDZ.css"
+    ],
+    "assets": [
+      "assets/nstpLogo-B4AumqtN.png",
+      "assets/layers-BWBAp2CZ.png",
+      "assets/layers-2x-Bpkbi35X.png",
+      "assets/marker-icon-hN30_KVU.png"
+    ]
+  }
+}
