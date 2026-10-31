@@ -53,192 +53,281 @@ import Profile from "./pages/shared/Profile";
 import Login from "./pages/auth/Login";
 
 const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      refetchOnWindowFocus: false,
-      retry: 1,
-      staleTime: 30000,
+    defaultOptions: {
+        queries: {
+            refetchOnWindowFocus: false,
+            retry: 1,
+            staleTime: 30000,
+        },
     },
-  },
 });
 
 // Simple auth check
 const getToken = () =>
-  localStorage.getItem("token") || localStorage.getItem("nstp_token");
+    localStorage.getItem("token") || localStorage.getItem("nstp_token");
 
 const App: React.FC = () => {
-  const token = getToken();
-  const userStr = localStorage.getItem("user");
-  let userRole = null;
+    const token = getToken();
+    const userStr = localStorage.getItem("user");
+    let userRole = null;
 
-  try {
-    if (userStr) {
-      const user = JSON.parse(userStr);
-      userRole = user?.role;
+    try {
+        if (userStr) {
+            const user = JSON.parse(userStr);
+            userRole = user?.role;
+        }
+    } catch (e) {
+        // Invalid user data
     }
-  } catch (e) {
-    // Invalid user data
-  }
 
-  const isAuthenticated = !!token && userRole;
-  const isAdmin = userRole === "super_admin" || userRole === "admin";
-  const isFaculty = userRole === "faculty";
+    const isAuthenticated = !!token && userRole;
+    const isAdmin = userRole === "super_admin" || userRole === "admin";
+    const isFaculty = userRole === "faculty";
 
-  return (
-    <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <Toaster position="top-right" />
-        <OfflineBanner />
-        <Routes>
-          {/* Public Routes */}
-          <Route path="/login" element={<Login />} />
-          <Route path="/forgot-password" element={<ForgotPassword />} />
+    return (
+        <QueryClientProvider client={queryClient}>
+            <BrowserRouter>
+                <Toaster position="top-right" />
+                <OfflineBanner />
+                <Routes>
+                    {/* Public Routes */}
+                    <Route path="/login" element={<Login />} />
+                    <Route
+                        path="/forgot-password"
+                        element={<ForgotPassword />}
+                    />
 
-          {/* ============================================================
+                    {/* ============================================================
               ADMIN ROUTES - Super Admin & Admin only
               ============================================================ */}
-          <Route
-            path="/admin/*"
-            element={
-              isAuthenticated && isAdmin ? (
-                <AdminLayout>
-                  <Routes>
-                    <Route index element={<Dashboard />} />
                     <Route
-                      path="superadmin"
-                      element={<SuperAdminDashboard />}
+                        path="/admin/*"
+                        element={
+                            isAuthenticated && isAdmin ? (
+                                <AdminLayout>
+                                    <Routes>
+                                        <Route index element={<Dashboard />} />
+                                        <Route
+                                            path="superadmin"
+                                            element={<SuperAdminDashboard />}
+                                        />
+                                        <Route
+                                            path="superadmin/backups"
+                                            element={<BackupPage />}
+                                        />
+                                        <Route
+                                            path="superadmin/backup-schedules"
+                                            element={<BackupSchedules />}
+                                        />
+                                        <Route
+                                            path="students"
+                                            element={<Students />}
+                                        />
+                                        <Route
+                                            path="students/component"
+                                            element={<StudentComponent />}
+                                        />
+                                        <Route
+                                            path="students/requests"
+                                            element={<StudentRequests />}
+                                        />
+                                        <Route
+                                            path="activities"
+                                            element={<ActivitiesLayout />}
+                                        >
+                                            <Route
+                                                index
+                                                element={<Activities />}
+                                            />
+                                            <Route
+                                                path="schedules"
+                                                element={<Schedules />}
+                                            />
+                                        </Route>
+                                        <Route
+                                            path="activities/map"
+                                            element={<ActivityMap />}
+                                        />
+                                        <Route
+                                            path="activities/location/:id"
+                                            element={<ActivityLocationView />}
+                                        />
+                                        <Route
+                                            path="documents/submissions"
+                                            element={<DocumentSubmissions />}
+                                        />
+                                        <Route
+                                            path="documents/library"
+                                            element={<DocumentLibrary />}
+                                        />
+                                        <Route
+                                            path="attendance/create"
+                                            element={
+                                                <CreateAttendanceSession />
+                                            }
+                                        />
+                                        <Route
+                                            path="reports/accomplishment"
+                                            element={<AccomplishmentReport />}
+                                        />
+                                        <Route
+                                            path="certificates/generate"
+                                            element={<GenerateCertificate />}
+                                        />
+                                        <Route
+                                            path="grades"
+                                            element={<GradesManagement />}
+                                        />
+                                        <Route
+                                            path="certificates/issued"
+                                            element={<IssuedCertificates />}
+                                        />
+                                        <Route
+                                            path="bulletin"
+                                            element={<BulletinBoard />}
+                                        />
+                                        <Route
+                                            path="reports/enrollment"
+                                            element={<EnrollmentReport />}
+                                        />
+                                        <Route
+                                            path="reports/attendance"
+                                            element={<AttendanceReport />}
+                                        />
+                                        <Route
+                                            path="reports/deficiency"
+                                            element={<DeficiencyReport />}
+                                        />
+                                        <Route
+                                            path="classes"
+                                            element={<Classes />}
+                                        />
+                                        <Route
+                                            path="profile"
+                                            element={<Profile />}
+                                        />
+                                        <Route
+                                            path="*"
+                                            element={
+                                                <Navigate to="/admin" replace />
+                                            }
+                                        />
+                                    </Routes>
+                                </AdminLayout>
+                            ) : (
+                                <Navigate to="/login" replace />
+                            )
+                        }
                     />
-                    <Route path="superadmin/backups" element={<BackupPage />} />
-                    <Route path="superadmin/backup-schedules" element={<BackupSchedules />} />
-                    <Route path="students" element={<Students />} />
-                    <Route
-                      path="students/component"
-                      element={<StudentComponent />}
-                    />
-                    <Route
-                      path="students/requests"
-                      element={<StudentRequests />}
-                    />
-                    <Route path="activities" element={<ActivitiesLayout />}>
-                      <Route index element={<Activities />} />
-                      <Route path="schedules" element={<Schedules />} />
-                    </Route>
-                    <Route path="activities/map" element={<ActivityMap />} />
-                    <Route path="activities/location/:id" element={<ActivityLocationView />} />
-                    <Route
-                      path="documents/submissions"
-                      element={<DocumentSubmissions />}
-                    />
-                    <Route
-                      path="documents/library"
-                      element={<DocumentLibrary />}
-                    />
-                    <Route
-                      path="attendance/create"
-                      element={<CreateAttendanceSession />}
-                    />
-                    <Route
-                      path="reports/accomplishment"
-                      element={<AccomplishmentReport />}
-                    />
-                    <Route
-                      path="certificates/generate"
-                      element={<GenerateCertificate />}
-                    />
-                    <Route path="grades" element={<GradesManagement />} />
-                    <Route
-                      path="certificates/issued"
-                      element={<IssuedCertificates />}
-                    />
-                    <Route path="bulletin" element={<BulletinBoard />} />
-                    <Route
-                      path="reports/enrollment"
-                      element={<EnrollmentReport />}
-                    />
-                    <Route
-                      path="reports/attendance"
-                      element={<AttendanceReport />}
-                    />
-                    <Route
-                      path="reports/deficiency"
-                      element={<DeficiencyReport />}
-                    />
-                    <Route path="classes" element={<Classes />} />
-                    <Route path="profile" element={<Profile />} />
-                    <Route
-                      path="*"
-                      element={<Navigate to="/admin" replace />}
-                    />
-                  </Routes>
-                </AdminLayout>
-              ) : (
-                <Navigate to="/login" replace />
-              )
-            }
-          />
 
-          {/* ============================================================
+                    {/* ============================================================
               FACULTY ROUTES - Faculty only
               ============================================================ */}
-          <Route
-            path="/faculty/*"
-            element={
-              isAuthenticated && isFaculty ? (
-                <AdminLayout>
-                  <Routes>
-                    {/* Dashboard */}
-                    {/* ===== LEARNING MATERIALS ===== */}
-<Route
-  path="classes/:id/materials"
-  element={<FacultyMaterials />}
-/>
-<Route
-  path="classes/:id/materials/upload"
-  element={<FacultyMaterialUpload />}
-/>
-
-                    <Route path="students" element={<FacultyStudents />} />
-                    {/* ===== CLASSES ===== */}
-                    <Route path="classes" element={<FacultyClasses />} />
-                    <Route path="classes/:id" element={<FacultyClassDetail />} />
-
-                    {/* Activities & Schedules */}
-                    <Route path="activities" element={<ActivitiesLayout />}>
-                      <Route index element={<Activities />} />
-                      <Route path="schedules" element={<Schedules />} />
-                      <Route path="map" element={<FacultyActivityMap />} />
-                      <Route path="location/:id" element={<FacultyActivityLocationView />} />
-                    </Route>
-
                     <Route
-                      path="attendance/create"
-                      element={<CreateAttendanceSession />}
+                        path="/faculty/*"
+                        element={
+                            isAuthenticated && isFaculty ? (
+                                <AdminLayout>
+                                    <Routes>
+                                        {/* Dashboard */}
+                                        <Route index element={<FacultyDashboard />} />
+                                        {/* ===== LEARNING MATERIALS ===== */}
+                                        <Route
+                                            path="classes/:id/materials"
+                                            element={<FacultyMaterials />}
+                                        />
+                                        <Route
+                                            path="classes/:id/materials/upload"
+                                            element={<FacultyMaterialUpload />}
+                                        />
+
+                                        <Route
+                                            path="students"
+                                            element={<FacultyStudents />}
+                                        />
+                                        {/* ===== CLASSES ===== */}
+                                        <Route
+                                            path="classes"
+                                            element={<FacultyClasses />}
+                                        />
+                                        <Route
+                                            path="classes/:id"
+                                            element={<FacultyClassDetail />}
+                                        />
+
+                                        {/* Activities & Schedules */}
+                                        <Route
+                                            path="activities"
+                                            element={<ActivitiesLayout />}
+                                        >
+                                            <Route
+                                                index
+                                                element={<Activities />}
+                                            />
+                                            <Route
+                                                path="schedules"
+                                                element={<Schedules />}
+                                            />
+                                            <Route
+                                                path="map"
+                                                element={<FacultyActivityMap />}
+                                            />
+                                            <Route
+                                                path="location/:id"
+                                                element={
+                                                    <FacultyActivityLocationView />
+                                                }
+                                            />
+                                        </Route>
+
+                                        <Route
+                                            path="attendance/create"
+                                            element={
+                                                <CreateAttendanceSession />
+                                            }
+                                        />
+
+                                        {/* Bulletin Board */}
+                                        <Route
+                                            path="bulletin"
+                                            element={<BulletinBoard />}
+                                        />
+                                        <Route
+                                            path="profile"
+                                            element={<Profile />}
+                                        />
+
+                                        {/* Catch all */}
+                                        <Route
+                                            path="*"
+                                            element={
+                                                <Navigate
+                                                    to="/faculty"
+                                                    replace
+                                                />
+                                            }
+                                        />
+                                    </Routes>
+                                </AdminLayout>
+                            ) : (
+                                <Navigate to="/login" replace />
+                            )
+                        }
                     />
 
-                    {/* Bulletin Board */}
-                    <Route path="bulletin" element={<BulletinBoard />} />
-                    <Route path="profile" element={<Profile />} />
-
-                    {/* Catch all */}
+                    {/* Redirect root to admin */}
                     <Route
-                      path="*"
-                      element={<Navigate to="/faculty" replace />}
+                        path="/"
+                        element={<Navigate to="/admin" replace />}
                     />
-                  </Routes>
-                </AdminLayout>
-              ) : (
-                <Navigate to="/login" replace />
-              )
-            }
-          />
-
-          {/* Redirect root to admin */}
-          <Route path="/" element={<Navigate to="/admin" replace />} />
-          <Route path="*" element={<Navigate to="/admin" replace />} />
-        </Routes>
-      </BrowserRouter>
-    </QueryClientProvider>
-  );
+                    <Route
+                        path="*"
+                        element={<Navigate to="/admin" replace />}
+                    />
+                </Routes>
+            </BrowserRouter>
+        </QueryClientProvider>
+    );
 };
 
 export default App;

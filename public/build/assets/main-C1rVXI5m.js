@@ -45313,6 +45313,305 @@ const BulletinBoard = () => {
     )) })
   ] });
 };
+const FacultyDashboard = () => {
+  const {
+    data: stats,
+    isLoading,
+    error,
+    refetch,
+    isFetching
+  } = useQuery({
+    queryKey: ["faculty", "dashboard"],
+    queryFn: () => facultyApi.getDashboard(),
+    staleTime: 6e4
+  });
+  if (isLoading) {
+    return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-center py-16", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "spinner" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "ml-3 text-slate-500", children: "Loading dashboard..." })
+    ] });
+  }
+  if (error) {
+    return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-exclamation-circle mr-2" }),
+      "Failed to load dashboard: ",
+      error.message,
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { className: "btn btn-primary btn-sm ml-3", onClick: () => refetch(), children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-redo" }),
+        " Retry"
+      ] })
+    ] });
+  }
+  const user = (() => {
+    try {
+      return JSON.parse(localStorage.getItem("user") || "{}");
+    } catch {
+      return {};
+    }
+  })();
+  const num = (v2) => typeof v2 === "number" && !Number.isNaN(v2) ? v2 : Number(v2) || 0;
+  const myStudents = num(stats?.my_students);
+  const activeSessions = num(stats?.active_sessions);
+  const todayCheckins = num(stats?.today_checkins);
+  const pendingDocuments = num(stats?.pending_documents);
+  const completedStudents = num(stats?.completed_students);
+  const inProgressStudents = num(stats?.in_progress_students);
+  const deficientStudents = num(stats?.deficient_students);
+  const pendingStudents = num(stats?.pending_students);
+  const eligibleStudents = num(stats?.eligible_students);
+  const componentDist = stats?.component_distribution ?? {};
+  const weeklyAttendance = Array.isArray(stats?.weekly_attendance) ? stats.weekly_attendance : [];
+  const todayAttendance = Array.isArray(stats?.today_attendance) ? stats.today_attendance : [];
+  const recentSessions = Array.isArray(stats?.recent_sessions) ? stats.recent_sessions : [];
+  const pct = (part, whole) => whole > 0 ? Math.min(100, part / whole * 100) : 0;
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-6", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between items-center flex-wrap gap-3", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("h3", { className: "text-lg font-semibold text-navy-900", children: [
+          "Welcome, ",
+          user?.name || "Faculty",
+          "!"
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-sm text-slate-500", children: [
+          user?.email || "faculty@nstp.com",
+          " • Role: Faculty",
+          stats?.component && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "ml-2 inline-block bg-gold-100 text-gold-800 px-2 py-0.5 rounded text-xs font-semibold", children: String(stats.component).toUpperCase() }),
+          user?.class_code && /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "ml-2 inline-block bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-xs font-semibold font-mono", children: [
+            "Code: ",
+            user.class_code
+          ] })
+        ] })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          RefreshButton,
+          {
+            onRefresh: refetch,
+            isLoading: isFetching,
+            label: "",
+            className: "btn-sm"
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          Link,
+          {
+            to: "/faculty/activities/schedules",
+            className: "btn btn-info btn-sm",
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-calendar-week mr-2" }),
+              " Schedule"
+            ]
+          }
+        )
+      ] })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid grid-cols-1 sm:grid-cols-3 gap-4", children: [
+      {
+        to: "/faculty/attendance/create",
+        label: "ADD ATTENDANCE",
+        icon: "fa-camera",
+        color: "bg-navy-600"
+      },
+      {
+        to: "/faculty/activities",
+        label: "ACTIVITIES",
+        icon: "fa-tasks",
+        color: "bg-slate-600"
+      },
+      {
+        to: "/faculty/activities/map",
+        label: "LOCATION MONITOR",
+        icon: "fa-map-marked-alt",
+        color: "bg-emerald-600"
+      },
+      {
+        to: "/faculty/bulletin",
+        label: "BULLETIN BOARD",
+        icon: "fa-bullhorn",
+        color: "bg-gold-600"
+      }
+    ].map((action) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+      Link,
+      {
+        to: action.to,
+        className: `${action.color} text-white p-4 rounded-xl flex flex-col items-center justify-center gap-2 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-200`,
+        children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: `fas ${action.icon} text-2xl` }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs font-bold tracking-wide", children: action.label })
+        ]
+      },
+      action.to
+    )) }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid grid-cols-2 md:grid-cols-4 gap-4", children: [
+      { label: "My Students", value: myStudents, color: "border-blue-500" },
+      { label: "Active Sessions", value: activeSessions, color: "border-emerald-500" },
+      { label: "Today's Check-ins", value: todayCheckins, color: "border-gold-500" },
+      { label: "Pending Documents", value: pendingDocuments, color: "border-red-500" }
+    ].map((stat, index) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+      "div",
+      {
+        className: `bg-white p-4 rounded-xl shadow-sm border-l-4 ${stat.color}`,
+        children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "block text-xs text-slate-500", children: stat.label }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-2xl font-bold text-navy-900", children: stat.value })
+        ]
+      },
+      index
+    )) }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid md:grid-cols-2 gap-6", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-white rounded-xl shadow-sm border border-slate-200 p-6", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("h4", { className: "font-semibold text-navy-900 mb-4", children: "Student Status" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "space-y-3", children: [
+          { label: "Completed", value: completedStudents, color: "bg-emerald-500" },
+          { label: "In Progress", value: inProgressStudents, color: "bg-blue-500" },
+          { label: "Deficient", value: deficientStudents, color: "bg-red-500" },
+          { label: "Pending", value: pendingStudents, color: "bg-amber-500" }
+        ].map((item, index) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between text-sm mb-1", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-slate-600", children: item.label }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-medium text-navy-900", children: item.value })
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "w-full h-2 bg-slate-200 rounded-full overflow-hidden", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "div",
+            {
+              className: `h-full rounded-full ${item.color}`,
+              style: { width: `${pct(item.value, myStudents)}%` }
+            }
+          ) })
+        ] }, index)) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mt-3 text-sm text-slate-500", children: [
+          "Eligible:",
+          " ",
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-medium text-emerald-600", children: eligibleStudents }),
+          " ",
+          "students"
+        ] })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-white rounded-xl shadow-sm border border-slate-200 p-6", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("h4", { className: "font-semibold text-navy-900 mb-4", children: "Component Distribution" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "space-y-3", children: [
+          { label: "CWTS", value: num(componentDist.cwts), color: "bg-blue-500" },
+          { label: "ROTC", value: num(componentDist.rotc), color: "bg-red-500" },
+          { label: "LTS", value: num(componentDist.lts), color: "bg-emerald-500" },
+          { label: "Unassigned", value: num(componentDist.unassigned), color: "bg-slate-400" }
+        ].map((item, index) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between text-sm mb-1", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-slate-600", children: item.label }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-medium text-navy-900", children: item.value })
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "w-full h-2 bg-slate-200 rounded-full overflow-hidden", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "div",
+            {
+              className: `h-full rounded-full ${item.color}`,
+              style: { width: `${pct(item.value, myStudents)}%` }
+            }
+          ) })
+        ] }, index)) })
+      ] })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-white rounded-xl shadow-sm border border-slate-200 p-6", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("h4", { className: "font-semibold text-navy-900 mb-4", children: "Weekly Attendance" }),
+      weeklyAttendance.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-center py-8 text-slate-500", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-chart-bar text-3xl text-slate-300 block mb-2" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm", children: "No attendance data for this week" })
+      ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex items-end justify-between h-40 gap-2", children: (() => {
+        const maxCount = Math.max(
+          1,
+          ...weeklyAttendance.map((d2) => num(d2.count))
+        );
+        return weeklyAttendance.map((day, index) => {
+          const c2 = num(day.count);
+          const height = c2 / maxCount * 100;
+          return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1 flex flex-col items-center", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "w-full flex justify-center", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "div",
+              {
+                className: "w-full max-w-[40px] bg-gold-500 rounded-t transition-all duration-500 hover:bg-gold-600",
+                style: { height: `${Math.max(height * 1.5, 4)}px` },
+                children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[10px] text-white flex items-center justify-center h-full", children: c2 > 0 ? c2 : "" })
+              }
+            ) }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-slate-500 mt-2", children: day.date })
+          ] }, index);
+        });
+      })() })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid md:grid-cols-2 gap-6", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-white rounded-xl shadow-sm border border-slate-200 p-6", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between items-center mb-4", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("h4", { className: "font-semibold text-navy-900", children: "Today's Attendance" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-sm text-slate-500", children: [
+            todayCheckins,
+            " check-ins"
+          ] })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "overflow-x-auto max-h-60 overflow-y-auto", children: todayAttendance.length > 0 ? /* @__PURE__ */ jsxRuntimeExports.jsxs("table", { className: "w-full text-sm", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("thead", { className: "sticky top-0 bg-white", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("tr", { className: "border-b border-slate-200", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("th", { className: "text-left py-2 px-2 text-xs font-semibold text-slate-500 uppercase", children: "Student" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("th", { className: "text-left py-2 px-2 text-xs font-semibold text-slate-500 uppercase", children: "ID" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("th", { className: "text-left py-2 px-2 text-xs font-semibold text-slate-500 uppercase", children: "Time" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("th", { className: "text-left py-2 px-2 text-xs font-semibold text-slate-500 uppercase", children: "Status" })
+          ] }) }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("tbody", { children: todayAttendance.map((item, index) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "tr",
+            {
+              className: "border-b border-slate-100 last:border-0 hover:bg-slate-50",
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "py-2 px-2 text-navy-700 truncate max-w-[80px]", children: item.student }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "py-2 px-2 text-navy-700 text-xs", children: item.student_id }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "py-2 px-2 text-slate-500 text-xs", children: item.time }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "py-2 px-2", children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `status ${item.status}`, children: item.status ? item.status.charAt(0).toUpperCase() + item.status.slice(1) : "—" }) })
+              ]
+            },
+            index
+          )) })
+        ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-center py-8 text-slate-500", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-user-check text-3xl text-slate-300 block mb-2" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "No check-ins today" })
+        ] }) })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-white rounded-xl shadow-sm border border-slate-200 p-6", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("h4", { className: "font-semibold text-navy-900 mb-4", children: "Recent Sessions" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "space-y-3 max-h-60 overflow-y-auto", children: recentSessions.length > 0 ? recentSessions.map((session) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "div",
+          {
+            className: "flex items-center justify-between p-3 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors",
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-medium text-navy-900", children: session.class_name || `Session #${session.id}` }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-slate-500 ml-2", children: session.component?.toUpperCase() || "All" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-slate-400", children: session.start_time ? `${new Date(session.start_time).toLocaleDateString()} at ${new Date(
+                  session.start_time
+                ).toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit"
+                })}` : "—" })
+              ] }),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-xs text-slate-500", children: [
+                  session.logs_count || 0,
+                  " students"
+                ] }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  "span",
+                  {
+                    className: `badge ${session.status === "active" ? "badge-success" : "badge-secondary"}`,
+                    children: (session.status || "unknown").toUpperCase()
+                  }
+                )
+              ] })
+            ]
+          },
+          session.id
+        )) : /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-center py-8 text-slate-500", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-calendar-times text-3xl text-slate-300 block mb-2" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "No sessions yet" })
+        ] }) })
+      ] })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(DashboardScheduleView, { scope: "faculty", showActivities: true, showSessions: true })
+  ] });
+};
 const FacultyActivityMap = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -48071,7 +48370,13 @@ const App = () => {
     /* @__PURE__ */ jsxRuntimeExports.jsx(OfflineBanner, {}),
     /* @__PURE__ */ jsxRuntimeExports.jsxs(Routes, { children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { path: "/login", element: /* @__PURE__ */ jsxRuntimeExports.jsx(Login, {}) }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { path: "/forgot-password", element: /* @__PURE__ */ jsxRuntimeExports.jsx(ForgotPassword, {}) }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        Route,
+        {
+          path: "/forgot-password",
+          element: /* @__PURE__ */ jsxRuntimeExports.jsx(ForgotPassword, {})
+        }
+      ),
       /* @__PURE__ */ jsxRuntimeExports.jsx(
         Route,
         {
@@ -48085,9 +48390,27 @@ const App = () => {
                 element: /* @__PURE__ */ jsxRuntimeExports.jsx(SuperAdminDashboard, {})
               }
             ),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { path: "superadmin/backups", element: /* @__PURE__ */ jsxRuntimeExports.jsx(BackupPage, {}) }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { path: "superadmin/backup-schedules", element: /* @__PURE__ */ jsxRuntimeExports.jsx(BackupSchedules, {}) }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { path: "students", element: /* @__PURE__ */ jsxRuntimeExports.jsx(Students, {}) }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              Route,
+              {
+                path: "superadmin/backups",
+                element: /* @__PURE__ */ jsxRuntimeExports.jsx(BackupPage, {})
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              Route,
+              {
+                path: "superadmin/backup-schedules",
+                element: /* @__PURE__ */ jsxRuntimeExports.jsx(BackupSchedules, {})
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              Route,
+              {
+                path: "students",
+                element: /* @__PURE__ */ jsxRuntimeExports.jsx(Students, {})
+              }
+            ),
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               Route,
               {
@@ -48102,12 +48425,43 @@ const App = () => {
                 element: /* @__PURE__ */ jsxRuntimeExports.jsx(StudentRequests, {})
               }
             ),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs(Route, { path: "activities", element: /* @__PURE__ */ jsxRuntimeExports.jsx(ActivitiesLayout, {}), children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { index: true, element: /* @__PURE__ */ jsxRuntimeExports.jsx(Activities, {}) }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { path: "schedules", element: /* @__PURE__ */ jsxRuntimeExports.jsx(Schedules, {}) })
-            ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { path: "activities/map", element: /* @__PURE__ */ jsxRuntimeExports.jsx(ActivityMap, {}) }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { path: "activities/location/:id", element: /* @__PURE__ */ jsxRuntimeExports.jsx(ActivityLocationView, {}) }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs(
+              Route,
+              {
+                path: "activities",
+                element: /* @__PURE__ */ jsxRuntimeExports.jsx(ActivitiesLayout, {}),
+                children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    Route,
+                    {
+                      index: true,
+                      element: /* @__PURE__ */ jsxRuntimeExports.jsx(Activities, {})
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    Route,
+                    {
+                      path: "schedules",
+                      element: /* @__PURE__ */ jsxRuntimeExports.jsx(Schedules, {})
+                    }
+                  )
+                ]
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              Route,
+              {
+                path: "activities/map",
+                element: /* @__PURE__ */ jsxRuntimeExports.jsx(ActivityMap, {})
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              Route,
+              {
+                path: "activities/location/:id",
+                element: /* @__PURE__ */ jsxRuntimeExports.jsx(ActivityLocationView, {})
+              }
+            ),
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               Route,
               {
@@ -48143,7 +48497,13 @@ const App = () => {
                 element: /* @__PURE__ */ jsxRuntimeExports.jsx(GenerateCertificate, {})
               }
             ),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { path: "grades", element: /* @__PURE__ */ jsxRuntimeExports.jsx(GradesManagement, {}) }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              Route,
+              {
+                path: "grades",
+                element: /* @__PURE__ */ jsxRuntimeExports.jsx(GradesManagement, {})
+              }
+            ),
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               Route,
               {
@@ -48151,7 +48511,13 @@ const App = () => {
                 element: /* @__PURE__ */ jsxRuntimeExports.jsx(IssuedCertificates, {})
               }
             ),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { path: "bulletin", element: /* @__PURE__ */ jsxRuntimeExports.jsx(BulletinBoard, {}) }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              Route,
+              {
+                path: "bulletin",
+                element: /* @__PURE__ */ jsxRuntimeExports.jsx(BulletinBoard, {})
+              }
+            ),
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               Route,
               {
@@ -48173,8 +48539,20 @@ const App = () => {
                 element: /* @__PURE__ */ jsxRuntimeExports.jsx(DeficiencyReport, {})
               }
             ),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { path: "classes", element: /* @__PURE__ */ jsxRuntimeExports.jsx(Classes, {}) }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { path: "profile", element: /* @__PURE__ */ jsxRuntimeExports.jsx(Profile, {}) }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              Route,
+              {
+                path: "classes",
+                element: /* @__PURE__ */ jsxRuntimeExports.jsx(Classes, {})
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              Route,
+              {
+                path: "profile",
+                element: /* @__PURE__ */ jsxRuntimeExports.jsx(Profile, {})
+              }
+            ),
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               Route,
               {
@@ -48190,6 +48568,7 @@ const App = () => {
         {
           path: "/faculty/*",
           element: isAuthenticated && isFaculty ? /* @__PURE__ */ jsxRuntimeExports.jsx(AdminLayout, { children: /* @__PURE__ */ jsxRuntimeExports.jsxs(Routes, { children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { index: true, element: /* @__PURE__ */ jsxRuntimeExports.jsx(FacultyDashboard, {}) }),
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               Route,
               {
@@ -48204,15 +48583,64 @@ const App = () => {
                 element: /* @__PURE__ */ jsxRuntimeExports.jsx(MaterialUpload, {})
               }
             ),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { path: "students", element: /* @__PURE__ */ jsxRuntimeExports.jsx(FacultyStudents, {}) }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { path: "classes", element: /* @__PURE__ */ jsxRuntimeExports.jsx(FacultyClasses, {}) }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { path: "classes/:id", element: /* @__PURE__ */ jsxRuntimeExports.jsx(FacultyClassDetail, {}) }),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs(Route, { path: "activities", element: /* @__PURE__ */ jsxRuntimeExports.jsx(ActivitiesLayout, {}), children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { index: true, element: /* @__PURE__ */ jsxRuntimeExports.jsx(Activities, {}) }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { path: "schedules", element: /* @__PURE__ */ jsxRuntimeExports.jsx(Schedules, {}) }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { path: "map", element: /* @__PURE__ */ jsxRuntimeExports.jsx(FacultyActivityMap, {}) }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { path: "location/:id", element: /* @__PURE__ */ jsxRuntimeExports.jsx(FacultyActivityLocationView, {}) })
-            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              Route,
+              {
+                path: "students",
+                element: /* @__PURE__ */ jsxRuntimeExports.jsx(FacultyStudents, {})
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              Route,
+              {
+                path: "classes",
+                element: /* @__PURE__ */ jsxRuntimeExports.jsx(FacultyClasses, {})
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              Route,
+              {
+                path: "classes/:id",
+                element: /* @__PURE__ */ jsxRuntimeExports.jsx(FacultyClassDetail, {})
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs(
+              Route,
+              {
+                path: "activities",
+                element: /* @__PURE__ */ jsxRuntimeExports.jsx(ActivitiesLayout, {}),
+                children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    Route,
+                    {
+                      index: true,
+                      element: /* @__PURE__ */ jsxRuntimeExports.jsx(Activities, {})
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    Route,
+                    {
+                      path: "schedules",
+                      element: /* @__PURE__ */ jsxRuntimeExports.jsx(Schedules, {})
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    Route,
+                    {
+                      path: "map",
+                      element: /* @__PURE__ */ jsxRuntimeExports.jsx(FacultyActivityMap, {})
+                    }
+                  ),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    Route,
+                    {
+                      path: "location/:id",
+                      element: /* @__PURE__ */ jsxRuntimeExports.jsx(FacultyActivityLocationView, {})
+                    }
+                  )
+                ]
+              }
+            ),
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               Route,
               {
@@ -48220,20 +48648,50 @@ const App = () => {
                 element: /* @__PURE__ */ jsxRuntimeExports.jsx(CreateAttendanceSession, {})
               }
             ),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { path: "bulletin", element: /* @__PURE__ */ jsxRuntimeExports.jsx(BulletinBoard, {}) }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { path: "profile", element: /* @__PURE__ */ jsxRuntimeExports.jsx(Profile, {}) }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              Route,
+              {
+                path: "bulletin",
+                element: /* @__PURE__ */ jsxRuntimeExports.jsx(BulletinBoard, {})
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              Route,
+              {
+                path: "profile",
+                element: /* @__PURE__ */ jsxRuntimeExports.jsx(Profile, {})
+              }
+            ),
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               Route,
               {
                 path: "*",
-                element: /* @__PURE__ */ jsxRuntimeExports.jsx(Navigate, { to: "/faculty", replace: true })
+                element: /* @__PURE__ */ jsxRuntimeExports.jsx(
+                  Navigate,
+                  {
+                    to: "/faculty",
+                    replace: true
+                  }
+                )
               }
             )
           ] }) }) : /* @__PURE__ */ jsxRuntimeExports.jsx(Navigate, { to: "/login", replace: true })
         }
       ),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { path: "/", element: /* @__PURE__ */ jsxRuntimeExports.jsx(Navigate, { to: "/admin", replace: true }) }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { path: "*", element: /* @__PURE__ */ jsxRuntimeExports.jsx(Navigate, { to: "/admin", replace: true }) })
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        Route,
+        {
+          path: "/",
+          element: /* @__PURE__ */ jsxRuntimeExports.jsx(Navigate, { to: "/admin", replace: true })
+        }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        Route,
+        {
+          path: "*",
+          element: /* @__PURE__ */ jsxRuntimeExports.jsx(Navigate, { to: "/admin", replace: true })
+        }
+      )
     ] })
   ] }) });
 };
@@ -48322,4 +48780,4 @@ startSyncEngine();
 ReactDOM.createRoot(document.getElementById("root")).render(
   /* @__PURE__ */ jsxRuntimeExports.jsx(React.StrictMode, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(App, {}) })
 );
-//# sourceMappingURL=main-CDnwpqiM.js.map
+//# sourceMappingURL=main-C1rVXI5m.js.map
