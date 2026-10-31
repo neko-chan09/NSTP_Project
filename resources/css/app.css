@@ -1,0 +1,468 @@
+@import 'tailwindcss';
+@import 'leaflet/dist/leaflet.css';
+
+/* ============================================================
+   SOURCES
+   ============================================================ */
+@source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+@source '../../storage/framework/views/*.php';
+@source '../views/**/*.blade.php';
+@source '../js/**/*.{js,ts,jsx,tsx}';
+
+/* ============================================================
+   THEME — merged from old tailwind.config.js + app.css
+   ============================================================ */
+@theme {
+    --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif,
+        'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
+    --font-inter: 'Inter', sans-serif;
+
+    /* NAVY */
+    --color-navy-50: #f0f4f8;
+    --color-navy-100: #d9e2ec;
+    --color-navy-200: #b3c5d9;
+    --color-navy-300: #8da8c6;
+    --color-navy-400: #668bb3;
+    --color-navy-500: #406ea0;
+    --color-navy-600: #1B2A4A;
+    --color-navy-700: #16223b;
+    --color-navy-800: #11192d;
+    --color-navy-900: #0c121f;
+    --color-navy-950: #070a12;
+
+    /* GOLD */
+    --color-gold-50: #fbf6e8;
+    --color-gold-100: #f7edc5;
+    --color-gold-200: #f3dda2;
+    --color-gold-300: #efce7f;
+    --color-gold-400: #ebbe5c;
+    --color-gold-500: #D4AF37;
+    --color-gold-600: #b8952a;
+    --color-gold-700: #9c7c1e;
+    --color-gold-800: #806413;
+    --color-gold-900: #644c08;
+    --color-gold-950: #483404;
+}
+
+/* ============================================================
+   BASE
+   ============================================================ */
+@layer base {
+    :root {
+        --sidebar-width: 280px;
+        --sidebar-collapsed-width: 72px;
+    }
+
+    * {
+        @apply m-0 p-0 box-border;
+    }
+
+    body {
+        @apply bg-slate-50 text-navy-900 font-inter antialiased;
+    }
+
+    ::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+    }
+
+    ::-webkit-scrollbar-track {
+        @apply bg-slate-100;
+    }
+
+    ::-webkit-scrollbar-thumb {
+        @apply bg-slate-400 rounded-full;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+        @apply bg-slate-500;
+    }
+}
+
+/* ============================================================
+   COMPONENTS — paste everything from your v3 index.css
+   inside this single @layer components block.
+   ============================================================ */
+@layer components {
+    .btn {
+        @apply px-4 py-2 rounded-lg font-semibold text-sm transition-all duration-200 inline-flex items-center gap-2;
+    }
+
+    .btn:disabled {
+        @apply opacity-60 cursor-not-allowed;
+    }
+
+    .btn-primary {
+        @apply bg-navy-600 text-white hover:bg-navy-700 hover:shadow-lg hover:-translate-y-0.5;
+    }
+
+    .btn-secondary {
+        @apply bg-slate-100 text-navy-700 border border-slate-200 hover:bg-slate-200;
+    }
+
+    .btn-success {
+        @apply bg-emerald-600 text-white hover:bg-emerald-700;
+    }
+
+    .btn-danger {
+        @apply bg-red-600 text-white hover:bg-red-700;
+    }
+
+    .btn-info {
+        @apply bg-blue-600 text-white hover:bg-blue-700;
+    }
+
+    .btn-warning {
+        @apply bg-amber-500 text-white hover:bg-amber-600;
+    }
+
+    .btn-sm {
+        @apply px-3 py-1.5 text-xs;
+    }
+
+    .btn-lg {
+        @apply px-6 py-3 text-base;
+    }
+
+    .input {
+        @apply w-full px-4 py-2.5 border border-slate-200 rounded-lg text-navy-900 bg-white focus:outline-none focus:ring-2 focus:ring-gold-500 focus:border-transparent transition-all;
+    }
+
+    .input-error {
+        @apply border-red-500 focus:ring-red-500;
+    }
+
+    .label {
+        @apply block text-sm font-semibold text-navy-700 mb-1.5;
+    }
+
+    .card {
+        @apply bg-white rounded-xl shadow-sm border border-slate-200 p-6;
+    }
+
+    .badge {
+        @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold;
+    }
+
+    .badge-success {
+        @apply bg-emerald-100 text-emerald-800;
+    }
+
+    .badge-danger {
+        @apply bg-red-100 text-red-800;
+    }
+
+    .badge-warning {
+        @apply bg-amber-100 text-amber-800;
+    }
+
+    .badge-info {
+        @apply bg-blue-100 text-blue-800;
+    }
+
+    .badge-secondary {
+        @apply bg-slate-100 text-slate-800;
+    }
+
+    .badge-gold {
+        @apply bg-gold-100 text-gold-800;
+    }
+
+    .status {
+        @apply inline-flex px-2.5 py-0.5 rounded-full text-xs font-semibold;
+    }
+
+    .status-present {
+        @apply bg-emerald-100 text-emerald-800;
+    }
+
+    .status-late {
+        @apply bg-amber-100 text-amber-800;
+    }
+
+    .status-absent {
+        @apply bg-red-100 text-red-800;
+    }
+
+    .page-header {
+        @apply flex justify-between items-center flex-wrap gap-3 mb-5;
+    }
+
+    .page-title {
+        @apply text-2xl font-bold text-navy-900;
+    }
+
+    .page-subtitle {
+        @apply text-sm text-slate-500 font-normal;
+    }
+
+    .filters {
+        @apply flex flex-wrap gap-3 mb-5;
+    }
+
+    .search-box {
+        @apply flex items-center bg-white border border-slate-200 rounded-lg px-3 flex-1 min-w-[200px];
+    }
+
+    .search-box input {
+        @apply border-none bg-transparent py-2.5 px-2 w-full text-sm focus:outline-none;
+    }
+
+    .search-box i {
+        @apply text-slate-400;
+    }
+
+    .data-table {
+        @apply w-full border-collapse bg-white rounded-xl overflow-hidden shadow-sm;
+    }
+
+    .data-table thead {
+        @apply bg-navy-600;
+    }
+
+    .data-table th {
+        @apply text-white text-left px-4 py-3 text-xs font-semibold uppercase tracking-wider whitespace-nowrap;
+    }
+
+    .data-table td {
+        @apply px-4 py-3 border-b border-slate-100 text-sm align-middle;
+    }
+
+    .data-table tbody tr:hover td {
+        @apply bg-slate-50;
+    }
+
+    .data-table tbody tr:last-child td {
+        @apply border-b-0;
+    }
+
+    .modal-overlay {
+        @apply fixed inset-0 bg-black/50 flex items-center justify-center z-50;
+    }
+
+    .modal {
+        @apply bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl;
+    }
+
+    .modal-lg {
+        @apply max-w-4xl;
+    }
+
+    .modal-xl {
+        @apply max-w-6xl;
+    }
+
+    .modal-header {
+        @apply flex justify-between items-center px-6 py-4 border-b border-slate-200 sticky top-0 bg-white rounded-t-2xl z-10;
+    }
+
+    .modal-header h3 {
+        @apply text-lg font-semibold text-navy-900;
+    }
+
+    .modal-close {
+        @apply text-3xl text-slate-400 hover:text-slate-600 transition-colors bg-transparent border-none cursor-pointer;
+    }
+
+    .modal-body {
+        @apply p-6;
+    }
+
+    .modal-footer {
+        @apply px-6 py-4 border-t border-slate-200 flex justify-end gap-3;
+    }
+
+    .form-group {
+        @apply flex flex-col gap-1.5;
+    }
+
+    .form-row {
+        @apply grid grid-cols-1 md:grid-cols-2 gap-4;
+    }
+
+    .form-grid {
+        @apply grid grid-cols-1 md:grid-cols-2 gap-4;
+    }
+
+    .loading-spinner {
+        @apply flex items-center justify-center py-16 text-slate-500 gap-3;
+    }
+
+    .spinner {
+        @apply w-8 h-8 border-4 border-slate-200 border-t-gold-500 rounded-full animate-spin;
+    }
+
+    .empty-state {
+        @apply text-center py-16 bg-white rounded-xl border border-slate-200;
+    }
+
+    .empty-state i {
+        @apply text-5xl text-slate-300 mb-4 block;
+    }
+
+    .empty-state p {
+        @apply text-slate-500 text-base;
+    }
+
+    .text-danger {
+        @apply text-red-600;
+    }
+
+    .text-muted {
+        @apply text-slate-500;
+    }
+
+    .alert {
+        @apply px-4 py-3 rounded-lg border text-sm;
+    }
+
+    .alert-danger {
+        @apply bg-red-50 border-red-200 text-red-700;
+    }
+
+    .alert-success {
+        @apply bg-emerald-50 border-emerald-200 text-emerald-700;
+    }
+
+    .alert-warning {
+        @apply bg-amber-50 border-amber-200 text-amber-700;
+    }
+
+    .alert-info {
+        @apply bg-blue-50 border-blue-200 text-blue-700;
+    }
+}
+
+/* ============================================================
+   UTILITIES — Leaflet overrides + animations (paste from your index.css)
+   ============================================================ */
+@layer utilities {
+    .leaflet-control-attribution {
+        font-size: 8px !important;
+    }
+
+    .leaflet-container {
+        font-family: inherit !important;
+        z-index: 0 !important;
+        height: 100% !important;
+        width: 100% !important;
+        position: relative !important;
+        overflow: hidden !important;
+    }
+
+    .leaflet-control-zoom {
+        border: 1px solid #e5e7eb !important;
+        border-radius: 8px !important;
+        overflow: hidden !important;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+    }
+
+    .leaflet-control-zoom a {
+        background-color: white !important;
+        color: #0A1628 !important;
+        width: 34px !important;
+        height: 34px !important;
+        line-height: 34px !important;
+    }
+
+    .leaflet-control-zoom a:hover {
+        background-color: #f3f4f6 !important;
+    }
+
+    .leaflet-control-zoom a:first-child {
+        border-bottom: 1px solid #e5e7eb !important;
+    }
+
+    .leaflet-popup-content-wrapper {
+        border-radius: 12px !important;
+        padding: 0 !important;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+    }
+
+    .leaflet-popup-content {
+        margin: 12px 16px !important;
+        min-width: 150px !important;
+    }
+
+    .leaflet-popup-tip {
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+    }
+
+    @media (max-width: 640px) {
+        .leaflet-container {
+            height: 300px !important;
+        }
+    }
+
+    .venue-marker {
+        filter: hue-rotate(30deg);
+    }
+
+    .animate-in {
+        animation: animateIn 0.2s ease;
+    }
+
+    .slide-in-from-bottom-4 {
+        animation: slideInFromBottom 0.3s ease;
+    }
+
+    .fade-in {
+        animation: fadeIn 0.2s ease;
+    }
+
+    @keyframes animateIn {
+        from {
+            opacity: 0;
+        }
+
+        to {
+            opacity: 1;
+        }
+    }
+
+    @keyframes slideInFromBottom {
+        from {
+            transform: translateY(20px);
+            opacity: 0;
+        }
+
+        to {
+            transform: translateY(0);
+            opacity: 1;
+        }
+    }
+
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+        }
+
+        to {
+            opacity: 1;
+        }
+    }
+
+    @keyframes pulse-dot {
+
+        0%,
+        100% {
+            opacity: 1;
+        }
+
+        50% {
+            opacity: 0.3;
+        }
+    }
+
+    input[type="range"] {
+        @apply appearance-none bg-slate-200 h-2 rounded-full outline-none;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+        @apply appearance-none w-4 h-4 rounded-full bg-gold-500 cursor-pointer;
+    }
+
+    input[type="range"]::-moz-range-thumb {
+        @apply appearance-none w-4 h-4 rounded-full bg-gold-500 cursor-pointer border-0;
+    }
+}
