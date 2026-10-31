@@ -29829,6 +29829,48 @@ function useAttendanceReport(params) {
   };
   return { ...query, refresh, isRefreshing: query.isFetching };
 }
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error, info) {
+    console.error("[ErrorBoundary]", error, info);
+  }
+  render() {
+    if (this.state.hasError) {
+      if (this.props.fallback) return this.props.fallback;
+      return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "font-medium", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-exclamation-triangle mr-2" }),
+          "Something went wrong in this section."
+        ] }),
+        this.state.error?.message && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs mt-1 text-red-600 font-mono break-all", children: this.state.error.message }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "button",
+          {
+            className: "btn btn-secondary btn-sm mt-3",
+            onClick: () => this.setState({ hasError: false, error: null }),
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-redo mr-1" }),
+              " Try again"
+            ]
+          }
+        )
+      ] });
+    }
+    return this.props.children;
+  }
+}
+const normalizeArray = (res) => {
+  if (Array.isArray(res)) return res;
+  if (res && Array.isArray(res.data)) return res.data;
+  if (res && res.data && Array.isArray(res.data.data)) return res.data.data;
+  return [];
+};
 const MONTH_NAMES$1 = [
   "January",
   "February",
@@ -29905,7 +29947,22 @@ const getComponentLabel$1 = (type) => {
   };
   return labels[type] || type.toUpperCase();
 };
-const DashboardScheduleView = ({
+const safeDate = (value) => {
+  if (!value) return null;
+  const d2 = new Date(value);
+  return isNaN(d2.getTime()) ? null : d2;
+};
+const DashboardScheduleView = (props) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+  ErrorBoundary,
+  {
+    fallback: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-white rounded-xl shadow-sm border border-slate-200 p-6 text-center text-slate-500", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-calendar-times text-3xl text-slate-300 block mb-2" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm", children: "Schedule overview couldn't be loaded." })
+    ] }),
+    children: /* @__PURE__ */ jsxRuntimeExports.jsx(DashboardScheduleViewInner, { ...props })
+  }
+);
+const DashboardScheduleViewInner = ({
   scope = "admin",
   maxHeight = "auto",
   showSessions = true,
@@ -29915,55 +29972,75 @@ const DashboardScheduleView = ({
   const [anchorDate, setAnchorDate] = reactExports.useState(/* @__PURE__ */ new Date());
   const [filterComponent, setFilterComponent] = reactExports.useState("all");
   const [selectedDay, setSelectedDay] = reactExports.useState(null);
-  const user = JSON.parse(localStorage.getItem("user") || "{}");
-  const { data: activitiesData = [], isLoading: activitiesLoading } = useQuery({
+  const user = reactExports.useMemo(() => {
+    try {
+      return JSON.parse(localStorage.getItem("user") || "{}");
+    } catch {
+      return {};
+    }
+  }, []);
+  const { data: activitiesData, isLoading: activitiesLoading } = useQuery({
     queryKey: ["dashboard-schedule", "activities"],
     queryFn: () => adminApi.getActivities(),
     staleTime: 6e4,
     enabled: showActivities
   });
-  const { data: sessionsData = [], isLoading: sessionsLoading } = useQuery({
+  const { data: sessionsData, isLoading: sessionsLoading } = useQuery({
     queryKey: ["dashboard-schedule", "sessions"],
     queryFn: () => adminApi.getAttendanceSessions(),
     staleTime: 3e4,
     enabled: showSessions
   });
   const isLoading = activitiesLoading || sessionsLoading;
+  const rawActivities = reactExports.useMemo(
+    () => normalizeArray(activitiesData),
+    [activitiesData]
+  );
+  const rawSessions = reactExports.useMemo(
+    () => normalizeArray(sessionsData),
+    [sessionsData]
+  );
   const items = reactExports.useMemo(() => {
     const out = [];
     if (showActivities) {
-      (activitiesData || []).forEach((a2) => {
+      rawActivities.forEach((a2) => {
+        if (!a2) return;
         if (scope === "faculty" && a2.created_by !== user?.id) return;
-        if (scope === "faculty" && user?.nstp_component && a2.component_type !== "all" && a2.component_type !== user.nstp_component) {
+        if (scope === "faculty" && user?.nstp_component && a2.component_type && a2.component_type !== "all" && a2.component_type !== user.nstp_component) {
           return;
         }
+        const start = safeDate(a2.start_datetime);
+        const end = safeDate(a2.end_datetime) || start;
+        if (!start) return;
         out.push({
           id: a2.id,
           kind: "activity",
-          title: a2.title,
+          title: a2.title || "Untitled activity",
           subtitle: a2.description,
-          start: new Date(a2.start_datetime),
-          end: new Date(a2.end_datetime),
-          status: a2.status,
+          start,
+          end: end || start,
+          status: a2.status || "upcoming",
           component: a2.component_type,
           venue: a2.venue
         });
       });
     }
     if (showSessions) {
-      (sessionsData || []).forEach((s2) => {
+      rawSessions.forEach((s2) => {
+        if (!s2) return;
         if (scope === "faculty" && s2.faculty_id !== user?.id) return;
-        const start = s2.scheduled_start || s2.start_time;
-        const end = s2.scheduled_end || s2.end_time || start;
+        const start = safeDate(s2.scheduled_start || s2.start_time);
+        const end = safeDate(s2.scheduled_end || s2.end_time) || start;
         if (!start) return;
+        const status = s2.status === "active" ? "ongoing" : s2.status === "closed" ? "completed" : "upcoming";
         out.push({
           id: s2.id,
           kind: "session",
           title: s2.class_name ? `Session · ${s2.class_name}` : `Session #${s2.id}`,
           subtitle: s2.description || "Attendance session",
-          start: new Date(start),
-          end: new Date(end),
-          status: s2.status === "active" ? "ongoing" : "completed",
+          start,
+          end: end || start,
+          status,
           component: s2.component,
           class_name: s2.class_name
         });
@@ -29976,8 +30053,8 @@ const DashboardScheduleView = ({
     }
     return out;
   }, [
-    activitiesData,
-    sessionsData,
+    rawActivities,
+    rawSessions,
     scope,
     user?.id,
     user?.nstp_component,
@@ -30010,9 +30087,7 @@ const DashboardScheduleView = ({
   };
   const goPrev = () => {
     if (viewMode === "month") {
-      setAnchorDate(
-        (d2) => new Date(d2.getFullYear(), d2.getMonth() - 1, 1)
-      );
+      setAnchorDate((d2) => new Date(d2.getFullYear(), d2.getMonth() - 1, 1));
     } else {
       setAnchorDate((d2) => {
         const nd = new Date(d2);
@@ -30024,9 +30099,7 @@ const DashboardScheduleView = ({
   };
   const goNext = () => {
     if (viewMode === "month") {
-      setAnchorDate(
-        (d2) => new Date(d2.getFullYear(), d2.getMonth() + 1, 1)
-      );
+      setAnchorDate((d2) => new Date(d2.getFullYear(), d2.getMonth() + 1, 1));
     } else {
       setAnchorDate((d2) => {
         const nd = new Date(d2);
@@ -30052,9 +30125,7 @@ const DashboardScheduleView = ({
   const monthStats = reactExports.useMemo(() => {
     const first = startOfMonth$2(anchorDate);
     const last = endOfMonth$2(anchorDate);
-    const inMonth = items.filter(
-      (i2) => i2.start >= first && i2.start <= last
-    );
+    const inMonth = items.filter((i2) => i2.start >= first && i2.start <= last);
     return {
       total: inMonth.length,
       upcoming: inMonth.filter((i2) => i2.status === "upcoming").length,
@@ -30150,30 +30221,45 @@ const DashboardScheduleView = ({
           }
         )
       ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs(
-        "button",
-        {
-          className: "btn btn-secondary btn-sm",
-          onClick: goToday,
-          children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-calendar-day mr-1" }),
-            " Today"
-          ]
-        }
-      )
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { className: "btn btn-secondary btn-sm", onClick: goToday, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-calendar-day mr-1" }),
+        " Today"
+      ] })
     ] }),
     viewMode === "month" && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid grid-cols-2 sm:grid-cols-4 gap-2 p-3 bg-white border-b border-slate-200", children: [
-      { label: "Upcoming", value: monthStats.upcoming, color: "border-blue-500 text-blue-600" },
-      { label: "Ongoing", value: monthStats.ongoing, color: "border-amber-500 text-amber-600" },
-      { label: "Completed", value: monthStats.completed, color: "border-emerald-500 text-emerald-600" },
-      { label: "Total", value: monthStats.total, color: "border-navy-600 text-navy-700" }
+      {
+        label: "Upcoming",
+        value: monthStats.upcoming,
+        color: "border-blue-500 text-blue-600"
+      },
+      {
+        label: "Ongoing",
+        value: monthStats.ongoing,
+        color: "border-amber-500 text-amber-600"
+      },
+      {
+        label: "Completed",
+        value: monthStats.completed,
+        color: "border-emerald-500 text-emerald-600"
+      },
+      {
+        label: "Total",
+        value: monthStats.total,
+        color: "border-navy-600 text-navy-700"
+      }
     ].map((stat, i2) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
       "div",
       {
         className: `bg-white rounded-lg border-l-4 ${stat.color.split(" ")[0]} px-3 py-2`,
         children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "block text-[10px] uppercase tracking-wider text-slate-500", children: stat.label }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `text-lg font-bold ${stat.color.split(" ")[1]}`, children: stat.value })
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "span",
+            {
+              className: `text-lg font-bold ${stat.color.split(" ")[1]}`,
+              children: stat.value
+            }
+          )
         ]
       },
       i2
@@ -48236,4 +48322,4 @@ startSyncEngine();
 ReactDOM.createRoot(document.getElementById("root")).render(
   /* @__PURE__ */ jsxRuntimeExports.jsx(React.StrictMode, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(App, {}) })
 );
-//# sourceMappingURL=main-Pb__WEal.js.map
+//# sourceMappingURL=main-CDnwpqiM.js.map

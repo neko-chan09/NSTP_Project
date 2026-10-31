@@ -380,7 +380,7 @@
     "isDynamicEntry": true
   },
   "resources/css/app.css": {
-    "file": "assets/app-BX2FiSdL.css",
+    "file": "assets/app-BTBmsMEX.css",
     "src": "resources/css/app.css",
     "isEntry": true,
     "name": "app",
@@ -399,7 +399,7 @@
     "isDynamicEntry": true
   },
   "resources/js/main.tsx": {
-    "file": "assets/main-Pb__WEal.js",
+    "file": "assets/main-CDnwpqiM.js",
     "name": "main",
     "src": "resources/js/main.tsx",
     "isEntry": true,

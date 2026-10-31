@@ -3639,6 +3639,10 @@
     overflow-wrap: break-word;
   }
 
+  .break-all {
+    word-break: break-all;
+  }
+
   .text-clip {
     text-overflow: clip;
   }
