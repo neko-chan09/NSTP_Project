@@ -1608,17 +1608,21 @@ const Activities: React.FC = () => {
                       </div>
 
                       <LocationPicker
-                        latitude={formData.latitude}
-                        longitude={formData.longitude}
-                        onLocationSelect={(lat, lng) => {
-                          setFormData((prev) => ({
-                            ...prev,
-                            latitude: lat,
-                            longitude: lng,
-                          }));
-                        }}
-                        venueName={formData.venue}
-                      />
+  latitude={formData.latitude}
+  longitude={formData.longitude}
+  onLocationSelect={(lat, lng) => {
+    setFormData((prev) => ({
+      ...prev,
+      latitude: lat,
+      longitude: lng,
+    }));
+  }}
+  venueName={formData.venue}
+  radius={formData.geofence_radius}
+  onRadiusChange={(r) =>
+    setFormData((prev) => ({ ...prev, geofence_radius: r }))
+  }
+/>
 
                       <div>
                         <label className="label flex justify-between">

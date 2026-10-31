@@ -8,6 +8,9 @@ interface LocationPickerProps {
   longitude: number | null;
   onLocationSelect: (lat: number, lng: number) => void;
   venueName?: string;
+  radius?: number;              // geofence radius in meters
+  onRadiusChange?: (r: number) => void; // optional: let picker control radius
+  showRadiusCircle?: boolean;   // default true
 }
 
 const LocationPicker: React.FC<LocationPickerProps> = ({
@@ -15,12 +18,15 @@ const LocationPicker: React.FC<LocationPickerProps> = ({
   longitude,
   onLocationSelect,
   venueName,
+  radius = 100,
+  onRadiusChange,
+  showRadiusCircle = true,
 }) => {
   const [searchQuery, setSearchQuery] = useState("");
   const [searching, setSearching] = useState(false);
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [position, setPosition] = useState<[number, number] | null>(
-    latitude && longitude ? [latitude, longitude] : null
+    latitude !== null && longitude !== null ? [latitude, longitude] : null
   );
   const [mapLoaded, setMapLoaded] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
@@ -30,6 +36,7 @@ const LocationPicker: React.FC<LocationPickerProps> = ({
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
+  const circleRef = useRef<any>(null);
   const leafletRef = useRef<any>(null);
 
   // ------------------------------------------------------------
@@ -126,6 +133,16 @@ const LocationPicker: React.FC<LocationPickerProps> = ({
 
     return () => {
       cancelled = true;
+
+      if (circleRef.current) {
+        try {
+          circleRef.current.remove();
+        } catch {
+          /* ignore */
+        }
+        circleRef.current = null;
+      }
+
       if (mapRef.current) {
         try {
           mapRef.current.remove();
@@ -139,6 +156,7 @@ const LocationPicker: React.FC<LocationPickerProps> = ({
         (mapContainerRef.current as any)._leaflet_id = null;
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ------------------------------------------------------------
@@ -150,7 +168,44 @@ const LocationPicker: React.FC<LocationPickerProps> = ({
       updateMarker(leafletRef.current, latitude, longitude, true);
       setPosition([latitude, longitude]);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [latitude, longitude]);
+
+  // ------------------------------------------------------------
+  // Draw / update geofence circle whenever position or radius changes
+  // ------------------------------------------------------------
+  useEffect(() => {
+    if (!mapRef.current || !leafletRef.current) return;
+    const L = leafletRef.current;
+
+    // Remove existing circle
+    if (circleRef.current) {
+      circleRef.current.remove();
+      circleRef.current = null;
+    }
+
+    if (!showRadiusCircle) return;
+    if (!position || !radius || radius <= 0) return;
+
+    const circle = L.circle(position, {
+      radius: Number(radius),
+      color: "#D4AF37",
+      fillColor: "#D4AF37",
+      fillOpacity: 0.12,
+      weight: 2,
+      dashArray: "6, 4",
+    }).addTo(mapRef.current);
+
+    circle.bindPopup(
+      `<div style="text-align:center">
+         <strong>Geofence Boundary</strong><br/>
+         <span style="font-size:11px;color:#666">Radius: ${radius}m</span>
+       </div>`
+    );
+
+    circleRef.current = circle;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [position, radius, showRadiusCircle]);
 
   const updateMarker = (
     L: any,
@@ -183,6 +238,11 @@ const LocationPicker: React.FC<LocationPickerProps> = ({
       });
 
       markerRef.current = marker;
+    }
+
+    // Recenter circle when marker moves
+    if (circleRef.current) {
+      circleRef.current.setLatLng([lat, lng]);
     }
 
     if (panTo) {
@@ -229,9 +289,10 @@ const LocationPicker: React.FC<LocationPickerProps> = ({
     if (mapRef.current && leafletRef.current) {
       updateMarker(leafletRef.current, lat, lng, true);
     }
-    toast(`Previewing ${result.display_name.split(",")[0]}. Click "Confirm Location" to use it.`, {
-      icon: "👁️",
-    });
+    toast(
+      `Previewing ${result.display_name.split(",")[0]}. Click "Confirm Location" to use it.`,
+      { icon: "👁️" }
+    );
   };
 
   // ------------------------------------------------------------
@@ -295,7 +356,7 @@ const LocationPicker: React.FC<LocationPickerProps> = ({
     { label: "🏟️ Taboc Opol Gymnasium", lat: 8.518316, lng: 124.576157 },
     { label: "🏟️ Opol Boardwalk", lat: 8.521507, lng: 124.575593 },
   ];
-//8.521507, 124.575593
+
   const previewQuickVenue = (venue: {
     label: string;
     lat: number;
@@ -391,6 +452,28 @@ const LocationPicker: React.FC<LocationPickerProps> = ({
         </div>
       )}
 
+      {/* Optional inline radius control (only if parent passes onRadiusChange) */}
+      {onRadiusChange && showRadiusCircle && (
+        <div className="flex items-center gap-3 px-1">
+          <label className="text-xs font-medium text-slate-600 whitespace-nowrap">
+            <i className="fas fa-circle-notch text-gold-500 mr-1" />
+            Geofence
+          </label>
+          <input
+            type="range"
+            min={10}
+            max={500}
+            step={10}
+            value={radius}
+            onChange={(e) => onRadiusChange(parseInt(e.target.value))}
+            className="flex-1 accent-gold-500"
+          />
+          <span className="text-xs font-semibold text-navy-900 tabular-nums w-12 text-right">
+            {radius}m
+          </span>
+        </div>
+      )}
+
       {/* Map */}
       <div className="relative">
         <div
@@ -429,6 +512,14 @@ const LocationPicker: React.FC<LocationPickerProps> = ({
           <div className="absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/70 backdrop-blur-sm px-4 py-2 rounded-lg shadow-md text-xs text-white/80 border border-white/10">
             <i className="fas fa-hand-pointer text-gold-400 mr-1" />
             Click on the map to set location • Drag marker to adjust
+          </div>
+        )}
+
+        {/* Radius badge overlay */}
+        {showRadiusCircle && position && radius > 0 && (
+          <div className="absolute top-3 left-3 bg-black/70 backdrop-blur-sm px-3 py-1.5 rounded-lg shadow-md text-xs text-white/90 border border-gold-500/30 flex items-center gap-2">
+            <span className="inline-block w-3 h-3 rounded-full border-2 border-dashed border-gold-400" />
+            Geofence: <span className="font-semibold text-gold-300">{radius}m</span>
           </div>
         )}
       </div>
@@ -470,6 +561,16 @@ const LocationPicker: React.FC<LocationPickerProps> = ({
                   }`}
                 >
                   Venue: {venueName}
+                </p>
+              )}
+              {showRadiusCircle && radius > 0 && (
+                <p
+                  className={`text-xs ${
+                    isConfirmed ? "text-emerald-600" : "text-amber-600"
+                  }`}
+                >
+                  <i className="fas fa-circle-notch mr-1" />
+                  Geofence: {radius}m radius
                 </p>
               )}
               {!isConfirmed && (latitude || longitude) && (
@@ -539,7 +640,9 @@ const LocationPicker: React.FC<LocationPickerProps> = ({
             <p className="text-xs text-blue-500 mt-1">
               <i className="fas fa-lightbulb mr-1" />
               Click on the map, drag the marker, or preview a quick place —
-              then click <strong>Confirm Location</strong> to save it.
+              then click <strong>Confirm Location</strong> to save it. The{" "}
+              <span className="text-gold-600 font-medium">gold dashed circle</span>{" "}
+              shows the geofence boundary.
             </p>
           </div>
         </div>

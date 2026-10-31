@@ -1391,17 +1391,21 @@ const FacultyClassDetail: React.FC = () => {
                         {sessionFormData.require_location && (
                             <div className="p-3 bg-blue-50 rounded-lg border border-blue-200 space-y-3">
                                 <LocationPicker
-                                    latitude={sessionFormData.latitude}
-                                    longitude={sessionFormData.longitude}
-                                    onLocationSelect={(lat, lng) =>
-                                        setSessionFormData({
-                                            ...sessionFormData,
-                                            latitude: lat,
-                                            longitude: lng,
-                                        })
-                                    }
-                                    venueName="Attendance Venue"
-                                />
+  latitude={sessionFormData.latitude}
+  longitude={sessionFormData.longitude}
+  onLocationSelect={(lat, lng) =>
+    setSessionFormData({
+      ...sessionFormData,
+      latitude: lat,
+      longitude: lng,
+    })
+  }
+  venueName="Attendance Venue"
+  radius={sessionFormData.geofence_radius}
+  onRadiusChange={(r) =>
+    setSessionFormData({ ...sessionFormData, geofence_radius: r })
+  }
+/>
                                 <button
                                     type="button"
                                     className="btn btn-secondary btn-sm w-full inline-flex items-center justify-center gap-2"

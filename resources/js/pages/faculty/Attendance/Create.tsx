@@ -528,11 +528,15 @@ const CreateAttendanceSession: React.FC = () => {
                 </div>
 
                 <LocationPicker
-                  latitude={formData.latitude}
-                  longitude={formData.longitude}
-                  onLocationSelect={handleLocationSelect}
-                  venueName="Attendance Venue"
-                />
+  latitude={formData.latitude}
+  longitude={formData.longitude}
+  onLocationSelect={handleLocationSelect}
+  venueName="Attendance Venue"
+  radius={formData.geofence_radius}
+  onRadiusChange={(r) =>
+    setFormData((prev) => ({ ...prev, geofence_radius: r }))
+  }
+/>
 
                 <button
                   type="button"

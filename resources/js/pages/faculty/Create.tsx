@@ -709,11 +709,15 @@ const CreateAttendanceSession: React.FC = () => {
                 <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
                   <div className="xl:col-span-3 rounded-xl overflow-hidden border border-slate-200">
                     <LocationPicker
-                      latitude={formData.latitude}
-                      longitude={formData.longitude}
-                      onLocationSelect={handleLocationSelect}
-                      venueName="Attendance Venue"
-                    />
+  latitude={formData.latitude}
+  longitude={formData.longitude}
+  onLocationSelect={handleLocationSelect}
+  venueName="Attendance Venue"
+  radius={formData.geofence_radius}
+  onRadiusChange={(r) =>
+    setFormData((prev) => ({ ...prev, geofence_radius: r }))
+  }
+/>
                   </div>
 
                   <div className="xl:col-span-2 space-y-5">

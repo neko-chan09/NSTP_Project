@@ -17555,13 +17555,16 @@ const LocationPicker = ({
   latitude,
   longitude,
   onLocationSelect,
-  venueName
+  venueName,
+  radius = 100,
+  onRadiusChange,
+  showRadiusCircle = true
 }) => {
   const [searchQuery, setSearchQuery] = reactExports.useState("");
   const [searching, setSearching] = reactExports.useState(false);
   const [searchResults, setSearchResults] = reactExports.useState([]);
   const [position, setPosition] = reactExports.useState(
-    latitude && longitude ? [latitude, longitude] : null
+    latitude !== null && longitude !== null ? [latitude, longitude] : null
   );
   const [mapLoaded, setMapLoaded] = reactExports.useState(false);
   const [mapError, setMapError] = reactExports.useState(null);
@@ -17570,6 +17573,7 @@ const LocationPicker = ({
   const mapContainerRef = reactExports.useRef(null);
   const mapRef = reactExports.useRef(null);
   const markerRef = reactExports.useRef(null);
+  const circleRef = reactExports.useRef(null);
   const leafletRef = reactExports.useRef(null);
   const isConfirmed = position !== null && latitude !== null && longitude !== null && Math.abs(position[0] - latitude) < 1e-7 && Math.abs(position[1] - longitude) < 1e-7;
   reactExports.useEffect(() => {
@@ -17637,6 +17641,13 @@ const LocationPicker = ({
     initMap();
     return () => {
       cancelled = true;
+      if (circleRef.current) {
+        try {
+          circleRef.current.remove();
+        } catch {
+        }
+        circleRef.current = null;
+      }
       if (mapRef.current) {
         try {
           mapRef.current.remove();
@@ -17657,6 +17668,31 @@ const LocationPicker = ({
       setPosition([latitude, longitude]);
     }
   }, [latitude, longitude]);
+  reactExports.useEffect(() => {
+    if (!mapRef.current || !leafletRef.current) return;
+    const L2 = leafletRef.current;
+    if (circleRef.current) {
+      circleRef.current.remove();
+      circleRef.current = null;
+    }
+    if (!showRadiusCircle) return;
+    if (!position || !radius || radius <= 0) return;
+    const circle = L2.circle(position, {
+      radius: Number(radius),
+      color: "#D4AF37",
+      fillColor: "#D4AF37",
+      fillOpacity: 0.12,
+      weight: 2,
+      dashArray: "6, 4"
+    }).addTo(mapRef.current);
+    circle.bindPopup(
+      `<div style="text-align:center">
+         <strong>Geofence Boundary</strong><br/>
+         <span style="font-size:11px;color:#666">Radius: ${radius}m</span>
+       </div>`
+    );
+    circleRef.current = circle;
+  }, [position, radius, showRadiusCircle]);
   const updateMarker = (L2, lat, lng, panTo = false) => {
     if (!mapRef.current) return;
     if (markerRef.current) {
@@ -17678,6 +17714,9 @@ const LocationPicker = ({
         setPosition([pos.lat, pos.lng]);
       });
       markerRef.current = marker;
+    }
+    if (circleRef.current) {
+      circleRef.current.setLatLng([lat, lng]);
     }
     if (panTo) {
       mapRef.current.setView([lat, lng], 17);
@@ -17716,9 +17755,10 @@ const LocationPicker = ({
     if (mapRef.current && leafletRef.current) {
       updateMarker(leafletRef.current, lat, lng, true);
     }
-    zt(`Previewing ${result.display_name.split(",")[0]}. Click "Confirm Location" to use it.`, {
-      icon: "👁️"
-    });
+    zt(
+      `Previewing ${result.display_name.split(",")[0]}. Click "Confirm Location" to use it.`,
+      { icon: "👁️" }
+    );
   };
   const getCurrentLocation = () => {
     if (!navigator.geolocation) {
@@ -17855,6 +17895,28 @@ const LocationPicker = ({
       },
       index
     )) }),
+    onRadiusChange && showRadiusCircle && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-3 px-1", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "text-xs font-medium text-slate-600 whitespace-nowrap", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-circle-notch text-gold-500 mr-1" }),
+        "Geofence"
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "input",
+        {
+          type: "range",
+          min: 10,
+          max: 500,
+          step: 10,
+          value: radius,
+          onChange: (e2) => onRadiusChange(parseInt(e2.target.value)),
+          className: "flex-1 accent-gold-500"
+        }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-xs font-semibold text-navy-900 tabular-nums w-12 text-right", children: [
+        radius,
+        "m"
+      ] })
+    ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "relative", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx(
         "div",
@@ -17888,6 +17950,14 @@ const LocationPicker = ({
       mapLoaded && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/70 backdrop-blur-sm px-4 py-2 rounded-lg shadow-md text-xs text-white/80 border border-white/10", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-hand-pointer text-gold-400 mr-1" }),
         "Click on the map to set location • Drag marker to adjust"
+      ] }),
+      showRadiusCircle && position && radius > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "absolute top-3 left-3 bg-black/70 backdrop-blur-sm px-3 py-1.5 rounded-lg shadow-md text-xs text-white/90 border border-gold-500/30 flex items-center gap-2", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "inline-block w-3 h-3 rounded-full border-2 border-dashed border-gold-400" }),
+        "Geofence: ",
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "font-semibold text-gold-300", children: [
+          radius,
+          "m"
+        ] })
       ] })
     ] }),
     position && /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -17930,6 +18000,18 @@ const LocationPicker = ({
                 children: [
                   "Venue: ",
                   venueName
+                ]
+              }
+            ),
+            showRadiusCircle && radius > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs(
+              "p",
+              {
+                className: `text-xs ${isConfirmed ? "text-emerald-600" : "text-amber-600"}`,
+                children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-circle-notch mr-1" }),
+                  "Geofence: ",
+                  radius,
+                  "m radius"
                 ]
               }
             ),
@@ -17984,7 +18066,11 @@ const LocationPicker = ({
           /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-lightbulb mr-1" }),
           "Click on the map, drag the marker, or preview a quick place — then click ",
           /* @__PURE__ */ jsxRuntimeExports.jsx("strong", { children: "Confirm Location" }),
-          " to save it."
+          " to save it. The",
+          " ",
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-gold-600 font-medium", children: "gold dashed circle" }),
+          " ",
+          "shows the geofence boundary."
         ] })
       ] })
     ] }) })
@@ -19477,7 +19563,9 @@ const FacultyClassDetail = () => {
                   latitude: lat,
                   longitude: lng
                 }),
-                venueName: "Attendance Venue"
+                venueName: "Attendance Venue",
+                radius: sessionFormData.geofence_radius,
+                onRadiusChange: (r) => setSessionFormData({ ...sessionFormData, geofence_radius: r })
               }
             ),
             /* @__PURE__ */ jsxRuntimeExports.jsxs(
@@ -38959,7 +39047,9 @@ const CreateAttendanceSession = () => {
                       latitude: formData.latitude,
                       longitude: formData.longitude,
                       onLocationSelect: handleLocationSelect,
-                      venueName: "Attendance Venue"
+                      venueName: "Attendance Venue",
+                      radius: formData.geofence_radius,
+                      onRadiusChange: (r) => setFormData((prev) => ({ ...prev, geofence_radius: r }))
                     }
                   ) }),
                   /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "xl:col-span-2 space-y-5", children: [
@@ -40096,7 +40186,8 @@ const ActivityMap = () => {
                     latitude: editingActivity.latitude,
                     longitude: editingActivity.longitude,
                     onLocationSelect: handleLocationSelect,
-                    venueName: editingActivity.venue
+                    venueName: editingActivity.venue,
+                    radius: editingActivity.geofence_radius || 100
                   }
                 ),
                 /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mt-4", children: [
@@ -42564,7 +42655,9 @@ const Activities = () => {
                                   longitude: lng
                                 }));
                               },
-                              venueName: formData.venue
+                              venueName: formData.venue,
+                              radius: formData.geofence_radius,
+                              onRadiusChange: (r) => setFormData((prev) => ({ ...prev, geofence_radius: r }))
                             }
                           ),
                           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
@@ -48780,4 +48873,4 @@ startSyncEngine();
 ReactDOM.createRoot(document.getElementById("root")).render(
   /* @__PURE__ */ jsxRuntimeExports.jsx(React.StrictMode, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(App, {}) })
 );
-//# sourceMappingURL=main-CIIwpbbW.js.map
+//# sourceMappingURL=main-Dsn8eVIQ.js.map

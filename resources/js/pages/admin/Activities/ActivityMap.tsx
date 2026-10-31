@@ -691,11 +691,12 @@ const ActivityMap: React.FC = () => {
               </div>
 
               <LocationPicker
-                latitude={editingActivity.latitude}
-                longitude={editingActivity.longitude}
-                onLocationSelect={handleLocationSelect}
-                venueName={editingActivity.venue}
-              />
+  latitude={editingActivity.latitude}
+  longitude={editingActivity.longitude}
+  onLocationSelect={handleLocationSelect}
+  venueName={editingActivity.venue}
+  radius={editingActivity.geofence_radius || 100}
+/>
 
               <div className="mt-4">
                 <label className="label">
