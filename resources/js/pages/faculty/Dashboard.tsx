@@ -19,11 +19,8 @@ const FacultyDashboard: React.FC = () => {
     staleTime: 60000,
   });
 
-  const { data: sessions = [] } = useQuery({
-    queryKey: ["faculty", "sessions"],
-    queryFn: () => facultyApi.getAttendanceSessions(),
-    staleTime: 30000,
-  });
+  // ← removed the unused `sessions` query; it was never rendered
+  //   and its shape `{data:[]}` vs `[]` was unreliable.
 
   if (isLoading) {
     return (
@@ -46,7 +43,13 @@ const FacultyDashboard: React.FC = () => {
     );
   }
 
-  const user = JSON.parse(localStorage.getItem("user") || "{}");
+  const user = (() => {
+    try {
+      return JSON.parse(localStorage.getItem("user") || "{}");
+    } catch {
+      return {};
+    }
+  })();
 
   // ---- Safe numeric helpers ----
   const num = (v: any): number =>
