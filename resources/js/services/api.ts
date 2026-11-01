@@ -332,6 +332,26 @@ export const authApi = {
 // SUPER ADMIN API
 // ============================================================
 export const superAdminApi = {
+  // ---------------- FACE RESET (online only, not queued) ----------------
+  searchStudentsForFaceReset: async (search: string): Promise<any[]> => {
+    const response = await fetch(
+      `${API_URL}/superadmin/students/search?search=${encodeURIComponent(search)}`,
+      { headers: headers() },
+    );
+    const result = await handleResponse(response);
+    return result.data ?? [];
+  },
+
+  resetStudentFace: async (
+    studentId: number,
+  ): Promise<{ success: boolean; message: string }> => {
+    const response = await fetch(
+      `${API_URL}/superadmin/students/${studentId}/face-embeddings`,
+      { method: "DELETE", headers: headers() },
+    );
+    return handleResponse(response);
+  },
+
   // ---------------- BACKUPS ----------------
   getBackups: async (): Promise<any[]> => {
     const response = await fetch(`${API_URL}/superadmin/backups`, {
@@ -837,17 +857,6 @@ export const adminApi = {
     });
     const result = await handleResponse(response);
     return result.data ?? result;
-  },
-
-  // ---------------- FACE RESET (admin only, online only) ----------------
-  resetStudentFace: async (
-    studentId: number,
-  ): Promise<{ success: boolean; message: string }> => {
-    const response = await fetch(
-      `${API_URL}/admin/students/${studentId}/face-embeddings`,
-      { method: "DELETE", headers: headers() },
-    );
-    return handleResponse(response);
   },
 
   // ---------------- COMPONENT CHANGE REQUESTS ----------------

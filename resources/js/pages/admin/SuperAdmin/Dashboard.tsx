@@ -78,6 +78,7 @@ const SuperAdminDashboard: React.FC = () => {
 
   // ------- Tab -------
   const [tab, setTab] = useState<Tab>("users");
+  const [showFaceReset, setShowFaceReset] = useState(false);
 
   // ============================================================
   // TAB 1: USERS
@@ -481,6 +482,12 @@ const SuperAdminDashboard: React.FC = () => {
               label=""
               className="btn-sm"
             />
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={() => setShowFaceReset(true)}
+            >
+              <i className="fas fa-user-lock" /> Face Reset
+            </button>
             <button className="btn btn-primary btn-sm" onClick={openCreate}>
               <i className="fas fa-plus" /> Add User
             </button>
@@ -1052,6 +1059,212 @@ const SuperAdminDashboard: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* FACE RESET MODAL */}
+      {showFaceReset && <FaceResetModal onClose={() => setShowFaceReset(false)} />}
+    </div>
+  );
+};
+
+// ============================================================
+// FACE RESET MODAL
+// ============================================================
+const studentName = (s: any): string =>
+  s?.full_name ||
+  [s?.first_name, s?.last_name].filter(Boolean).join(" ") ||
+  `Student #${s?.id}`;
+
+const FaceResetModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<any[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [selected, setSelected] = useState<any | null>(null);
+  const [resetting, setResetting] = useState(false);
+  const requestId = useRef(0);
+
+  const close = () => {
+    if (!resetting) onClose();
+  };
+
+  // Debounced search
+  useEffect(() => {
+    if (selected) return;
+    const q = query.trim();
+    if (q.length < 2) {
+      setResults([]);
+      setSearching(false);
+      return;
+    }
+
+    setSearching(true);
+    const myId = ++requestId.current;
+    const t = setTimeout(async () => {
+      try {
+        const data = await superAdminApi.searchStudentsForFaceReset(q);
+        if (myId === requestId.current) setResults(data);
+      } catch (err: any) {
+        if (myId === requestId.current) {
+          setResults([]);
+          toast.error(err.message || "Failed to search students");
+        }
+      } finally {
+        if (myId === requestId.current) setSearching(false);
+      }
+    }, 350);
+
+    return () => clearTimeout(t);
+  }, [query, selected]);
+
+  const handleReset = async () => {
+    if (!selected) return;
+    setResetting(true);
+    try {
+      await superAdminApi.resetStudentFace(selected.id);
+      toast.success(
+        `Face reset for ${studentName(selected)}. They can register again.`,
+      );
+      setResetting(false);
+      onClose();
+    } catch (err: any) {
+      toast.error(err.message || "Failed to reset face");
+      setResetting(false);
+    }
+  };
+
+  return (
+    <div className="modal-overlay" onClick={close}>
+      <div className="modal max-w-lg" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3>{selected ? "Confirm Face Reset" : "Reset Student Face"}</h3>
+          <button className="modal-close" onClick={close}>
+            ×
+          </button>
+        </div>
+
+        <div className="modal-body space-y-4">
+          {!selected ? (
+            <>
+              <div className="form-group">
+                <label className="label">Search student</label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    className="input pr-10"
+                    placeholder="Name or student ID (min. 2 characters)"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    autoFocus
+                  />
+                  {searching && (
+                    <i className="fas fa-spinner fa-spin absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  )}
+                </div>
+              </div>
+
+              <div className="max-h-72 overflow-y-auto rounded-lg border border-slate-200 divide-y divide-slate-100">
+                {query.trim().length < 2 ? (
+                  <p className="p-4 text-sm text-slate-400">
+                    Type to search for a student.
+                  </p>
+                ) : results.length === 0 && !searching ? (
+                  <p className="p-4 text-sm text-slate-400">
+                    No students found.
+                  </p>
+                ) : (
+                  results.map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-slate-50"
+                      onClick={() => setSelected(s)}
+                    >
+                      <span>
+                        <span className="block text-sm font-medium text-navy-900">
+                          {studentName(s)}
+                        </span>
+                        <span className="block text-xs text-slate-500">
+                          {s.student_id || "No ID"}
+                          {s.course ? ` · ${s.course}` : ""}
+                          {s.component
+                            ? ` · ${String(s.component).toUpperCase()}`
+                            : ""}
+                        </span>
+                      </span>
+                      <span
+                        className={`badge ${
+                          s.has_face ? "badge-success" : "badge-info"
+                        }`}
+                      >
+                        {s.has_face ? "Face registered" : "No face"}
+                      </span>
+                    </button>
+                  ))
+                )}
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                <p className="text-sm font-medium text-navy-900">
+                  {studentName(selected)}
+                </p>
+                <p className="text-xs text-slate-500">
+                  {selected.student_id || "No ID"}
+                  {selected.course ? ` · ${selected.course}` : ""}
+                </p>
+              </div>
+
+              {selected.has_face ? (
+                <div className="alert alert-danger">
+                  <i className="fas fa-exclamation-triangle mr-2" />
+                  This permanently deletes this student's registered face data.
+                  They will need to register their face again before using face
+                  attendance.
+                </div>
+              ) : (
+                <div className="alert alert-info">
+                  <i className="fas fa-info-circle mr-2" />
+                  This student has no registered face, so there is nothing to
+                  reset.
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        <div className="modal-footer">
+          {selected ? (
+            <>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setSelected(null)}
+                disabled={resetting}
+              >
+                Back
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger"
+                onClick={handleReset}
+                disabled={resetting || !selected.has_face}
+              >
+                {resetting ? (
+                  <>
+                    <i className="fas fa-spinner fa-spin" /> Resetting...
+                  </>
+                ) : (
+                  "Reset Face"
+                )}
+              </button>
+            </>
+          ) : (
+            <button type="button" className="btn btn-secondary" onClick={close}>
+              Cancel
+            </button>
+          )}
+        </div>
+      </div>
     </div>
   );
 };

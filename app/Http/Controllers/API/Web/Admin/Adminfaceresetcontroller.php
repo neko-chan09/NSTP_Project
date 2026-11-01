@@ -1,8 +1,7 @@
 <?php
 // app/Http/Controllers/API/Admin/AdminFaceResetController.php
-// Route it ONLY inside your existing admin-protected group, e.g.:
-//   Route::delete('/admin/students/{student}/face-embeddings',
-//       [AdminFaceResetController::class, 'destroy']);
+// Already referenced by routes/api.php (admin group). Safe to delete together
+// with its route + import if you only want super admins to reset faces.
 
 namespace App\Http\Controllers\API\Admin;
 

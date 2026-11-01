@@ -39,6 +39,7 @@ use App\Http\Controllers\API\Admin\AdminFaceResetController;
 // ============================================================
 use App\Http\Controllers\API\Web\SuperAdmin\SuperAdminController;
 use App\Http\Controllers\API\Web\SuperAdmin\BackupController;
+use App\Http\Controllers\API\Web\SuperAdmin\SuperAdminFaceResetController;
 
 // ============================================================
 // MOBILE STUDENT CONTROLLERS
@@ -246,8 +247,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/students/{id}', [AdminStudentController::class, 'show']);
         Route::put('/students/{id}', [AdminStudentController::class, 'update']);
         Route::delete('/students/{id}', [AdminStudentController::class, 'destroy']);
-        Route::delete('/students/{student}/face-embeddings',
-    [AdminFaceResetController::class, 'destroy']);
+        Route::delete('/students/{student}/face-embeddings', [AdminFaceResetController::class, 'destroy']);
 
         // ---------- DOCUMENTS ----------
         Route::get('/documents', [AdminDocumentController::class, 'index']);
@@ -328,6 +328,10 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::patch('/users/{id}/toggle', [SuperAdminController::class, 'toggleActive']);
         Route::get('/stats', [SuperAdminController::class, 'stats']);
 
+        // ---------- FACE RESET (search student + reset face) ----------
+        Route::get('/students/search', [SuperAdminFaceResetController::class, 'search']);
+        Route::delete('/students/{student}/face-embeddings', [SuperAdminFaceResetController::class, 'destroy']);
+
         // ---------- FACULTY CSV (chunked sync) ----------
         Route::get('/faculty/template', [SuperAdminController::class, 'templateCsv']);
         Route::get('/faculty/export', [SuperAdminController::class, 'exportCsv']);
@@ -387,7 +391,6 @@ Route::middleware('auth:sanctum')->group(function () {
         // Face embeddings
         Route::post('/face-embeddings', [FaceEmbeddingController::class, 'store']);
         Route::get('/face-status', [FaceEmbeddingController::class, 'status']);
-        Route::delete('/face-embeddings', [FaceEmbeddingController::class, 'destroy']);
 
         // Documents
         Route::get('/documents', [StudentDocumentController::class, 'myDocuments']);
