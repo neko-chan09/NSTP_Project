@@ -839,6 +839,17 @@ export const adminApi = {
     return result.data ?? result;
   },
 
+  // ---------------- FACE RESET (admin only, online only) ----------------
+  resetStudentFace: async (
+    studentId: number,
+  ): Promise<{ success: boolean; message: string }> => {
+    const response = await fetch(
+      `${API_URL}/admin/students/${studentId}/face-embeddings`,
+      { method: "DELETE", headers: headers() },
+    );
+    return handleResponse(response);
+  },
+
   // ---------------- COMPONENT CHANGE REQUESTS ----------------
   getChangeRequests: async (
     status?: string,

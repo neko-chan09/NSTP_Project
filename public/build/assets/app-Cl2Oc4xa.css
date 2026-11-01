@@ -70,7 +70,6 @@
       --tw-backdrop-sepia: initial;
       --tw-duration: initial;
       --tw-ease: initial;
-      --tw-content: "";
       --tw-scale-x: 1;
       --tw-scale-y: 1;
       --tw-scale-z: 1;
@@ -188,6 +187,7 @@
     --container-sm: 24rem;
     --container-md: 28rem;
     --container-lg: 32rem;
+    --container-xl: 36rem;
     --container-2xl: 42rem;
     --container-3xl: 48rem;
     --container-4xl: 56rem;
@@ -1112,18 +1112,6 @@
     visibility: visible;
   }
 
-  .sr-only {
-    clip-path: inset(50%);
-    white-space: nowrap;
-    border-width: 0;
-    width: 1px;
-    height: 1px;
-    margin: -1px;
-    padding: 0;
-    position: absolute;
-    overflow: hidden;
-  }
-
   .absolute {
     position: absolute;
   }
@@ -1697,6 +1685,10 @@
     max-height: calc(var(--spacing) * 60);
   }
 
+  .max-h-72 {
+    max-height: calc(var(--spacing) * 72);
+  }
+
   .max-h-96 {
     max-height: calc(var(--spacing) * 96);
   }
@@ -1811,10 +1803,6 @@
 
   .w-10 {
     width: calc(var(--spacing) * 10);
-  }
-
-  .w-11 {
-    width: calc(var(--spacing) * 11);
   }
 
   .w-12 {
@@ -1955,6 +1943,10 @@
 
   .max-w-sm {
     max-width: var(--container-sm);
+  }
+
+  .max-w-xl {
+    max-width: var(--container-xl);
   }
 
   .min-w-0 {
@@ -4342,93 +4334,6 @@
     }
   }
 
-  .peer-checked\:bg-gold-500:is(:where(.peer):checked ~ *) {
-    background-color: var(--color-gold-500);
-  }
-
-  .peer-focus\:ring-2:is(:where(.peer):focus ~ *) {
-    --tw-ring-shadow: var(--tw-ring-inset, ) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color, currentcolor);
-    box-shadow: var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow);
-  }
-
-  .peer-focus\:ring-gold-300:is(:where(.peer):focus ~ *) {
-    --tw-ring-color: var(--color-gold-300);
-  }
-
-  .peer-focus\:outline-none:is(:where(.peer):focus ~ *) {
-    --tw-outline-style: none;
-    outline-style: none;
-  }
-
-  .after\:absolute:after {
-    content: var(--tw-content);
-    position: absolute;
-  }
-
-  .after\:top-\[2px\]:after {
-    content: var(--tw-content);
-    top: 2px;
-  }
-
-  .after\:left-\[2px\]:after {
-    content: var(--tw-content);
-    left: 2px;
-  }
-
-  .after\:h-5:after {
-    content: var(--tw-content);
-    height: calc(var(--spacing) * 5);
-  }
-
-  .after\:w-5:after {
-    content: var(--tw-content);
-    width: calc(var(--spacing) * 5);
-  }
-
-  .after\:rounded-full:after {
-    content: var(--tw-content);
-    border-radius: 3.40282e38px;
-  }
-
-  .after\:border:after {
-    content: var(--tw-content);
-    border-style: var(--tw-border-style);
-    border-width: 1px;
-  }
-
-  .after\:border-slate-300:after {
-    content: var(--tw-content);
-    border-color: var(--color-slate-300);
-  }
-
-  .after\:bg-white:after {
-    content: var(--tw-content);
-    background-color: var(--color-white);
-  }
-
-  .after\:transition-all:after {
-    content: var(--tw-content);
-    transition-property: all;
-    transition-timing-function: var(--tw-ease, var(--default-transition-timing-function));
-    transition-duration: var(--tw-duration, var(--default-transition-duration));
-  }
-
-  .after\:content-\[\'\'\]:after {
-    --tw-content: "";
-    content: var(--tw-content);
-  }
-
-  .peer-checked\:after\:translate-x-full:is(:where(.peer):checked ~ *):after {
-    content: var(--tw-content);
-    --tw-translate-x: 100%;
-    translate: var(--tw-translate-x) var(--tw-translate-y);
-  }
-
-  .peer-checked\:after\:border-white:is(:where(.peer):checked ~ *):after {
-    content: var(--tw-content);
-    border-color: var(--color-white);
-  }
-
   .last\:border-0:last-child {
     border-style: var(--tw-border-style);
     border-width: 0;
@@ -4568,6 +4473,10 @@
       .hover\:bg-red-500\/10:hover {
         background-color: color-mix(in oklab, var(--color-red-500) 10%, transparent);
       }
+    }
+
+    .hover\:bg-red-700:hover {
+      background-color: var(--color-red-700);
     }
 
     .hover\:bg-rose-200:hover {
@@ -6653,12 +6562,6 @@ svg.leaflet-zoom-animated {
 @property --tw-ease {
   syntax: "*";
   inherits: false
-}
-
-@property --tw-content {
-  syntax: "*";
-  inherits: false;
-  initial-value: "";
 }
 
 @property --tw-scale-x {

@@ -32,6 +32,7 @@ use App\Http\Controllers\API\Web\Admin\ActivityMapController;
 use App\Http\Controllers\API\Web\Admin\ComponentChangeController as AdminComponentChangeController;
 use App\Http\Controllers\API\Web\Admin\UserController;
 use App\Http\Controllers\API\Web\Admin\ClassController as AdminClasscontroller;
+use App\Http\Controllers\API\Admin\AdminFaceResetController;
 
 // ============================================================
 // SUPER ADMIN CONTROLLERS
@@ -245,6 +246,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::get('/students/{id}', [AdminStudentController::class, 'show']);
         Route::put('/students/{id}', [AdminStudentController::class, 'update']);
         Route::delete('/students/{id}', [AdminStudentController::class, 'destroy']);
+        Route::delete('/students/{student}/face-embeddings',
+    [AdminFaceResetController::class, 'destroy']);
 
         // ---------- DOCUMENTS ----------
         Route::get('/documents', [AdminDocumentController::class, 'index']);

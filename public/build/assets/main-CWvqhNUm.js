@@ -13343,6 +13343,14 @@ const adminApi = {
     const result = await handleResponse(response);
     return result.data ?? result;
   },
+  // ---------------- FACE RESET (admin only, online only) ----------------
+  resetStudentFace: async (studentId) => {
+    const response = await fetch(
+      `${API_URL}/admin/students/${studentId}/face-embeddings`,
+      { method: "DELETE", headers: headers() }
+    );
+    return handleResponse(response);
+  },
   // ---------------- COMPONENT CHANGE REQUESTS ----------------
   getChangeRequests: async (status) => {
     const query = status ? `?status=${status}` : "";
@@ -48872,4 +48880,4 @@ startSyncEngine();
 ReactDOM.createRoot(document.getElementById("root")).render(
   /* @__PURE__ */ jsxRuntimeExports.jsx(React.StrictMode, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(App, {}) })
 );
-//# sourceMappingURL=main-BTPElcNB.js.map
+//# sourceMappingURL=main-CWvqhNUm.js.map
