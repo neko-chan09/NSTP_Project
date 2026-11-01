@@ -12904,6 +12904,22 @@ const authApi = {
   }
 };
 const superAdminApi = {
+  // ---------------- FACE RESET (online only, not queued) ----------------
+  searchStudentsForFaceReset: async (search) => {
+    const response = await fetch(
+      `${API_URL}/superadmin/students/search?search=${encodeURIComponent(search)}`,
+      { headers: headers() }
+    );
+    const result = await handleResponse(response);
+    return result.data ?? [];
+  },
+  resetStudentFace: async (studentId) => {
+    const response = await fetch(
+      `${API_URL}/superadmin/students/${studentId}/face-embeddings`,
+      { method: "DELETE", headers: headers() }
+    );
+    return handleResponse(response);
+  },
   // ---------------- BACKUPS ----------------
   getBackups: async () => {
     const response = await fetch(`${API_URL}/superadmin/backups`, {
@@ -13342,14 +13358,6 @@ const adminApi = {
     });
     const result = await handleResponse(response);
     return result.data ?? result;
-  },
-  // ---------------- FACE RESET (admin only, online only) ----------------
-  resetStudentFace: async (studentId) => {
-    const response = await fetch(
-      `${API_URL}/admin/students/${studentId}/face-embeddings`,
-      { method: "DELETE", headers: headers() }
-    );
-    return handleResponse(response);
   },
   // ---------------- COMPONENT CHANGE REQUESTS ----------------
   getChangeRequests: async (status) => {
@@ -32779,10 +32787,10 @@ const StudentRequests = () => {
     (req) => {
       if (!searchTerm.trim()) return true;
       const search = searchTerm.toLowerCase().trim();
-      const studentName = `${req.student?.user?.first_name || ""} ${req.student?.user?.last_name || ""}`.toLowerCase();
+      const studentName2 = `${req.student?.user?.first_name || ""} ${req.student?.user?.last_name || ""}`.toLowerCase();
       const studentId = req.student?.student_id?.toLowerCase() || "";
       const email = req.student?.user?.email?.toLowerCase() || "";
-      return studentName.includes(search) || studentId.includes(search) || email.includes(search);
+      return studentName2.includes(search) || studentId.includes(search) || email.includes(search);
     }
   );
   const pendingCount = requests.filter(
@@ -33774,11 +33782,11 @@ const DocumentSubmissions = () => {
       zt.error(err.message || "Failed to approve");
     }
   };
-  const handleRejectClick = (doc, studentName) => {
+  const handleRejectClick = (doc, studentName2) => {
     setRejectModal({
       documentId: doc.id,
       fileName: doc.file_name,
-      studentName,
+      studentName: studentName2,
       reason: ""
     });
   };
@@ -33857,7 +33865,7 @@ const DocumentSubmissions = () => {
     };
     return map[status] || status;
   };
-  const renderDocument = (doc, studentName) => {
+  const renderDocument = (doc, studentName2) => {
     const isImage = doc.file_name?.match(/\.(jpg|jpeg|png|gif|webp)$/i);
     const isSelected = selectedDocs.has(doc.id);
     const isActing = verifyMut.isPending && verifyMut.variables?.id === doc.id;
@@ -33950,7 +33958,7 @@ const DocumentSubmissions = () => {
                 "button",
                 {
                   className: "btn btn-danger btn-sm",
-                  onClick: () => handleRejectClick(doc, studentName),
+                  onClick: () => handleRejectClick(doc, studentName2),
                   disabled: isActing,
                   title: "Reject",
                   children: [
@@ -33979,7 +33987,7 @@ const DocumentSubmissions = () => {
     );
   };
   const renderStudent = (studentGroup, parentKey) => {
-    const studentName = `${studentGroup.student.user?.first_name || ""} ${studentGroup.student.user?.last_name || ""}`;
+    const studentName2 = `${studentGroup.student.user?.first_name || ""} ${studentGroup.student.user?.last_name || ""}`;
     const key = `${parentKey}:stu:${studentGroup.student.id}`;
     const open = isOpen(key);
     return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "ml-6", children: [
@@ -34000,7 +34008,7 @@ const DocumentSubmissions = () => {
               studentGroup.student.user?.last_name?.[0] || ""
             ] }),
             /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1 min-w-0", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-sm font-medium text-navy-900 truncate", children: studentName || "Unknown" }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-sm font-medium text-navy-900 truncate", children: studentName2 || "Unknown" }),
               /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-slate-400", children: studentGroup.student.student_id || "N/A" })
             ] }),
             /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-1.5", children: [
@@ -34021,7 +34029,7 @@ const DocumentSubmissions = () => {
         }
       ),
       open && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "ml-6 mt-2 space-y-2", children: studentGroup.docs.map(
-        (doc) => renderDocument(doc, studentName)
+        (doc) => renderDocument(doc, studentName2)
       ) })
     ] }, key);
   };
@@ -36695,10 +36703,10 @@ const IssuedCertificates = () => {
   const filteredCertificates = certificates.filter((cert) => {
     if (searchTerm) {
       const search = searchTerm.toLowerCase();
-      const studentName = `${cert.student?.user?.first_name || ""} ${cert.student?.user?.last_name || ""}`.toLowerCase();
+      const studentName2 = `${cert.student?.user?.first_name || ""} ${cert.student?.user?.last_name || ""}`.toLowerCase();
       const certNumber = cert.certificate_number?.toLowerCase() || "";
       const studentId = cert.student?.student_id?.toLowerCase() || "";
-      if (!studentName.includes(search) && !certNumber.includes(search) && !studentId.includes(search)) {
+      if (!studentName2.includes(search) && !certNumber.includes(search) && !studentId.includes(search)) {
         return false;
       }
     }
@@ -37580,6 +37588,7 @@ const FACULTY_CHUNK_SIZE = 25;
 const SuperAdminDashboard = () => {
   const queryClient2 = useQueryClient();
   const [tab, setTab] = reactExports.useState("users");
+  const [showFaceReset, setShowFaceReset] = reactExports.useState(false);
   const [showModal, setShowModal] = reactExports.useState(false);
   const [editingId, setEditingId] = reactExports.useState(null);
   const [formData, setFormData] = reactExports.useState(EMPTY_FORM$1);
@@ -37922,6 +37931,17 @@ const SuperAdminDashboard = () => {
             isLoading: isFetching,
             label: "",
             className: "btn-sm"
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "button",
+          {
+            className: "btn btn-secondary btn-sm",
+            onClick: () => setShowFaceReset(true),
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-user-lock" }),
+              " Face Reset"
+            ]
           }
         ),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { className: "btn btn-primary btn-sm", onClick: openCreate, children: [
@@ -38444,8 +38464,152 @@ const SuperAdminDashboard = () => {
           )
         ] })
       ] })
-    ] }) })
+    ] }) }),
+    showFaceReset && /* @__PURE__ */ jsxRuntimeExports.jsx(FaceResetModal, { onClose: () => setShowFaceReset(false) })
   ] });
+};
+const studentName = (s2) => s2?.full_name || [s2?.first_name, s2?.last_name].filter(Boolean).join(" ") || `Student #${s2?.id}`;
+const FaceResetModal = ({ onClose }) => {
+  const [query, setQuery] = reactExports.useState("");
+  const [results, setResults] = reactExports.useState([]);
+  const [searching, setSearching] = reactExports.useState(false);
+  const [selected, setSelected] = reactExports.useState(null);
+  const [resetting, setResetting] = reactExports.useState(false);
+  const requestId = reactExports.useRef(0);
+  const close = () => {
+    if (!resetting) onClose();
+  };
+  reactExports.useEffect(() => {
+    if (selected) return;
+    const q2 = query.trim();
+    if (q2.length < 2) {
+      setResults([]);
+      setSearching(false);
+      return;
+    }
+    setSearching(true);
+    const myId = ++requestId.current;
+    const t2 = setTimeout(async () => {
+      try {
+        const data = await superAdminApi.searchStudentsForFaceReset(q2);
+        if (myId === requestId.current) setResults(data);
+      } catch (err) {
+        if (myId === requestId.current) {
+          setResults([]);
+          zt.error(err.message || "Failed to search students");
+        }
+      } finally {
+        if (myId === requestId.current) setSearching(false);
+      }
+    }, 350);
+    return () => clearTimeout(t2);
+  }, [query, selected]);
+  const handleReset = async () => {
+    if (!selected) return;
+    setResetting(true);
+    try {
+      await superAdminApi.resetStudentFace(selected.id);
+      zt.success(
+        `Face reset for ${studentName(selected)}. They can register again.`
+      );
+      setResetting(false);
+      onClose();
+    } catch (err) {
+      zt.error(err.message || "Failed to reset face");
+      setResetting(false);
+    }
+  };
+  return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "modal-overlay", onClick: close, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "modal max-w-lg", onClick: (e2) => e2.stopPropagation(), children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "modal-header", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("h3", { children: selected ? "Confirm Face Reset" : "Reset Student Face" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "modal-close", onClick: close, children: "×" })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "modal-body space-y-4", children: !selected ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "form-group", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "label", children: "Search student" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "relative", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "input",
+            {
+              type: "text",
+              className: "input pr-10",
+              placeholder: "Name or student ID (min. 2 characters)",
+              value: query,
+              onChange: (e2) => setQuery(e2.target.value),
+              autoFocus: true
+            }
+          ),
+          searching && /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-spinner fa-spin absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" })
+        ] })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "max-h-72 overflow-y-auto rounded-lg border border-slate-200 divide-y divide-slate-100", children: query.trim().length < 2 ? /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "p-4 text-sm text-slate-400", children: "Type to search for a student." }) : results.length === 0 && !searching ? /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "p-4 text-sm text-slate-400", children: "No students found." }) : results.map((s2) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+        "button",
+        {
+          type: "button",
+          className: "flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-slate-50",
+          onClick: () => setSelected(s2),
+          children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "block text-sm font-medium text-navy-900", children: studentName(s2) }),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "block text-xs text-slate-500", children: [
+                s2.student_id || "No ID",
+                s2.course ? ` · ${s2.course}` : "",
+                s2.component ? ` · ${String(s2.component).toUpperCase()}` : ""
+              ] })
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "span",
+              {
+                className: `badge ${s2.has_face ? "badge-success" : "badge-info"}`,
+                children: s2.has_face ? "Face registered" : "No face"
+              }
+            )
+          ]
+        },
+        s2.id
+      )) })
+    ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "rounded-lg border border-slate-200 bg-slate-50 p-4", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm font-medium text-navy-900", children: studentName(selected) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-xs text-slate-500", children: [
+          selected.student_id || "No ID",
+          selected.course ? ` · ${selected.course}` : ""
+        ] })
+      ] }),
+      selected.has_face ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "alert alert-danger", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-exclamation-triangle mr-2" }),
+        "This permanently deletes this student's registered face data. They will need to register their face again before using face attendance."
+      ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "alert alert-info", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-info-circle mr-2" }),
+        "This student has no registered face, so there is nothing to reset."
+      ] })
+    ] }) }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "modal-footer", children: selected ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "button",
+        {
+          type: "button",
+          className: "btn btn-secondary",
+          onClick: () => setSelected(null),
+          disabled: resetting,
+          children: "Back"
+        }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "button",
+        {
+          type: "button",
+          className: "btn btn-danger",
+          onClick: handleReset,
+          disabled: resetting || !selected.has_face,
+          children: resetting ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-spinner fa-spin" }),
+            " Resetting..."
+          ] }) : "Reset Face"
+        }
+      )
+    ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "btn btn-secondary", onClick: close, children: "Cancel" }) })
+  ] }) });
 };
 const TabsHeader = ({ tab, setTab }) => {
   const tabs = [
@@ -48880,4 +49044,4 @@ startSyncEngine();
 ReactDOM.createRoot(document.getElementById("root")).render(
   /* @__PURE__ */ jsxRuntimeExports.jsx(React.StrictMode, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(App, {}) })
 );
-//# sourceMappingURL=main-CWvqhNUm.js.map
+//# sourceMappingURL=main-Cwchyx0o.js.map

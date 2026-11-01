@@ -1945,10 +1945,6 @@
     max-width: var(--container-sm);
   }
 
-  .max-w-xl {
-    max-width: var(--container-xl);
-  }
-
   .min-w-0 {
     min-width: 0;
   }
@@ -4473,10 +4469,6 @@
       .hover\:bg-red-500\/10:hover {
         background-color: color-mix(in oklab, var(--color-red-500) 10%, transparent);
       }
-    }
-
-    .hover\:bg-red-700:hover {
-      background-color: var(--color-red-700);
     }
 
     .hover\:bg-rose-200:hover {
