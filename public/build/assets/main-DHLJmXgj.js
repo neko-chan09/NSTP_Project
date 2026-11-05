@@ -14304,7 +14304,7 @@ const Classes = () => {
     queryFn: async () => {
       const token = localStorage.getItem("token");
       const response = await fetch(
-        `${"http://localhost:8000/api"}/admin/users?role=faculty`,
+        `${API_URL}/admin/users?role=faculty`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -33571,7 +33571,7 @@ const COMPONENTS = [
   { key: "lts", label: "LTS", icon: "fa-chalkboard-teacher" }
 ];
 const DocumentSubmissions = () => {
-  const API_URL2 = "http://localhost:8000/api";
+  const api_url = API_URL;
   const {
     data: docResponse,
     isLoading,
@@ -33743,7 +33743,7 @@ const DocumentSubmissions = () => {
     try {
       const token = localStorage.getItem("token");
       const response = await fetch(
-        `${API_URL2}/admin/documents/${doc.id}/download`,
+        `${api_url}/admin/documents/${doc.id}/download`,
         // <-- changed from /student/documents
         { headers: { Authorization: `Bearer ${token}` } }
       );
@@ -33901,7 +33901,7 @@ const DocumentSubmissions = () => {
               /* @__PURE__ */ jsxRuntimeExports.jsx(
                 "a",
                 {
-                  href: `${API_URL2}/admin/documents/${doc.id}/download`,
+                  href: `${api_url}/admin/documents/${doc.id}/download`,
                   target: "_blank",
                   rel: "noopener",
                   className: "text-sm font-medium text-navy-900 hover:text-gold-600 hover:underline truncate",
@@ -35761,7 +35761,7 @@ const isImageFile = (file) => {
   return imageTypes.includes(file.type);
 };
 const DocumentLibrary = () => {
-  const API_URL2 = "http://localhost:8000/api";
+  const api_url = API_URL;
   const {
     data: docResponse,
     isLoading,
@@ -35837,7 +35837,7 @@ const DocumentLibrary = () => {
     try {
       const token = localStorage.getItem("token");
       const response = await fetch(
-        `${API_URL2}/office-documents/${doc.id}/download`,
+        `${api_url}/office-documents/${doc.id}/download`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
       if (!response.ok) {
@@ -36118,7 +36118,7 @@ const DocumentLibrary = () => {
                   /* @__PURE__ */ jsxRuntimeExports.jsx(
                     "a",
                     {
-                      href: `${API_URL2}/office-documents/${doc.id}/download`,
+                      href: `${api_url}/office-documents/${doc.id}/download`,
                       target: "_blank",
                       rel: "noopener",
                       className: "btn btn-info btn-sm",
@@ -36194,7 +36194,7 @@ const DocumentLibrary = () => {
                 /* @__PURE__ */ jsxRuntimeExports.jsxs(
                   "a",
                   {
-                    href: `${API_URL2}/office-documents/${doc.id}/download`,
+                    href: `${api_url}/office-documents/${doc.id}/download`,
                     target: "_blank",
                     rel: "noopener",
                     className: "btn btn-info btn-sm flex-1",
@@ -36658,7 +36658,7 @@ const GenerateCertificate = () => {
   ] });
 };
 const IssuedCertificates = () => {
-  const API_URL2 = "http://localhost:8000/api";
+  const api_url = API_URL;
   const {
     data: certificates = [],
     isLoading,
@@ -36728,7 +36728,7 @@ const IssuedCertificates = () => {
     return true;
   });
   const handleDownload = async (id) => {
-    window.open(`${API_URL2}/student/certificates/${id}/download`, "_blank");
+    window.open(`${api_url}/student/certificates/${id}/download`, "_blank");
   };
   const clearFilters = () => {
     setSearchTerm("");
@@ -36913,7 +36913,7 @@ const IssuedCertificates = () => {
           {
             className: "btn btn-info btn-sm",
             onClick: () => window.open(
-              `${API_URL2}/storage/${cert.qr_code_path}`,
+              `${api_url}/storage/${cert.qr_code_path}`,
               "_blank"
             ),
             title: "View QR Code",
@@ -43857,7 +43857,7 @@ const AccomplishmentReport = () => {
     try {
       const token = localStorage.getItem("token");
       const response = await fetch(
-        `${"http://localhost:8000/api"}/admin/reports/accomplishment/template`,
+        `${API_URL}/admin/reports/accomplishment/template`,
         {
           headers: {
             Authorization: `Bearer ${token}`
@@ -43892,7 +43892,7 @@ const AccomplishmentReport = () => {
     try {
       const token = localStorage.getItem("token");
       const response = await fetch(
-        `${"http://localhost:8000/api"}/admin/reports/accomplishment/import`,
+        `${API_URL}/admin/reports/accomplishment/import`,
         {
           method: "POST",
           headers: {
@@ -46446,8 +46446,8 @@ const Materials = () => {
   };
   const handleDownload = (material) => {
     const token = localStorage.getItem("token") || localStorage.getItem("nstp_token");
-    const API_URL2 = "http://localhost:8000/api";
-    fetch(`${API_URL2}/faculty/materials/${material.id}/download`, {
+    const api_url = API_URL;
+    fetch(`${api_url}/faculty/materials/${material.id}/download`, {
       headers: { Authorization: `Bearer ${token}` }
     }).then((res) => {
       if (!res.ok) throw new Error(`Download failed (${res.status})`);
@@ -46465,8 +46465,8 @@ const Materials = () => {
     }).catch((err) => zt.error(err.message || "Download failed"));
   };
   const handleCopyLink = (material) => {
-    const API_URL2 = "http://localhost:8000/api";
-    const url = `${API_URL2}/faculty/materials/${material.id}/download`;
+    const api_url = API_URL;
+    const url = `${api_url}/faculty/materials/${material.id}/download`;
     navigator.clipboard.writeText(url);
     zt.success("Download link copied");
   };
@@ -48989,4 +48989,4 @@ startSyncEngine();
 ReactDOM.createRoot(document.getElementById("root")).render(
   /* @__PURE__ */ jsxRuntimeExports.jsx(React.StrictMode, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(App, {}) })
 );
-//# sourceMappingURL=main-MwoNraD5.js.map
+//# sourceMappingURL=main-DHLJmXgj.js.map

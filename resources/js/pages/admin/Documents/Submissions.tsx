@@ -5,6 +5,7 @@ import { useDocuments, useVerifyDocument } from "../../hooks/useDocuments";
 import RefreshButton from "../../components/common/RefreshButton";
 import ScannerModal from "../../components/common/ScannerModal";
 import toast from "react-hot-toast";
+import { API_URL } from "../../../services/api";
 import type { Document } from "../../../types/api";
 
 type StatusFilter = "all" | "pending" | "approved" | "rejected";
@@ -49,8 +50,7 @@ const COMPONENTS = [
 ] as const;
 
 const DocumentSubmissions: React.FC = () => {
-  const API_URL =
-    import.meta.env.VITE_API_URL || "http://localhost:8000/api";
+  const api_url = API_URL;
 
   const {
     data: docResponse,
@@ -297,7 +297,7 @@ const DocumentSubmissions: React.FC = () => {
   try {
     const token = localStorage.getItem("token");
     const response = await fetch(
-      `${API_URL}/admin/documents/${doc.id}/download`,  // <-- changed from /student/documents
+      `${api_url}/admin/documents/${doc.id}/download`,  // <-- changed from /student/documents
       { headers: { Authorization: `Bearer ${token}` } }
     );
 
@@ -500,7 +500,7 @@ const DocumentSubmissions: React.FC = () => {
             <div className="flex items-start gap-2 flex-wrap">
               {/* File name link */}
 <a
-  href={`${API_URL}/admin/documents/${doc.id}/download`}
+  href={`${api_url}/admin/documents/${doc.id}/download`}
   target="_blank"
   rel="noopener"
   className="text-sm font-medium text-navy-900 hover:text-gold-600 hover:underline truncate"

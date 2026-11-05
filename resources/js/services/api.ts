@@ -1,7 +1,7 @@
 // resources/js/services/api.ts
 
 // const API_URL = "http://localhost:8000/api";
-const API_URL = "https://orangered-oryx-492151.hostingersite.com/api";
+export const API_URL = "https://orangered-oryx-492151.hostingersite.com/api";
 
 import type {
   DashboardStats,
@@ -2215,4 +2215,5 @@ export default {
   studentApi,
   facultyApi,
   ocrApi,
+  API_URL,
 };

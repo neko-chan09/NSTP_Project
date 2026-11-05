@@ -1,10 +1,11 @@
 // src/pages/admin/Certificates/Issued.tsx
 import React, { useState, useMemo } from "react";
 import { useCertificates } from "../../hooks/useCertificates";
+import { API_URL } from "../../../services/api";
 import RefreshButton from "../../components/common/RefreshButton";
 
 const IssuedCertificates: React.FC = () => {
-  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api";
+  const api_url = API_URL;
   const {
     data: certificates = [],
     isLoading,
@@ -105,7 +106,7 @@ const IssuedCertificates: React.FC = () => {
   });
 
   const handleDownload = async (id: number) => {
-    window.open(`${API_URL}/student/certificates/${id}/download`, "_blank");
+    window.open(`${api_url}/student/certificates/${id}/download`, "_blank");
   };
 
   const clearFilters = () => {
@@ -350,7 +351,7 @@ const IssuedCertificates: React.FC = () => {
                           className="btn btn-info btn-sm"
                           onClick={() =>
                             window.open(
-                              `${API_URL}/storage/${cert.qr_code_path}`,
+                              `${api_url}/storage/${cert.qr_code_path}`,
                               "_blank",
                             )
                           }

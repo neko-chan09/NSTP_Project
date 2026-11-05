@@ -2,7 +2,7 @@
 
 import React, { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { adminApi } from "../../services/api";
+import { adminApi, API_URL } from "../../services/api";
 import type { ClassGroup } from "../../types/api";
 import RefreshButton from "../components/common/RefreshButton";
 import toast from "react-hot-toast";
@@ -65,7 +65,7 @@ const Classes: React.FC = () => {
       const token = localStorage.getItem("token");
       const response = await fetch(
         `${
-          import.meta.env.VITE_API_URL || "http://localhost:8000/api"
+          API_URL
         }/admin/users?role=faculty`,
         {
           headers: {

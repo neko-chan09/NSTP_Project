@@ -8,8 +8,6 @@ import {
 } from "./outbox";
 import { setMeta } from "./db";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api";
-
 let syncing = false;
 let intervalId: number | null = null;
 

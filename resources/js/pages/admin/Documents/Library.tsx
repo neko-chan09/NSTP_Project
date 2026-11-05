@@ -9,13 +9,13 @@ import {
 import RefreshButton from "../../components/common/RefreshButton";
 import ScannerModal from "../../components/common/ScannerModal";
 import { isImageFile } from "../../../utils/ocr";
+import { API_URL } from "../../../services/api";
 import toast from "react-hot-toast";
 
 type ViewMode = "list" | "grid";
 
 const DocumentLibrary: React.FC = () => {
-  const API_URL =
-    import.meta.env.VITE_API_URL || "http://localhost:8000/api";
+  const api_url = API_URL;
 
   const {
     data: docResponse,
@@ -124,7 +124,7 @@ const DocumentLibrary: React.FC = () => {
     try {
       const token = localStorage.getItem("token");
       const response = await fetch(
-        `${API_URL}/office-documents/${doc.id}/download`,
+        `${api_url}/office-documents/${doc.id}/download`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
@@ -466,7 +466,7 @@ const DocumentLibrary: React.FC = () => {
                       <td>
                         <div className="flex items-center justify-end gap-1.5">
                           <a
-                            href={`${API_URL}/office-documents/${doc.id}/download`}
+                            href={`${api_url}/office-documents/${doc.id}/download`}
                             target="_blank"
                             rel="noopener"
                             className="btn btn-info btn-sm"
@@ -555,7 +555,7 @@ const DocumentLibrary: React.FC = () => {
                 </div>
                 <div className="flex gap-2 mt-3 pt-3 border-t border-slate-100">
                   <a
-                    href={`${API_URL}/office-documents/${doc.id}/download`}
+                    href={`${api_url}/office-documents/${doc.id}/download`}
                     target="_blank"
                     rel="noopener"
                     className="btn btn-info btn-sm flex-1"

@@ -3,7 +3,7 @@
 import React, { useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { facultyApi } from "../../services/api";
+import { facultyApi, API_URL } from "../../services/api";
 import {
   useClassMaterials,
   useDeleteMaterial,
@@ -96,9 +96,9 @@ const Materials: React.FC = () => {
   const handleDownload = (material: LearningMaterial) => {
     // Server endpoint expects auth header; use a blob download trick
     const token = localStorage.getItem("token") || localStorage.getItem("nstp_token");
-    const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api";
+    const api_url = API_URL;
 
-    fetch(`${API_URL}/faculty/materials/${material.id}/download`, {
+    fetch(`${api_url}/faculty/materials/${material.id}/download`, {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then((res) => {
@@ -120,8 +120,8 @@ const Materials: React.FC = () => {
   };
 
   const handleCopyLink = (material: LearningMaterial) => {
-    const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api";
-    const url = `${API_URL}/faculty/materials/${material.id}/download`;
+    const api_url = API_URL;
+    const url = `${api_url}/faculty/materials/${material.id}/download`;
     navigator.clipboard.writeText(url);
     toast.success("Download link copied");
   };

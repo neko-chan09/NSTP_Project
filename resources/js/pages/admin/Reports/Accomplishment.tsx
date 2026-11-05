@@ -7,6 +7,7 @@ import {
   exportAccomplishmentCSV,
 } from "../../hooks/useReports";
 import RefreshButton from "../../components/common/RefreshButton";
+import { API_URL } from "../../../services/api";
 import toast from "react-hot-toast";
 
 interface StudentAccomplishment {
@@ -120,7 +121,7 @@ const AccomplishmentReport: React.FC = () => {
     try {
       const token = localStorage.getItem("token");
       const response = await fetch(
-        `${import.meta.env.VITE_API_URL || "http://localhost:8000/api"}/admin/reports/accomplishment/template`,
+        `${API_URL}/admin/reports/accomplishment/template`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -160,7 +161,7 @@ const AccomplishmentReport: React.FC = () => {
     try {
       const token = localStorage.getItem("token");
       const response = await fetch(
-        `${import.meta.env.VITE_API_URL || "http://localhost:8000/api"}/admin/reports/accomplishment/import`,
+        `${API_URL}/admin/reports/accomplishment/import`,
         {
           method: "POST",
           headers: {
