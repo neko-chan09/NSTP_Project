@@ -41069,34 +41069,13 @@ const ActivityParticipants = ({
   const [removingParticipant, setRemovingParticipant] = reactExports.useState(
     null
   );
-  const API_URL2 = "http://localhost:8000/api";
   const canEdit = !isSuperAdmin && isAdmin || isFaculty && activity.created_by === user?.id;
   const fetchParticipants = async () => {
     try {
       setLoading(true);
       setError(null);
-      const token = localStorage.getItem("token");
-      const response = await fetch(
-        `${API_URL2}/activities/${activity.id}/participants`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/json"
-          }
-        }
-      );
-      if (!response.ok) {
-        if (response.status === 404) {
-          throw new Error("Activity not found");
-        } else if (response.status === 401) {
-          throw new Error("Please login again");
-        } else if (response.status === 403) {
-          throw new Error("You do not have permission to view participants");
-        }
-        throw new Error(`Failed to fetch participants (${response.status})`);
-      }
-      const data = await response.json();
-      setParticipants(data.data || []);
+      const data = await adminApi.getActivityParticipants(activity.id);
+      setParticipants(data || []);
     } catch (err) {
       setError(err.message || "Failed to load participants");
       console.error("Error fetching participants:", err);
@@ -41175,30 +41154,14 @@ const ActivityParticipants = ({
     }
     try {
       setUpdatingStatus(participantId);
-      const token = localStorage.getItem("token");
-      const response = await fetch(
-        `${API_URL2}/activities/${activity.id}/participants/${participantId}`,
-        {
-          method: "PUT",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-            Accept: "application/json"
-          },
-          body: JSON.stringify({ attendance_status: status })
-        }
+      const result = await adminApi.updateParticipantStatus(
+        activity.id,
+        participantId,
+        status
       );
-      if (!response.ok) {
-        if (response.status === 404) {
-          throw new Error("Participant not found");
-        } else if (response.status === 401) {
-          throw new Error("Please login again");
-        } else if (response.status === 403) {
-          throw new Error(
-            "You don't have permission to update this participant"
-          );
-        }
-        throw new Error(`Failed to update status (${response.status})`);
+      if (result?.queued) {
+        zt(result.message || "Change queued and will sync automatically");
+        return;
       }
       zt.success("Status updated successfully");
       await fetchParticipants();
@@ -41220,28 +41183,10 @@ const ActivityParticipants = ({
       return;
     try {
       setRemovingParticipant(participantId);
-      const token = localStorage.getItem("token");
-      const response = await fetch(
-        `${API_URL2}/activities/${activity.id}/participants/${participantId}`,
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/json"
-          }
-        }
-      );
-      if (!response.ok) {
-        if (response.status === 404) {
-          throw new Error("Participant not found");
-        } else if (response.status === 401) {
-          throw new Error("Please login again");
-        } else if (response.status === 403) {
-          throw new Error(
-            "You don't have permission to remove this participant"
-          );
-        }
-        throw new Error(`Failed to remove participant (${response.status})`);
+      const result = await adminApi.removeParticipant(activity.id, participantId);
+      if (result?.queued) {
+        zt(result.message || "Change queued and will sync automatically");
+        return;
       }
       zt.success("Participant removed successfully");
       await fetchParticipants();
@@ -49044,4 +48989,4 @@ startSyncEngine();
 ReactDOM.createRoot(document.getElementById("root")).render(
   /* @__PURE__ */ jsxRuntimeExports.jsx(React.StrictMode, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(App, {}) })
 );
-//# sourceMappingURL=main-Cwchyx0o.js.map
+//# sourceMappingURL=main-MwoNraD5.js.map

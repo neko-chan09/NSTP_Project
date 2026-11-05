@@ -380,7 +380,7 @@
     "isDynamicEntry": true
   },
   "resources/css/app.css": {
-    "file": "assets/app-CJ7DJPrU.css",
+    "file": "assets/app-ByHYDxCX.css",
     "src": "resources/css/app.css",
     "isEntry": true,
     "name": "app",
@@ -399,7 +399,7 @@
     "isDynamicEntry": true
   },
   "resources/js/main.tsx": {
-    "file": "assets/main-Cwchyx0o.js",
+    "file": "assets/main-MwoNraD5.js",
     "name": "main",
     "src": "resources/js/main.tsx",
     "isEntry": true,

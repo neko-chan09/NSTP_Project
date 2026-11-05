@@ -43,8 +43,6 @@ const ActivityParticipants: React.FC<ActivityParticipantsProps> = ({
     null,
   );
 
-  const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/api";
-
   // Check if user can edit this activity (Admin/Super Admin, or Faculty who created it)
   // ✅ Super Admin gets view-only access to participants
   const canEdit =
@@ -55,31 +53,8 @@ const ActivityParticipants: React.FC<ActivityParticipantsProps> = ({
     try {
       setLoading(true);
       setError(null);
-      const token = localStorage.getItem("token");
-
-      const response = await fetch(
-        `${API_URL}/activities/${activity.id}/participants`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/json",
-          },
-        },
-      );
-
-      if (!response.ok) {
-        if (response.status === 404) {
-          throw new Error("Activity not found");
-        } else if (response.status === 401) {
-          throw new Error("Please login again");
-        } else if (response.status === 403) {
-          throw new Error("You do not have permission to view participants");
-        }
-        throw new Error(`Failed to fetch participants (${response.status})`);
-      }
-
-      const data = await response.json();
-      setParticipants(data.data || []);
+      const data = await adminApi.getActivityParticipants(activity.id);
+      setParticipants(data || []);
     } catch (err: any) {
       setError(err.message || "Failed to load participants");
       console.error("Error fetching participants:", err);
@@ -173,32 +148,15 @@ const ActivityParticipants: React.FC<ActivityParticipantsProps> = ({
 
     try {
       setUpdatingStatus(participantId);
-      const token = localStorage.getItem("token");
-
-      const response = await fetch(
-        `${API_URL}/activities/${activity.id}/participants/${participantId}`,
-        {
-          method: "PUT",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-            Accept: "application/json",
-          },
-          body: JSON.stringify({ attendance_status: status }),
-        },
+      const result = await adminApi.updateParticipantStatus(
+        activity.id,
+        participantId,
+        status,
       );
 
-      if (!response.ok) {
-        if (response.status === 404) {
-          throw new Error("Participant not found");
-        } else if (response.status === 401) {
-          throw new Error("Please login again");
-        } else if (response.status === 403) {
-          throw new Error(
-            "You don't have permission to update this participant",
-          );
-        }
-        throw new Error(`Failed to update status (${response.status})`);
+      if (result?.queued) {
+        toast(result.message || "Change queued and will sync automatically");
+        return;
       }
 
       toast.success("Status updated successfully");
@@ -226,30 +184,12 @@ const ActivityParticipants: React.FC<ActivityParticipantsProps> = ({
 
     try {
       setRemovingParticipant(participantId);
-      const token = localStorage.getItem("token");
+      const result: { message: string; queued?: boolean } =
+        await adminApi.removeParticipant(activity.id, participantId);
 
-      const response = await fetch(
-        `${API_URL}/activities/${activity.id}/participants/${participantId}`,
-        {
-          method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${token}`,
-            Accept: "application/json",
-          },
-        },
-      );
-
-      if (!response.ok) {
-        if (response.status === 404) {
-          throw new Error("Participant not found");
-        } else if (response.status === 401) {
-          throw new Error("Please login again");
-        } else if (response.status === 403) {
-          throw new Error(
-            "You don't have permission to remove this participant",
-          );
-        }
-        throw new Error(`Failed to remove participant (${response.status})`);
+      if (result?.queued) {
+        toast(result.message || "Change queued and will sync automatically");
+        return;
       }
 
       toast.success("Participant removed successfully");
