@@ -461,7 +461,9 @@ Route::middleware('auth:sanctum')->group(function () {
 
         // Learning Materials
         Route::get('/classes/{classId}/materials', [FacultyLearningMaterialController::class, 'index']);
+        Route::post('/classes/{classId}/materials/bulk', [FacultyLearningMaterialController::class, 'storeBulk']);
         Route::post('/classes/{classId}/materials', [FacultyLearningMaterialController::class, 'store']);
+        Route::get('/materials/{materialId}/download', [FacultyLearningMaterialController::class, 'download']);
         Route::put('/materials/{id}', [FacultyLearningMaterialController::class, 'update']);
         Route::delete('/materials/{id}', [FacultyLearningMaterialController::class, 'destroy']);
 

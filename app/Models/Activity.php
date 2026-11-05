@@ -51,6 +51,29 @@ class Activity extends Model
         return $this->participations()->count();
     }
 
+    /**
+     * Status is derived from the schedule so it is always accurate.
+     * "cancelled" is the only manual state and always wins.
+     */
+    public function getStatusAttribute($value)
+    {
+        if ($value === 'cancelled') {
+            return 'cancelled';
+        }
+
+        $now = now();
+
+        if ($this->end_datetime && $now->gte($this->end_datetime)) {
+            return 'completed';
+        }
+
+        if ($this->start_datetime && $now->gte($this->start_datetime)) {
+            return 'ongoing';
+        }
+
+        return 'upcoming';
+    }
+
     public function isWithinGeofence($lat, $lng)
     {
 if (is_null($this->latitude) || is_null($this->longitude) || is_null($lat) || is_null($lng)) {

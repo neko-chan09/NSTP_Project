@@ -39,7 +39,10 @@ public function show($id)
 }
     public function studentActivities(Request $request)
     {
-        $activities = Activity::where('status', 'upcoming')
+        // Status is time-based now, so don't rely on the stored column.
+        // Shows upcoming + ongoing (not cancelled, not yet ended).
+        $activities = Activity::where('status', '!=', 'cancelled')
+            ->where('end_datetime', '>=', now())
             ->where(function($query) use ($request) {
                 $query->where('component_type', 'all')
                     ->orWhere('component_type', $request->user()->nstp_component);
