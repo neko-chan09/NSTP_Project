@@ -46,15 +46,18 @@ export function useGenerateCertificate() {
       student_id,
       certificate_type,
       description,
+      template_mode,
     }: {
       student_id: number;
       certificate_type: string;
       description?: string;
+      template_mode?: "default" | "saved";
     }) =>
       adminApi.generateCertificate({
         student_id,
         certificate_type,
         description,
+        template_mode,
       }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: CERTIFICATES_KEY });
@@ -69,10 +72,12 @@ export function useBatchGenerateCertificates() {
     mutationFn: ({
       student_ids,
       certificate_type,
+      template_mode,
     }: {
       student_ids: number[];
       certificate_type: string;
-    }) => adminApi.batchGenerateCertificates({ student_ids, certificate_type }),
+      template_mode?: "default" | "saved";
+    }) => adminApi.batchGenerateCertificates({ student_ids, certificate_type, template_mode }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: CERTIFICATES_KEY });
     },

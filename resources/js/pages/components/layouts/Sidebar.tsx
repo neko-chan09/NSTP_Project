@@ -328,6 +328,12 @@ const Sidebar: React.FC<SidebarProps> = ({
           roles: ["super_admin", "admin"],
         },
         {
+          label: "Certificate Designer",
+          icon: "fa-palette",
+          path: "/admin/certificates/designer",
+          roles: ["super_admin", "admin"],
+        },
+        {
           label: "Issued Certificates",
           icon: "fa-download",
           path: "/admin/certificates/issued",

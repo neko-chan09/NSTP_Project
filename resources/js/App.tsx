@@ -22,6 +22,7 @@ import StudentRequests from "./pages/admin/Students/Requests";
 import DocumentSubmissions from "./pages/admin/Documents/Submissions";
 import DocumentLibrary from "./pages/admin/Documents/Library";
 import GenerateCertificate from "./pages/admin/Certificates/Generate";
+import CertificateDesigner from "./pages/admin/Certificates/Designer";
 import IssuedCertificates from "./pages/admin/Certificates/Issued";
 import EnrollmentReport from "./pages/admin/Reports/Enrollment";
 import AttendanceReport from "./pages/admin/Reports/Attendance";
@@ -177,6 +178,10 @@ const App: React.FC = () => {
                                         <Route
                                             path="grades"
                                             element={<GradesManagement />}
+                                        />
+                                        <Route
+                                            path="certificates/designer"
+                                            element={<CertificateDesigner />}
                                         />
                                         <Route
                                             path="certificates/issued"

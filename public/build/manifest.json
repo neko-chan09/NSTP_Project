@@ -399,7 +399,7 @@
     "isDynamicEntry": true
   },
   "resources/js/main.tsx": {
-    "file": "assets/main-DHLJmXgj.js",
+    "file": "assets/main-DfHqrsTp.js",
     "name": "main",
     "src": "resources/js/main.tsx",
     "isEntry": true,
@@ -411,7 +411,7 @@
       "node_modules/workbox-window/build/workbox-window.prod.es5.mjs"
     ],
     "css": [
-      "assets/main-C9RfRVDZ.css"
+      "assets/main-DAhTJHEg.css"
     ],
     "assets": [
       "assets/nstpLogo-B4AumqtN.png",

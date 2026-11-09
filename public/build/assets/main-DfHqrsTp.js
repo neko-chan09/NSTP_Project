@@ -12361,24 +12361,24 @@ function getCursorAdvanceMethods() {
 const transactionDoneMap = /* @__PURE__ */ new WeakMap();
 const transformCache = /* @__PURE__ */ new WeakMap();
 const reverseTransformCache = /* @__PURE__ */ new WeakMap();
-function promisifyRequest(request) {
+function promisifyRequest(request2) {
   const promise = new Promise((resolve, reject) => {
     const unlisten = () => {
-      request.removeEventListener("success", success);
-      request.removeEventListener("error", error);
+      request2.removeEventListener("success", success);
+      request2.removeEventListener("error", error);
     };
     const success = () => {
-      resolve(wrap(request.result));
+      resolve(wrap(request2.result));
       unlisten();
     };
     const error = () => {
-      reject(request.error);
+      reject(request2.error);
       unlisten();
     };
-    request.addEventListener("success", success);
-    request.addEventListener("error", error);
+    request2.addEventListener("success", success);
+    request2.addEventListener("error", error);
   });
-  reverseTransformCache.set(promise, request);
+  reverseTransformCache.set(promise, request2);
   return promise;
 }
 function cacheDonePromiseForTransaction(tx) {
@@ -12463,15 +12463,15 @@ function wrap(value) {
 }
 const unwrap = (value) => reverseTransformCache.get(value);
 function openDB(name, version2, { blocked, upgrade, blocking, terminated } = {}) {
-  const request = indexedDB.open(name, version2);
-  const openPromise = wrap(request);
+  const request2 = indexedDB.open(name, version2);
+  const openPromise = wrap(request2);
   if (upgrade) {
-    request.addEventListener("upgradeneeded", (event) => {
-      upgrade(wrap(request.result), event.oldVersion, event.newVersion, wrap(request.transaction), event);
+    request2.addEventListener("upgradeneeded", (event) => {
+      upgrade(wrap(request2.result), event.oldVersion, event.newVersion, wrap(request2.transaction), event);
     });
   }
   if (blocked) {
-    request.addEventListener("blocked", (event) => blocked(
+    request2.addEventListener("blocked", (event) => blocked(
       // Casting due to https://github.com/microsoft/TypeScript-DOM-lib-generator/pull/1405
       event.oldVersion,
       event.newVersion,
@@ -13713,27 +13713,21 @@ const adminApi = {
     return result.data ?? result;
   },
   generateCertificate: async (data) => {
-    const result = await mutateWithQueue(
-      `${API_URL}/admin/certificates/generate`,
-      "POST",
-      {
-        body: data,
-        label: `Generate certificate for student ${data.student_id}`,
-        tag: "certificate-generate"
-      }
-    );
+    const response = await fetch(`${API_URL}/admin/certificates/generate`, {
+      method: "POST",
+      headers: headers(),
+      body: JSON.stringify(data)
+    });
+    const result = await handleResponse(response);
     return result.data ?? result;
   },
   batchGenerateCertificates: async (data) => {
-    const result = await mutateWithQueue(
-      `${API_URL}/admin/certificates/batch`,
-      "POST",
-      {
-        body: data,
-        label: `Batch generate ${data.student_ids.length} certificates`,
-        tag: "certificate-batch"
-      }
-    );
+    const response = await fetch(`${API_URL}/admin/certificates/batch`, {
+      method: "POST",
+      headers: headers(),
+      body: JSON.stringify(data)
+    });
+    const result = await handleResponse(response);
     return result.data ?? result;
   },
   // ---------------- REPORTS ----------------
@@ -15700,6 +15694,12 @@ const Sidebar = ({
           label: "Generate",
           icon: "fa-file-pdf",
           path: "/admin/certificates/generate",
+          roles: ["super_admin", "admin"]
+        },
+        {
+          label: "Certificate Designer",
+          icon: "fa-palette",
+          path: "/admin/certificates/designer",
           roles: ["super_admin", "admin"]
         },
         {
@@ -24459,7 +24459,7 @@ function requireLeafletSrc() {
       var featureGroup = function(layers2, options) {
         return new FeatureGroup(layers2, options);
       };
-      var Icon = Class.extend({
+      var Icon2 = Class.extend({
         /* @section
          * @aka Icon options
          *
@@ -24564,9 +24564,9 @@ function requireLeafletSrc() {
         }
       });
       function icon(options) {
-        return new Icon(options);
+        return new Icon2(options);
       }
-      var IconDefault = Icon.extend({
+      var IconDefault = Icon2.extend({
         options: {
           iconUrl: "marker-icon.png",
           iconRetinaUrl: "marker-icon-2x.png",
@@ -24581,7 +24581,7 @@ function requireLeafletSrc() {
           if (typeof IconDefault.imagePath !== "string") {
             IconDefault.imagePath = this._detectIconPath();
           }
-          return (this.options.imagePath || IconDefault.imagePath) + Icon.prototype._getIconUrl.call(this, name);
+          return (this.options.imagePath || IconDefault.imagePath) + Icon2.prototype._getIconUrl.call(this, name);
         },
         _stripUrl: function(path) {
           var strip = function(str, re2, idx) {
@@ -26936,7 +26936,7 @@ function requireLeafletSrc() {
           this._tooltip.setLatLng(latlng);
         }
       });
-      var DivIcon = Icon.extend({
+      var DivIcon = Icon2.extend({
         options: {
           // @section
           // @aka DivIcon options
@@ -26975,7 +26975,7 @@ function requireLeafletSrc() {
       function divIcon(options) {
         return new DivIcon(options);
       }
-      Icon.Default = IconDefault;
+      Icon2.Default = IconDefault;
       var GridLayer = Layer.extend({
         // @section
         // @aka GridLayer options
@@ -29234,7 +29234,7 @@ function requireLeafletSrc() {
       exports2.GeoJSON = GeoJSON;
       exports2.GridLayer = GridLayer;
       exports2.Handler = Handler;
-      exports2.Icon = Icon;
+      exports2.Icon = Icon2;
       exports2.ImageOverlay = ImageOverlay;
       exports2.LatLng = LatLng;
       exports2.LatLngBounds = LatLngBounds;
@@ -36334,6 +36334,26 @@ const DocumentLibrary = () => {
     )
   ] });
 };
+async function request(type, method = "GET", body, preview = false) {
+  const fresh = method === "GET" ? `?fresh=${Date.now()}` : "";
+  const response = await fetch(`${API_URL}/admin/certificates/design/${type}${preview ? "/preview" : ""}${fresh}`, {
+    method,
+    cache: "no-store",
+    headers: { Accept: preview ? "application/pdf" : "application/json", "Content-Type": "application/json", Authorization: `Bearer ${getToken$1()}` },
+    ...body ? { body: JSON.stringify(body) } : {}
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    const detail = Object.values(error.errors ?? {}).flat().join(" ");
+    throw new Error(detail || error.message || `Request failed (${response.status})`);
+  }
+  return response;
+}
+const designerApi = {
+  load: async (type) => (await (await request(type)).json()).data,
+  save: async (type, design) => (await (await request(type, "PUT", { design })).json()).data,
+  preview: async (type, design, studentId) => (await request(type, "POST", { design, student_id: studentId }, true)).blob()
+};
 const CERTIFICATES_KEY = ["certificates"];
 function useCertificates() {
   const queryClient2 = useQueryClient();
@@ -36347,13 +36367,28 @@ function useCertificates() {
   };
   return { ...query, refresh, isRefreshing: query.isFetching };
 }
+function useEligibleStudents(search) {
+  const queryClient2 = useQueryClient();
+  const query = useQuery({
+    queryKey: ["certificates", "eligible-students", search],
+    queryFn: () => adminApi.getEligibleStudents(search),
+    staleTime: 3e4
+  });
+  const refresh = () => {
+    queryClient2.invalidateQueries({
+      queryKey: ["certificates", "eligible-students", search]
+    });
+  };
+  return { ...query, refresh, isRefreshing: query.isFetching };
+}
 function useBatchGenerateCertificates() {
   const queryClient2 = useQueryClient();
   return useMutation({
     mutationFn: ({
       student_ids,
-      certificate_type
-    }) => adminApi.batchGenerateCertificates({ student_ids, certificate_type }),
+      certificate_type,
+      template_mode
+    }) => adminApi.batchGenerateCertificates({ student_ids, certificate_type, template_mode }),
     onSuccess: () => {
       queryClient2.invalidateQueries({ queryKey: CERTIFICATES_KEY });
     }
@@ -36361,7 +36396,12 @@ function useBatchGenerateCertificates() {
 }
 const GenerateCertificate = () => {
   const [selectedStudents, setSelectedStudents] = reactExports.useState([]);
-  const [certType, setCertType] = reactExports.useState("completion");
+  const [params] = useSearchParams();
+  const requestedType = params.get("design");
+  const fromDesigner = ["completion", "participation", "training"].includes(requestedType ?? "");
+  const [certType, setCertType] = reactExports.useState(fromDesigner ? requestedType : "completion");
+  const [templateMode, setTemplateMode] = reactExports.useState(fromDesigner ? "saved" : "default");
+  const designQuery = useQuery({ queryKey: ["certificate-design", certType], queryFn: () => designerApi.load(certType), staleTime: 0 });
   const [search, setSearch] = reactExports.useState("");
   const [page, setPage] = reactExports.useState(1);
   const [filterComponent, setFilterComponent] = reactExports.useState("");
@@ -36396,13 +36436,11 @@ const GenerateCertificate = () => {
       (prev) => prev.includes(id) ? prev.filter((sid) => sid !== id) : [...prev, id]
     );
   };
+  const selectable = students.filter((s2) => certType !== "completion" || s2.is_eligible_for_completion);
+  const allSelected = selectable.length > 0 && selectable.every((s2) => selectedStudents.includes(s2.id));
   const handleSelectAll = () => {
-    if (!students.length) return;
-    if (selectedStudents.length === students.length) {
-      setSelectedStudents([]);
-    } else {
-      setSelectedStudents(students.map((s2) => s2.id));
-    }
+    const ids = selectable.map((s2) => s2.id);
+    setSelectedStudents((previous) => allSelected ? previous.filter((id) => !ids.includes(id)) : [.../* @__PURE__ */ new Set([...previous, ...ids])]);
   };
   const handleGenerate = async () => {
     if (selectedStudents.length === 0) {
@@ -36412,7 +36450,8 @@ const GenerateCertificate = () => {
     try {
       const result = await generateMut.mutateAsync({
         student_ids: selectedStudents,
-        certificate_type: certType
+        certificate_type: certType,
+        template_mode: templateMode
       });
       zt.success(`Generated ${result?.length || 0} certificates successfully!`);
       setSelectedStudents([]);
@@ -36463,7 +36502,7 @@ const GenerateCertificate = () => {
           {
             className: "btn btn-primary",
             onClick: handleGenerate,
-            disabled: generateMut.isPending || selectedStudents.length === 0,
+            disabled: generateMut.isPending || selectedStudents.length === 0 || templateMode === "saved" && (!designQuery.data || designQuery.isFetching || designQuery.isError),
             children: generateMut.isPending ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
               /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-spinner fa-spin" }),
               " Generating..."
@@ -36474,6 +36513,28 @@ const GenerateCertificate = () => {
             ] })
           }
         )
+      ] })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-white p-4 rounded-xl border border-slate-200 flex flex-wrap items-center justify-between gap-4", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-wrap items-center gap-3", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("label", { htmlFor: "certificate-template", className: "text-sm font-semibold text-navy-900", children: "Certificate design" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("select", { id: "certificate-template", className: "border border-slate-200 rounded-lg px-3 py-2 text-sm", value: templateMode, onChange: (e2) => setTemplateMode(e2.target.value), children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "default", children: "Standard NSTP template" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("option", { value: "saved", disabled: !designQuery.data, children: [
+            "Saved design",
+            designQuery.data ? `: ${designQuery.data.design.name}` : " (not saved yet)"
+          ] })
+        ] }),
+        designQuery.isLoading && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-slate-500", children: "Checking saved design…" }),
+        designQuery.isError && /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { role: "alert", className: "text-xs text-red-600", children: [
+          "Could not load saved design. ",
+          /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "underline", onClick: () => designQuery.refetch(), children: "Retry" })
+        ] }),
+        templateMode === "saved" && !designQuery.isLoading && !designQuery.data && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { role: "alert", className: "text-xs text-red-600", children: "Save a design for this certificate type first." })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs(Link, { className: "text-sm font-semibold text-gold-600", to: "/admin/certificates/designer", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-palette mr-2" }),
+        "Open Certificate Designer"
       ] })
     ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-white p-4 rounded-xl shadow-sm border border-slate-200", children: [
@@ -36542,7 +36603,11 @@ const GenerateCertificate = () => {
             {
               className: "px-4 py-2 border border-slate-200 rounded-lg bg-white text-sm focus:outline-none focus:ring-2 focus:ring-gold-500",
               value: certType,
-              onChange: (e2) => setCertType(e2.target.value),
+              onChange: (e2) => {
+                setCertType(e2.target.value);
+                setSelectedStudents([]);
+                setTemplateMode("default");
+              },
               children: [
                 /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "completion", children: "Completion" }),
                 /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "participation", children: "Participation" }),
@@ -36550,7 +36615,7 @@ const GenerateCertificate = () => {
               ]
             }
           ),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-secondary btn-sm", onClick: handleSelectAll, children: selectedStudents.length === students.length && students.length > 0 ? "Deselect All" : "Select All" })
+          /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-secondary btn-sm", onClick: handleSelectAll, children: allSelected ? "Deselect All" : "Select All" })
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-3 flex-wrap", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-sm text-slate-500", children: [
@@ -36575,10 +36640,10 @@ const GenerateCertificate = () => {
           "input",
           {
             type: "checkbox",
-            checked: selectedStudents.length === students.length && students.length > 0,
+            checked: allSelected,
             onChange: handleSelectAll,
             className: "w-4 h-4 accent-gold-500",
-            disabled: students.length === 0
+            disabled: selectable.length === 0
           }
         ) }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "OCC ID" }),
@@ -36603,7 +36668,7 @@ const GenerateCertificate = () => {
             checked: selectedStudents.includes(student.id),
             onChange: () => handleSelect(student.id),
             className: "w-4 h-4 accent-gold-500",
-            disabled: !student.is_eligible_for_completion
+            disabled: certType === "completion" && !student.is_eligible_for_completion
           }
         ) }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "font-bold text-navy-900", children: student.student_id }),
@@ -36657,6 +36722,677 @@ const GenerateCertificate = () => {
     ] })
   ] });
 };
+const PAGE_WIDTH = 1120;
+const PAGE_HEIGHT = 792;
+const FIELDS = [
+  "student_name",
+  "student_number",
+  "course",
+  "section",
+  "component",
+  "academic_year",
+  "completion_date",
+  "hours_completed",
+  "certificate_number",
+  "certificate_type"
+];
+const uid = () => crypto.randomUUID();
+function newElement(kind, overrides = {}) {
+  return {
+    id: uid(),
+    kind,
+    x: 340,
+    y: 350,
+    width: 440,
+    height: 60,
+    text: "Your text here",
+    src: "",
+    fontSize: 24,
+    fontFamily: "serif",
+    color: "#142440",
+    bold: false,
+    italic: false,
+    align: "center",
+    ...overrides
+  };
+}
+function createDesign(type = "completion", modern = false) {
+  const text = (id, y, value, fontSize, extra = {}) => newElement("text", { id, x: 100, y, width: 920, height: Math.ceil(fontSize * 1.6), text: value, fontSize, ...extra });
+  return {
+    version: 1,
+    name: `NSTP ${type[0].toUpperCase() + type.slice(1)} Certificate`,
+    background: modern ? "#ffffff" : "#fffdf7",
+    backgroundImage: "",
+    border: modern ? "double" : "classic",
+    accent: "#c8a039",
+    elements: [
+      text("school", 88, "OPOL COMMUNITY COLLEGE", 22, { bold: true }),
+      text("office", 128, "National Service Training Program", 18),
+      newElement("line", { id: "divider", x: 430, y: 182, width: 260, height: 2, color: "#c8a039" }),
+      text("heading", 211, "CERTIFICATE OF {{certificate_type}}", 38, { bold: true }),
+      text("intro", 296, "This certifies that", 21, { italic: true }),
+      text("student", 343, "{{student_name}}", 48, { bold: true, height: 76 }),
+      text("details", 429, "{{student_number}}  •  {{course}}  •  {{section}}", 16),
+      text("body", 480, "has successfully fulfilled the prescribed NSTP requirements", 21),
+      text("component", 522, "{{component}}  •  Academic Year {{academic_year}}", 20, { bold: true }),
+      text("date", 565, "Given on {{completion_date}}", 16),
+      newElement("line", { id: "signature-left", x: 140, y: 665, width: 280, height: 1 }),
+      newElement("line", { id: "signature-right", x: 700, y: 665, width: 280, height: 1 }),
+      text("coordinator", 677, "NSTP Coordinator", 17, { x: 140, width: 280, bold: true }),
+      text("dean", 677, "College Dean", 17, { x: 700, width: 280, bold: true }),
+      newElement("qr", { id: "verification", x: 516, y: 634, width: 88, height: 88 }),
+      text("number", 735, "{{certificate_number}}", 11, { fontFamily: "monospace" })
+    ]
+  };
+}
+function substitute(text, values) {
+  return text.replace(/\{\{\s*([a-z_]+)\s*\}\}/g, (token, key) => values[key] ?? token);
+}
+function clampElement(item) {
+  const width = Math.max(20, Math.min(PAGE_WIDTH, item.width));
+  const height = Math.max(1, Math.min(PAGE_HEIGHT, item.height));
+  return {
+    ...item,
+    width,
+    height,
+    x: Math.max(0, Math.min(PAGE_WIDTH - width, item.x)),
+    y: Math.max(0, Math.min(PAGE_HEIGHT - height, item.y))
+  };
+}
+const tools = [
+  ["templates", "fa-th-large", "Templates"],
+  ["text", "fa-font", "Text"],
+  ["elements", "fa-shapes", "Elements"],
+  ["uploads", "fa-image", "Uploads"],
+  ["fields", "fa-user-graduate", "Student fields"],
+  ["layers", "fa-layer-group", "Layers"]
+];
+const fieldLabel = (field) => field.replaceAll("_", " ").replace(/^./, (c2) => c2.toUpperCase());
+const Icon = ({ name }) => /* @__PURE__ */ jsxRuntimeExports.jsx("i", { "aria-hidden": "true", className: `fas ${name}` });
+async function imageData(file) {
+  if (!["image/png", "image/jpeg"].includes(file.type)) throw new Error("Choose a PNG or JPG image.");
+  if (file.size > 5 * 1024 * 1024) throw new Error("Choose an image smaller than 5 MB.");
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = () => reject(new Error("Could not read this image."));
+      image.src = url;
+    });
+    const ratio = Math.min(1, 1600 / Math.max(img.width, img.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(img.width * ratio);
+    canvas.height = Math.round(img.height * ratio);
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Image processing is unavailable.");
+    context.drawImage(img, 0, 0, canvas.width, canvas.height);
+    const data = canvas.toDataURL(file.type, 0.9);
+    if (data.length > 2e6) throw new Error("This image is too detailed. Please use a smaller image.");
+    return data;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+function CertificateDesigner() {
+  const navigate = useNavigate();
+  const [type, setType] = reactExports.useState("completion");
+  const [design, setDesign] = reactExports.useState(() => createDesign());
+  const [selectedId, setSelectedId] = reactExports.useState("student");
+  const [tool, setTool] = reactExports.useState("fields");
+  const [loading, setLoading] = reactExports.useState(true);
+  const [loadError, setLoadError] = reactExports.useState("");
+  const [reload, setReload] = reactExports.useState(0);
+  const [saving, setSaving] = reactExports.useState(false);
+  const [previewing, setPreviewing] = reactExports.useState(false);
+  const [saved, setSaved] = reactExports.useState("");
+  const [lastSaved, setLastSaved] = reactExports.useState("");
+  const [preview, setPreview] = reactExports.useState(false);
+  const [previewStudent, setPreviewStudent] = reactExports.useState("");
+  const [previewUrl, setPreviewUrl] = reactExports.useState(null);
+  const [zoom, setZoom] = reactExports.useState(1);
+  const [scale, setScale] = reactExports.useState(0.6);
+  const [undo, setUndo] = reactExports.useState([]);
+  const [redo, setRedo] = reactExports.useState([]);
+  const viewport = reactExports.useRef(null);
+  const page = reactExports.useRef(null);
+  const current = reactExports.useRef(design);
+  current.current = design;
+  const dirty = JSON.stringify(design) !== saved;
+  const selected = design.elements.find((item) => item.id === selectedId);
+  const { data: students = [], isError: studentsError } = useEligibleStudents();
+  const student = students.find((item) => String(item.id) === previewStudent);
+  const eligibleCount = students.filter((item) => item.is_eligible_for_completion).length;
+  const year = (/* @__PURE__ */ new Date()).getFullYear();
+  const values = {
+    student_name: student ? `${student.user.first_name} ${student.user.last_name}` : "MARIA SANTOS",
+    student_number: student?.student_id ?? "STU-0001",
+    course: student?.course ?? "BSIT",
+    section: student?.section ?? "A",
+    component: student?.nstp_component_selected?.toUpperCase() ?? "CWTS",
+    academic_year: `${year - 1}–${year}`,
+    completion_date: (/* @__PURE__ */ new Date()).toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" }),
+    hours_completed: "90",
+    certificate_number: "NSTP-PREVIEW",
+    certificate_type: type.toUpperCase()
+  };
+  reactExports.useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setLoadError("");
+    setPreview(false);
+    designerApi.load(type).then((result) => {
+      if (!active) return;
+      const next = result?.design ?? createDesign(type);
+      setDesign(next);
+      setSaved(JSON.stringify(next));
+      setLastSaved(result?.saved_at ?? "");
+      setUndo([]);
+      setRedo([]);
+      setSelectedId(null);
+    }).catch((error) => {
+      if (active) setLoadError(error.message);
+    }).finally(() => {
+      if (active) setLoading(false);
+    });
+    return () => {
+      active = false;
+    };
+  }, [type, reload]);
+  reactExports.useEffect(() => {
+    if (!viewport.current) return;
+    const observer = new ResizeObserver(([entry]) => setScale(Math.min(0.95, Math.max(0.15, (entry.contentRect.width - 48) / PAGE_WIDTH))));
+    observer.observe(viewport.current);
+    return () => observer.disconnect();
+  }, [loading, loadError]);
+  reactExports.useEffect(() => {
+    const handler = (event) => {
+      if (dirty && !loading) {
+        event.preventDefault();
+        event.returnValue = "";
+      }
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [dirty, loading]);
+  reactExports.useEffect(() => () => {
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+  }, [previewUrl]);
+  const commit = reactExports.useCallback((next) => {
+    setUndo((history) => [...history.slice(-39), current.current]);
+    setRedo([]);
+    setDesign(next);
+  }, []);
+  const patch = (changes) => {
+    if (!selected) return;
+    commit({ ...design, elements: design.elements.map((item) => item.id === selected.id ? clampElement({ ...item, ...changes }) : item) });
+  };
+  const add = (kind, extra = {}) => {
+    if (design.elements.length >= 50) {
+      zt.error("A certificate can contain up to 50 elements.");
+      return;
+    }
+    const item = clampElement(newElement(kind, extra));
+    commit({ ...design, elements: [...design.elements, item] });
+    setSelectedId(item.id);
+    setPreview(false);
+  };
+  const deleteSelected = () => {
+    if (selected) {
+      commit({ ...design, elements: design.elements.filter((item) => item.id !== selected.id) });
+      setSelectedId(null);
+    }
+  };
+  const undoChange = () => {
+    if (!undo.length) return;
+    setRedo((history) => [...history, design]);
+    setDesign(undo[undo.length - 1]);
+    setUndo(undo.slice(0, -1));
+  };
+  const redoChange = () => {
+    if (!redo.length) return;
+    setUndo((history) => [...history, design]);
+    setDesign(redo[redo.length - 1]);
+    setRedo(redo.slice(0, -1));
+  };
+  reactExports.useEffect(() => {
+    const handler = (event) => {
+      if (event.target.closest("input,textarea,select,button,[contenteditable]")) return;
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
+        event.preventDefault();
+        event.shiftKey ? redoChange() : undoChange();
+      } else if (!preview && (event.key === "Delete" || event.key === "Backspace")) {
+        event.preventDefault();
+        deleteSelected();
+      } else if (!preview && selected && ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) {
+        event.preventDefault();
+        const step = event.shiftKey ? 10 : 1;
+        patch({ x: selected.x + (event.key === "ArrowLeft" ? -step : event.key === "ArrowRight" ? step : 0), y: selected.y + (event.key === "ArrowUp" ? -step : event.key === "ArrowDown" ? step : 0) });
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  });
+  const gesture = (event, item, resize = false) => {
+    if (preview || event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setSelectedId(item.id);
+    const node = event.currentTarget;
+    (resize ? node.parentElement : node)?.focus({ preventScroll: true });
+    node.setPointerCapture(event.pointerId);
+    const start = current.current;
+    const x = event.clientX;
+    const y = event.clientY;
+    const actualScale = page.current.getBoundingClientRect().width / PAGE_WIDTH;
+    let changed = false;
+    const move = (ev) => {
+      const dx = (ev.clientX - x) / actualScale;
+      const dy = (ev.clientY - y) / actualScale;
+      if (Math.abs(dx) + Math.abs(dy) < 2) return;
+      changed = true;
+      const next = clampElement({ ...item, ...resize ? { width: Math.round(Math.max(20, Math.min(PAGE_WIDTH - item.x, item.width + dx))), height: Math.round(Math.max(1, Math.min(PAGE_HEIGHT - item.y, item.height + dy))) } : { x: Math.round(item.x + dx), y: Math.round(item.y + dy) } });
+      setDesign({ ...start, elements: start.elements.map((el) => el.id === item.id ? next : el) });
+    };
+    const end = () => {
+      node.removeEventListener("pointermove", move);
+      node.removeEventListener("pointerup", end);
+      node.removeEventListener("pointercancel", cancel);
+      if (changed) {
+        setUndo((history) => [...history.slice(-39), start]);
+        setRedo([]);
+      }
+    };
+    const cancel = () => {
+      setDesign(start);
+      changed = false;
+      end();
+    };
+    node.addEventListener("pointermove", move);
+    node.addEventListener("pointerup", end);
+    node.addEventListener("pointercancel", cancel);
+  };
+  const save = async () => {
+    setSaving(true);
+    const snapshot = current.current;
+    try {
+      const result = await designerApi.save(type, snapshot);
+      setSaved(JSON.stringify(snapshot));
+      setLastSaved(result.saved_at);
+      zt.success("Template saved. It is ready in Generate.");
+      return true;
+    } catch (error) {
+      zt.error(error.message);
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  };
+  const pdfPreview = async () => {
+    setPreviewing(true);
+    try {
+      const blob = await designerApi.preview(type, design, previewStudent ? Number(previewStudent) : void 0);
+      setPreviewUrl(URL.createObjectURL(blob));
+    } catch (error) {
+      zt.error(error.message);
+    } finally {
+      setPreviewing(false);
+    }
+  };
+  const generate = async () => {
+    if ((dirty || !lastSaved) && !await save()) return;
+    navigate(`/admin/certificates/generate?design=${type}`);
+  };
+  const upload = async (event, background = false) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    try {
+      const src2 = await imageData(file);
+      if (background) commit({ ...design, backgroundImage: src2 });
+      else add("image", { src: src2, text: file.name, x: 460, y: 75, width: 200, height: 110 });
+    } catch (error) {
+      zt.error(error.message);
+    }
+  };
+  const replaceTemplate = (modern) => {
+    if (!window.confirm("Replace the current canvas? You can undo this change.")) return;
+    commit(createDesign(type, modern));
+    setSelectedId(null);
+  };
+  const reorder = (direction) => {
+    if (!selected) return;
+    const items = [...design.elements];
+    const index = items.findIndex((el) => el.id === selected.id);
+    const next = Math.max(0, Math.min(items.length - 1, index + direction));
+    [items[index], items[next]] = [items[next], items[index]];
+    commit({ ...design, elements: items });
+  };
+  const numberControl = (label, key, min = 0) => selected && /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
+    label,
+    /* @__PURE__ */ jsxRuntimeExports.jsx("input", { "aria-label": label, type: "number", min, max: key === "x" || key === "width" ? PAGE_WIDTH : PAGE_HEIGHT, value: selected[key], onChange: (e2) => patch({ [key]: Number(e2.target.value) }) })
+  ] });
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "certificate-designer", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { className: "cd-header", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "cd-eyebrow", children: "CERTIFICATES / DESIGN STUDIO" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("h2", { children: [
+          "Certificate Designer ",
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "cd-beta", children: "A4 LANDSCAPE" })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "Create once. Personalize for every graduate." })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "cd-actions", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { className: "cd-button", disabled: loading || !!loadError || previewing, onClick: pdfPreview, children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-file-pdf" }),
+          " ",
+          previewing ? "Preparing…" : "PDF preview"
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { className: "cd-button", disabled: loading || !!loadError || saving, onClick: () => save(), children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-save" }),
+          " ",
+          saving ? "Saving…" : "Save template"
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { className: "cd-button cd-primary", disabled: loading || !!loadError || saving, onClick: generate, children: [
+          "Use in Generate ",
+          /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-arrow-right" })
+        ] })
+      ] })
+    ] }),
+    loading ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "cd-state", role: "status", children: "Loading your saved design…" }) : loadError ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "cd-state", role: "alert", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { children: [
+        "Could not load the certificate design: ",
+        loadError
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "cd-button", onClick: () => setReload((n2) => n2 + 1), children: "Try again" })
+    ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "cd-documentbar", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("input", { "aria-label": "Template name", maxLength: 120, value: design.name, onChange: (e2) => commit({ ...design, name: e2.target.value }) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: dirty ? "cd-unsaved" : "cd-saved", children: dirty ? "● Unsaved changes" : lastSaved ? "✓ Saved to server" : "Starter template" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("select", { "aria-label": "Certificate type", value: type, disabled: saving, onChange: (e2) => {
+          if (!dirty || window.confirm("Discard your unsaved changes and switch certificate type?")) setType(e2.target.value);
+        }, children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "completion", children: "Completion" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "participation", children: "Participation" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "training", children: "Training" })
+        ] })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "cd-workspace", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("nav", { className: "cd-tools", "aria-label": "Design tools", children: tools.map(([id, icon, label]) => /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { "aria-pressed": tool === id, onClick: () => setTool(id), children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: icon }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: label })
+        ] }, id)) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("aside", { className: "cd-library", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("h3", { children: tools.find(([id]) => id === tool)?.[2] }),
+          tool === "fields" && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "Drag a field onto the page, or click to add it. Student details are filled automatically." }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "cd-tip", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-magic" }),
+              " One design, every graduate."
+            ] }),
+            FIELDS.map((field) => /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { className: "cd-field", draggable: true, onDragStart: (e2) => e2.dataTransfer.setData("application/nstp-field", field), onClick: () => add("text", { text: `{{${field}}}`, fontSize: field === "student_name" ? 44 : 20 }), children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-grip-vertical" }),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
+                fieldLabel(field),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("small", { children: `{{${field}}}` })
+              ] }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-plus" })
+            ] }, field))
+          ] }),
+          tool === "templates" && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "Start with an editable layout. All elements can be moved and changed." }),
+            [false, true].map((modern) => /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { className: "cd-template", onClick: () => replaceTemplate(modern), children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: modern ? "cd-mini modern" : "cd-mini", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx("small", { children: "OPOL COMMUNITY COLLEGE" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("strong", { children: "CERTIFICATE" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("i", { children: "Student Name" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "___________________" })
+              ] }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("b", { children: modern ? "Clean double border" : "Classic navy & gold" })
+            ] }, String(modern))),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "cd-button", onClick: () => {
+              if (window.confirm("Start with a blank canvas? You can undo this change.")) commit({ ...createDesign(type), border: "none", elements: [] });
+            }, children: "Start blank" })
+          ] }),
+          tool === "text" && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "Add text, then use the toolbar or properties to style it." }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "cd-text-add heading", onClick: () => add("text", { text: "Your heading", fontSize: 40, bold: true, height: 70 }), children: "Add a heading" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "cd-text-add", onClick: () => add("text", { text: "Your subheading", fontSize: 26 }), children: "Add a subheading" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "cd-text-add small", onClick: () => add("text", { text: "Add your certificate text", fontSize: 18 }), children: "Add body text" })
+          ] }),
+          tool === "elements" && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "cd-stack", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "Add finishing details to your certificate." }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { className: "cd-button", onClick: () => add("line", { width: 300, height: 2, color: design.accent }), children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-minus" }),
+              " Divider line"
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { className: "cd-button", onClick: () => add("qr", { width: 90, height: 90 }), children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-qrcode" }),
+              " Verification QR"
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { className: "cd-button", onClick: () => {
+              add("text", { text: "Authorized Signatory\nProgram Coordinator", fontSize: 18, width: 300, height: 65, y: 670 });
+            }, children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-signature" }),
+              " Signatory text"
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "Upload a transparent PNG signature in Uploads and position it above the signatory." })
+          ] }),
+          tool === "uploads" && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "cd-stack", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "Add your school logo, seal, or signature. PNG and JPG, up to 5 MB." }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "cd-upload", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-cloud-upload-alt" }),
+              " Upload image",
+              /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "file", accept: "image/png,image/jpeg", onChange: (e2) => upload(e2) })
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "cd-upload", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-image" }),
+              " Upload background",
+              /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "file", accept: "image/png,image/jpeg", onChange: (e2) => upload(e2, true) })
+            ] }),
+            design.backgroundImage && /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "cd-button", onClick: () => commit({ ...design, backgroundImage: "" }), children: "Remove background image" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "Background artwork fills the page. Logos and signatures keep their proportions inside their resize box." })
+          ] }),
+          tool === "layers" && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "Top layers appear in front. Select a layer to edit it." }),
+            [...design.elements].reverse().map((item) => /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { className: `cd-layer ${selectedId === item.id ? "active" : ""}`, onClick: () => {
+              setSelectedId(item.id);
+              setPreview(false);
+            }, children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: item.kind === "text" ? "fa-font" : item.kind === "image" ? "fa-image" : item.kind === "qr" ? "fa-qrcode" : "fa-minus" }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: item.kind === "text" ? item.text : item.kind === "qr" ? "Verification QR" : item.text || item.kind })
+            ] }, item.id))
+          ] })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "cd-editor", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "cd-toolbar", role: "toolbar", "aria-label": "Text formatting", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("button", { title: "Undo (Ctrl+Z)", "aria-label": "Undo", disabled: !undo.length, onClick: undoChange, children: /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-undo" }) }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("button", { title: "Redo (Ctrl+Shift+Z)", "aria-label": "Redo", disabled: !redo.length, onClick: redoChange, children: /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-redo" }) }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "cd-separator" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("select", { "aria-label": "Font family", disabled: selected?.kind !== "text", value: selected?.fontFamily ?? "serif", onChange: (e2) => patch({ fontFamily: e2.target.value }), children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "serif", children: "Classic serif" }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "sans-serif", children: "Modern sans" }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "monospace", children: "Monospace" })
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("input", { "aria-label": "Font size", type: "number", min: 8, max: 96, disabled: selected?.kind !== "text", value: selected?.fontSize ?? 24, onChange: (e2) => patch({ fontSize: Math.max(8, Math.min(96, Number(e2.target.value))) }) }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("button", { "aria-label": "Bold", "aria-pressed": selected?.bold ?? false, disabled: selected?.kind !== "text", onClick: () => patch({ bold: !selected?.bold }), children: /* @__PURE__ */ jsxRuntimeExports.jsx("b", { children: "B" }) }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("button", { "aria-label": "Italic", "aria-pressed": selected?.italic ?? false, disabled: selected?.kind !== "text", onClick: () => patch({ italic: !selected?.italic }), children: /* @__PURE__ */ jsxRuntimeExports.jsx("i", { children: "I" }) }),
+            ["left", "center", "right"].map((align) => /* @__PURE__ */ jsxRuntimeExports.jsx("button", { "aria-label": `Align ${align}`, "aria-pressed": selected?.align === align, disabled: selected?.kind !== "text", onClick: () => patch({ align }), children: /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: `fa-align-${align}` }) }, align)),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("input", { "aria-label": "Element color", title: "Element color", type: "color", disabled: !selected, value: selected?.color ?? "#142440", onChange: (e2) => patch({ color: e2.target.value }) }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { className: "cd-preview-toggle", "aria-pressed": preview, onClick: () => setPreview(!preview), children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-eye" }),
+              " ",
+              preview ? "Edit fields" : "Live preview"
+            ] })
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "cd-viewport", ref: viewport, children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "cd-paper-space", style: { width: PAGE_WIDTH * scale * zoom, height: PAGE_HEIGHT * scale * zoom }, children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "div",
+            {
+              className: `cd-paper cd-border-${design.border}`,
+              ref: page,
+              style: { width: PAGE_WIDTH, height: PAGE_HEIGHT, transform: `scale(${scale * zoom})`, backgroundColor: design.background, "--cd-accent": design.accent },
+              onPointerDown: () => setSelectedId(null),
+              onDragOver: (e2) => e2.preventDefault(),
+              onDrop: (e2) => {
+                e2.preventDefault();
+                const field = e2.dataTransfer.getData("application/nstp-field");
+                if (!FIELDS.includes(field)) return;
+                const rect = page.current.getBoundingClientRect();
+                const factor = rect.width / PAGE_WIDTH;
+                add("text", { text: `{{${field}}}`, x: (e2.clientX - rect.left) / factor, y: (e2.clientY - rect.top) / factor, width: 400, height: 60 });
+              },
+              children: [
+                design.backgroundImage && /* @__PURE__ */ jsxRuntimeExports.jsx("img", { className: "cd-background", src: design.backgroundImage, alt: "Certificate background", draggable: false }),
+                design.border !== "none" && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "cd-border-art" }),
+                design.elements.map((item) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                  "div",
+                  {
+                    role: "button",
+                    tabIndex: preview ? -1 : 0,
+                    "aria-label": `${item.kind}: ${item.text || "Verification QR"}`,
+                    "aria-pressed": selectedId === item.id,
+                    className: `cd-element ${!preview && selectedId === item.id ? "selected" : ""} ${preview ? "preview" : ""}`,
+                    style: { left: item.x, top: item.y, width: item.width, height: item.height },
+                    onPointerDown: (e2) => gesture(e2, item),
+                    onFocus: () => {
+                      if (!preview) setSelectedId(item.id);
+                    },
+                    onClick: (e2) => e2.stopPropagation(),
+                    children: [
+                      item.kind === "text" && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "cd-element-text", style: { fontFamily: item.fontFamily === "serif" ? '"DejaVu Serif", Georgia, serif' : item.fontFamily === "sans-serif" ? '"DejaVu Sans", Arial, sans-serif' : '"DejaVu Sans Mono", monospace', fontSize: item.fontSize, color: item.color, fontWeight: item.bold ? 700 : 400, fontStyle: item.italic ? "italic" : "normal", textAlign: item.align }, children: preview ? substitute(item.text, values) : item.text }),
+                      item.kind === "image" && /* @__PURE__ */ jsxRuntimeExports.jsx("img", { src: item.src, alt: item.text || "Certificate artwork", draggable: false }),
+                      item.kind === "line" && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { width: "100%", height: "100%", background: item.color } }),
+                      item.kind === "qr" && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "cd-qr-placeholder", children: [
+                        /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-qrcode" }),
+                        /* @__PURE__ */ jsxRuntimeExports.jsx("small", { children: "Verify certificate" })
+                      ] }),
+                      !preview && selectedId === item.id && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+                        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "cd-element-label", children: item.kind === "text" ? `${item.fontSize}px` : item.kind }),
+                        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { "aria-label": "Resize selected element", className: "cd-resize", onPointerDown: (e2) => gesture(e2, item, true) })
+                      ] })
+                    ]
+                  },
+                  item.id
+                ))
+              ]
+            }
+          ) }) }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("footer", { className: "cd-canvas-footer", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-lock" }),
+              " A4 · 297 × 210 mm ",
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "cd-footer-hint", children: " / Drag to move · corner to resize" })
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("button", { "aria-label": "Zoom out", disabled: zoom <= 0.5, onClick: () => setZoom(Math.max(0.5, +(zoom - 0.25).toFixed(2))), children: "−" }),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { title: "Fit page", onClick: () => setZoom(1), children: [
+                Math.round(scale * zoom * 100),
+                "%"
+              ] }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("button", { "aria-label": "Zoom in", disabled: zoom >= 2, onClick: () => setZoom(Math.min(2, zoom + 0.25)), children: "+" })
+            ] })
+          ] })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("aside", { className: "cd-properties", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("h3", { children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-sliders-h" }),
+            " ",
+            selected ? "Element properties" : "Certificate settings"
+          ] }),
+          selected ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "cd-stack", children: [
+            selected.kind === "text" && /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
+              "Text content",
+              /* @__PURE__ */ jsxRuntimeExports.jsx("textarea", { "aria-label": "Text content", rows: 4, maxLength: 2e3, value: selected.text, onChange: (e2) => patch({ text: e2.target.value }) })
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "cd-number-grid", children: [
+              numberControl("Left", "x"),
+              numberControl("Top", "y"),
+              numberControl("Width", "width", 20),
+              numberControl("Height", "height", 1)
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "cd-button-grid", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { className: "cd-button", onClick: () => reorder(-1), children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-arrow-down" }),
+                " Backward"
+              ] }),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { className: "cd-button", onClick: () => reorder(1), children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-arrow-up" }),
+                " Forward"
+              ] })
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { className: "cd-button", onClick: () => add(selected.kind, { ...selected, id: uid(), x: selected.x + 20, y: selected.y + 20 }), children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-copy" }),
+              " Duplicate element"
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { className: "cd-button cd-delete", onClick: deleteSelected, children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-trash" }),
+              " Delete element"
+            ] }),
+            selected.kind === "qr" && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "The actual QR code is generated in the PDF and links to this certificate’s verification page." }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "cd-link", onClick: () => setSelectedId(null), children: "Back to certificate settings" })
+          ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "cd-stack", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
+              "Page background",
+              /* @__PURE__ */ jsxRuntimeExports.jsx("input", { "aria-label": "Page background", type: "color", value: design.background, onChange: (e2) => commit({ ...design, background: e2.target.value }) })
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
+              "Border style",
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("select", { value: design.border, onChange: (e2) => commit({ ...design, border: e2.target.value }), children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "classic", children: "Classic navy & gold" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "double", children: "Double border" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "none", children: "No border" })
+              ] })
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
+              "Accent color",
+              /* @__PURE__ */ jsxRuntimeExports.jsx("input", { "aria-label": "Accent color", type: "color", value: design.accent, onChange: (e2) => commit({ ...design, accent: e2.target.value }) })
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "Click an element to edit its content, position, or size." })
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "cd-property-section", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("h4", { children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-user" }),
+              " Preview student"
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("select", { "aria-label": "Preview student", value: previewStudent, onChange: (e2) => {
+              setPreviewStudent(e2.target.value);
+              setPreview(true);
+            }, children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "", children: "Sample: Maria Santos" }),
+              students.map((s2) => /* @__PURE__ */ jsxRuntimeExports.jsxs("option", { value: s2.id, children: [
+                s2.user.first_name,
+                " ",
+                s2.user.last_name
+              ] }, s2.id))
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "Live preview uses sample dates and hours. PDF preview uses the student’s stored data and current academic year." })
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "cd-graduates", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "ELIGIBLE GRADUATES" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("strong", { children: [
+              studentsError ? "—" : eligibleCount,
+              /* @__PURE__ */ jsxRuntimeExports.jsx("small", { children: " students" })
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: studentsError ? "Student list unavailable. You can still design with sample data." : "Review and select recipients in Generate." }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { className: "cd-button", disabled: saving, onClick: generate, children: [
+              "Review recipients ",
+              /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-arrow-right" })
+            ] })
+          ] })
+        ] })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "cd-footnote", children: "Save a separate design for each certificate type. Issued certificates keep their original PDF when you update a template." })
+    ] }),
+    previewUrl && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "cd-modal", role: "dialog", "aria-modal": "true", "aria-label": "Certificate PDF preview", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "cd-modal-body", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("h3", { children: "PDF preview · not issued" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("a", { className: "cd-button", href: previewUrl, download: "certificate-preview.pdf", children: "Download preview" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "cd-button", onClick: () => setPreviewUrl(null), children: "Close" })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("iframe", { src: previewUrl, title: "Certificate PDF preview" })
+    ] }) })
+  ] });
+}
 const IssuedCertificates = () => {
   const api_url = API_URL;
   const {
@@ -48716,6 +49452,13 @@ const App = () => {
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               Route,
               {
+                path: "certificates/designer",
+                element: /* @__PURE__ */ jsxRuntimeExports.jsx(CertificateDesigner, {})
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              Route,
+              {
                 path: "certificates/issued",
                 element: /* @__PURE__ */ jsxRuntimeExports.jsx(IssuedCertificates, {})
               }
@@ -48989,4 +49732,4 @@ startSyncEngine();
 ReactDOM.createRoot(document.getElementById("root")).render(
   /* @__PURE__ */ jsxRuntimeExports.jsx(React.StrictMode, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(App, {}) })
 );
-//# sourceMappingURL=main-DHLJmXgj.js.map
+//# sourceMappingURL=main-DfHqrsTp.js.map

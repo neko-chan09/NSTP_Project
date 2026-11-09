@@ -254,6 +254,11 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::put('/documents/{id}/verify', [AdminDocumentController::class, 'verify']);
         Route::get('/documents/{id}/download', [AdminDocumentController::class, 'download']);
 
+        // ---------- CERTIFICATE DESIGNER ----------
+        Route::get('/certificates/design/{type}', [\App\Http\Controllers\API\Web\Admin\CertificateDesignController::class, 'show']);
+        Route::put('/certificates/design/{type}', [\App\Http\Controllers\API\Web\Admin\CertificateDesignController::class, 'update']);
+        Route::post('/certificates/design/{type}/preview', [\App\Http\Controllers\API\Web\Admin\CertificateDesignController::class, 'preview']);
+
         // ---------- CERTIFICATES ----------
         Route::get('/certificates', [AdminCertificateController::class, 'index']);
         Route::get('/certificates/eligible-students', [AdminCertificateController::class, 'getEligibleStudents']);

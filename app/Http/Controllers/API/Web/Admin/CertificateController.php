@@ -12,11 +12,19 @@ use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Validator;
 use App\Helpers\NotificationHelper;
+use App\Services\CertificateDesignService;
+use Illuminate\Support\Facades\DB;
 
 class CertificateController extends Controller
 {
-    public function index()
+    private function authorizeAdmin(Request $request): void
     {
+        abort_unless(in_array($request->user()?->role, ['admin', 'super_admin'], true), 403);
+    }
+
+    public function index(Request $request)
+    {
+        $this->authorizeAdmin($request);
         $certificates = Certificate::with('student.user')->get();
         return response()->json(['success' => true, 'data' => $certificates]);
     }
@@ -24,6 +32,7 @@ class CertificateController extends Controller
     // ── INSERTED HERE ──
     public function getEligibleStudents(Request $request)
     {
+        $this->authorizeAdmin($request);
         $search = $request->get('search', '');
 
         $students = Student::with('user')
@@ -62,90 +71,104 @@ class CertificateController extends Controller
 
     public function generate(Request $request)
     {
-        $validator = Validator::make($request->all(), [
-            'student_id' => 'required|exists:students,id',
+        $this->authorizeAdmin($request);
+        $data = $request->validate([
+            'student_id' => 'required|integer|exists:students,id',
             'certificate_type' => 'required|in:completion,participation,training',
+            'template_mode' => 'sometimes|in:default,saved',
         ]);
+        $student = Student::with('user')->findOrFail($data['student_id']);
+        $this->checkEligibility($student, $data['certificate_type']);
+        $design = $this->selectedDesign($data['certificate_type'], $data['template_mode'] ?? 'default');
+        $certificate = $this->issue($student, $data['certificate_type'], $design, $request->user()->id);
+        return response()->json(['success' => true, 'message' => 'Certificate generated', 'data' => $certificate]);
+    }
 
-        if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
+    private function checkEligibility(Student $student, string $type): void
+    {
+        if ($type === 'completion' && !$student->is_eligible_for_completion) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'student_ids' => "Student {$student->student_id} is not eligible for a completion certificate.",
+            ]);
         }
+    }
 
-        $student = Student::with('user')->find($request->student_id);
-        if (!$student) {
-            return response()->json(['message' => 'Student not found'], 404);
+    private function selectedDesign(string $type, string $mode): array
+    {
+        $service = app(CertificateDesignService::class);
+        if ($mode === 'saved') {
+            $saved = $service->load($type);
+            if (!$saved) {
+                throw \Illuminate\Validation\ValidationException::withMessages([
+                    'template_mode' => 'Save a design for this certificate type before generating certificates.',
+                ]);
+            }
+            return $service->validate($saved['design']);
         }
+        return $service->defaults($type);
+    }
 
-        $certificateNumber = 'NSTP-' . date('Y') . '-' . Str::upper(Str::random(8));
-        
-        // Generate QR Code
-        $qrCode = QrCode::format('png')->size(200)->generate($certificateNumber);
-        $qrPath = 'certificates/qrcodes/' . $certificateNumber . '.png';
-        Storage::disk('public')->put($qrPath, $qrCode);
-
-        // Generate PDF
-        $pdf = Pdf::loadView('certificates.completion', [
-            'student' => $student,
-            'certificate_number' => $certificateNumber,
-            'date' => now()->format('F d, Y'),
-        ]);
-        
-        $pdfPath = 'certificates/' . $certificateNumber . '.pdf';
-        Storage::disk('public')->put($pdfPath, $pdf->output());
-
-        $certificate = Certificate::create([
-            'student_id' => $request->student_id,
-            'certificate_number' => $certificateNumber,
-            'certificate_type' => $request->certificate_type,
-            'file_path' => $pdfPath,
-            'qr_code_path' => $qrPath,
-            'status' => 'issued',
-            'issued_by' => $request->user()->id,
-            'issued_at' => now(),
-        ]);
-
-        // --- Add notification to student ---
-        NotificationHelper::sendToStudent(
-            $student,
-            'Certificate Issued',
-            "Your {$request->certificate_type} certificate is now available.",
-            'certificate',
-            ['id' => $certificate->id]
-        );
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Certificate generated',
-            'data' => $certificate
-        ]);
+    private function issue(Student $student, string $type, array $design, int $issuerId): Certificate
+    {
+        $service = app(CertificateDesignService::class);
+        $number = 'NSTP-' . date('Y') . '-' . Str::upper(Str::random(8));
+        $verificationUrl = url('/api/verify-certificate/' . $number);
+        $pdfPath = 'certificates/' . $number . '.pdf';
+        $qrPath = 'certificates/qrcodes/' . $number . '.png';
+        $pdf = $service->render($design, $service->fields($student, $type, $number), $verificationUrl);
+        try {
+            if (!Storage::disk('public')->put($pdfPath, $pdf->output()) ||
+                !Storage::disk('public')->put($qrPath, QrCode::format('png')->size(200)->generate($verificationUrl))) {
+                throw new \RuntimeException('The certificate file could not be stored.');
+            }
+            $certificate = DB::transaction(function () use ($student, $number, $type, $pdfPath, $qrPath, $issuerId) {
+                $certificate = Certificate::create([
+                    'student_id' => $student->id, 'certificate_number' => $number,
+                    'certificate_type' => $type, 'file_path' => $pdfPath, 'qr_code_path' => $qrPath,
+                    'status' => 'issued', 'issued_by' => $issuerId, 'issued_at' => now(),
+                ]);
+                NotificationHelper::sendToStudent($student, 'Certificate Issued',
+                    "Your {$type} certificate is now available.", 'certificate', ['id' => $certificate->id]);
+                return $certificate;
+            });
+        } catch (\Throwable $error) {
+            Storage::disk('public')->delete([$pdfPath, $qrPath]);
+            throw $error;
+        }
+        return $certificate;
     }
 
     public function batchGenerate(Request $request)
     {
-        $validator = Validator::make($request->all(), [
-            'student_ids' => 'required|array|min:1',
-            'student_ids.*' => 'exists:students,id',
+        $this->authorizeAdmin($request);
+        $data = $request->validate([
+            'student_ids' => 'required|array|min:1|max:200',
+            'student_ids.*' => 'required|integer|distinct|exists:students,id',
             'certificate_type' => 'required|in:completion,participation,training',
+            'template_mode' => 'sometimes|in:default,saved',
         ]);
-
-        if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
+        $students = Student::with('user')->whereIn('id', $data['student_ids'])->get();
+        // Validate every recipient before issuing any certificate.
+        foreach ($students as $student) {
+            $this->checkEligibility($student, $data['certificate_type']);
         }
-
+        // Snapshot the saved design once so a batch cannot mix template revisions.
+        $design = $this->selectedDesign($data['certificate_type'], $data['template_mode'] ?? 'default');
         $certificates = [];
-        foreach ($request->student_ids as $studentId) {
-            $childRequest = new Request([
-                'student_id' => $studentId,
-                'certificate_type' => $request->certificate_type,
-            ]);
-            $childRequest->setUserResolver(fn () => $request->user());
-            $response = $this->generate($childRequest);
-            $payload = $response->getData(true);
-            if (isset($payload['data'])) {
-                $certificates[] = $payload['data'];
-            }
+        $files = [];
+        try {
+            DB::transaction(function () use ($students, $data, $design, $request, &$certificates, &$files) {
+                foreach ($students as $student) {
+                    $certificate = $this->issue($student, $data['certificate_type'], $design, $request->user()->id);
+                    $certificates[] = $certificate;
+                    $files[] = $certificate->file_path;
+                    $files[] = $certificate->qr_code_path;
+                }
+            });
+        } catch (\Throwable $error) {
+            Storage::disk('public')->delete($files);
+            throw $error;
         }
-
         return response()->json(['success' => true, 'data' => $certificates]);
     }
 }

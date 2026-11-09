@@ -1309,32 +1309,24 @@ export const adminApi = {
     student_id: number;
     certificate_type: string;
     description?: string;
+    template_mode?: "default" | "saved";
   }): Promise<Certificate> => {
-    const result = await mutateWithQueue(
-      `${API_URL}/admin/certificates/generate`,
-      "POST",
-      {
-        body: data,
-        label: `Generate certificate for student ${data.student_id}`,
-        tag: "certificate-generate",
-      },
-    );
+    const response = await fetch(`${API_URL}/admin/certificates/generate`, {
+      method: "POST", headers: headers(), body: JSON.stringify(data),
+    });
+    const result = await handleResponse(response);
     return result.data ?? result;
   },
 
   batchGenerateCertificates: async (data: {
     student_ids: number[];
     certificate_type: string;
+    template_mode?: "default" | "saved";
   }): Promise<Certificate[]> => {
-    const result = await mutateWithQueue(
-      `${API_URL}/admin/certificates/batch`,
-      "POST",
-      {
-        body: data,
-        label: `Batch generate ${data.student_ids.length} certificates`,
-        tag: "certificate-batch",
-      },
-    );
+    const response = await fetch(`${API_URL}/admin/certificates/batch`, {
+      method: "POST", headers: headers(), body: JSON.stringify(data),
+    });
+    const result = await handleResponse(response);
     return result.data ?? result;
   },
 
