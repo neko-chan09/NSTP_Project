@@ -380,7 +380,7 @@
     "isDynamicEntry": true
   },
   "resources/css/app.css": {
-    "file": "assets/app-ByHYDxCX.css",
+    "file": "assets/app-bvqnAR1e.css",
     "src": "resources/css/app.css",
     "isEntry": true,
     "name": "app",
@@ -399,7 +399,7 @@
     "isDynamicEntry": true
   },
   "resources/js/main.tsx": {
-    "file": "assets/main-DfHqrsTp.js",
+    "file": "assets/main-Cbh-4Hd7.js",
     "name": "main",
     "src": "resources/js/main.tsx",
     "isEntry": true,
@@ -411,7 +411,7 @@
       "node_modules/workbox-window/build/workbox-window.prod.es5.mjs"
     ],
     "css": [
-      "assets/main-DAhTJHEg.css"
+      "assets/main-uY2zmA-Z.css"
     ],
     "assets": [
       "assets/nstpLogo-B4AumqtN.png",

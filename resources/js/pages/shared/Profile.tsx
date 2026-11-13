@@ -1,3 +1,4 @@
+import ProfileAvatar from '../components/common/ProfileAvatar';
 // src/pages/shared/Profile.tsx
 import React, { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
@@ -259,20 +260,7 @@ const Profile: React.FC = () => {
               <div className="flex justify-center">
                 <div className="relative">
                   <div className="w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-lg bg-navy-600 flex items-center justify-center">
-                    {profile.profile_photo_url ? (
-                      <img
-                        src={profile.profile_photo_url}
-                        alt={profile.full_name || "Profile"}
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).style.display = "none";
-                        }}
-                      />
-                    ) : (
-                      <span className="text-3xl font-bold text-white tracking-wide">
-                        {initials}
-                      </span>
-                    )}
+                    <ProfileAvatar src={profile.profile_photo_url} firstName={profile.first_name} lastName={profile.last_name} className="w-full h-full text-3xl" />
                   </div>
 
                   {/* Small photo action */}

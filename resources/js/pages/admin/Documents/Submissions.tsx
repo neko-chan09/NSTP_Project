@@ -449,6 +449,7 @@ const DocumentSubmissions: React.FC = () => {
   // ============================================================
   const renderDocument = (doc: Document, studentName: string) => {
     const isImage = doc.file_name?.match(/\.(jpg|jpeg|png|gif|webp)$/i);
+    const isScannable = doc.file_name?.match(/\.(jpg|jpeg|png|gif|webp|bmp|tif|tiff|pdf)$/i);
     const isSelected = selectedDocs.has(doc.id);
     const isActing =
       verifyMut.isPending && verifyMut.variables?.id === doc.id;
@@ -578,11 +579,11 @@ const DocumentSubmissions: React.FC = () => {
                 </button>
               </>
             )}
-            {isImage && (
+            {isScannable && (
               <button
                 className="btn btn-info btn-sm"
                 onClick={() => handleOCR(doc)}
-                title="Scan and extract text"
+                title="Scan and select document text"
               >
                 <i className="fas fa-file-scan" /> Scan
               </button>
@@ -1204,8 +1205,9 @@ const DocumentSubmissions: React.FC = () => {
           file={scannerModal.file}
           fileName={scannerModal.fileName}
           documentId={scannerModal.documentId}
+          documentType="student"
           onTextExtracted={(text) => {
-            toast.success("Text extracted from document!");
+            toast.success("Selected text ready");
           }}
         />
       )}

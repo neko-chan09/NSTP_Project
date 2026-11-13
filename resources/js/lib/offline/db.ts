@@ -2,6 +2,7 @@
 import { openDB, type IDBPDatabase } from "idb";
 
 export interface QueuedMutation {
+  ownerId?: string;
   id?: number;
   url: string;
   method: "POST" | "PUT" | "PATCH" | "DELETE";

@@ -62,16 +62,6 @@ export function useUpdateClass() {
   });
 }
 
-export function useDeleteClass() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (id: number) => adminApi.deleteClass(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: CLASSES_KEY });
-    },
-  });
-}
-
 export function useToggleArchiveClass() {
   const queryClient = useQueryClient();
   return useMutation({

@@ -3,6 +3,7 @@
 
 use Illuminate\Support\Facades\Route;
 use Illuminate\Http\Request;
+use App\Http\Middleware\RequireRoles;
 
 // ============================================================
 // SHARED CONTROLLERS
@@ -83,16 +84,13 @@ Route::post('/check-contact-number', [AuthController::class, 'checkContactNumber
 | PUBLIC ROUTES — no auth
 |--------------------------------------------------------------------------
 */
-Route::get('/activities/map', [ActivityMapController::class, 'getActivitiesWithLocations']);
-Route::get('/activities/{id}/map', [ActivityMapController::class, 'getActivityLocation']);
-Route::put('/activities/{id}/location', [ActivityMapController::class, 'updateLocation']);
 
 /*
 |--------------------------------------------------------------------------
 | PASSWORD RESET (public)
 |--------------------------------------------------------------------------
 */
-Route::prefix('api')->group(function () {
+Route::middleware('throttle:10,1')->prefix('api')->group(function () {
     Route::post('/send-otp', [PasswordResetController::class, 'sendOtp']);
     Route::post('/verify-otp', [PasswordResetController::class, 'verifyOtp']);
     Route::post('/reset', [PasswordResetController::class, 'resetPassword']);
@@ -104,11 +102,17 @@ Route::prefix('api')->group(function () {
 | AUTHENTICATED ROUTES
 |--------------------------------------------------------------------------
 */
-Route::middleware('auth:sanctum')->group(function () {
+Route::get('/profile-photos/{userId}', [\App\Http\Controllers\API\Shared\ProfilePhotoController::class, 'show'])->whereNumber('userId');
+
+Route::middleware(['auth:sanctum', \App\Http\Middleware\RequireActiveUser::class])->group(function () {
 
     // ============================================================
     // SHARED AUTH
     // ============================================================
+    Route::get('/activities/map', [ActivityMapController::class, 'getActivitiesWithLocations'])->middleware(RequireRoles::class . ':admin,super_admin,faculty');
+    Route::get('/activities/{id}/map', [ActivityMapController::class, 'getActivityLocation'])->middleware(RequireRoles::class . ':admin,super_admin,faculty');
+    Route::put('/activities/{id}/location', [ActivityMapController::class, 'updateLocation'])->middleware(RequireRoles::class . ':admin,super_admin,faculty');
+
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::get('/me', [AuthController::class, 'me']);
     Route::post('/change-password', [AuthController::class, 'changePassword']);
@@ -143,6 +147,14 @@ Route::middleware('auth:sanctum')->group(function () {
     // ============================================================
     // BULLETIN (public reads, admin writes)
     // ============================================================
+    Route::get('/notifications', [NotificationController::class, 'index']);
+    Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);
+    Route::post('/notifications/read-all', [NotificationController::class, 'markAllAsRead']);
+    Route::post('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
+    Route::get('/bulletin/{id}/discussion', [\App\Http\Controllers\API\Shared\BulletinInteractionController::class, 'discussion']);
+    Route::post('/bulletin/{id}/comments', [\App\Http\Controllers\API\Shared\BulletinInteractionController::class, 'comment'])->middleware('throttle:30,1');
+    Route::put('/bulletin/{id}/like', [\App\Http\Controllers\API\Shared\BulletinInteractionController::class, 'like']);
+    Route::put('/bulletin/{id}/follow', [\App\Http\Controllers\API\Shared\BulletinInteractionController::class, 'follow']);
     Route::get('/bulletin', [BulletinController::class, 'index']);
     Route::post('/bulletin', [BulletinController::class, 'store']);
     Route::get('/bulletin/{id}', [BulletinController::class, 'show']);
@@ -152,8 +164,8 @@ Route::middleware('auth:sanctum')->group(function () {
     // ============================================================
     // SETTINGS
     // ============================================================
-    Route::get('/settings', [SettingsController::class, 'index']);
-    Route::put('/settings', [SettingsController::class, 'update']);
+    Route::get('/settings', [SettingsController::class, 'index'])->middleware(RequireRoles::class . ':admin,super_admin');
+    Route::put('/settings', [SettingsController::class, 'update'])->middleware(RequireRoles::class . ':admin,super_admin');
 
     // ============================================================
     // DROPDOWN OPTIONS
@@ -189,7 +201,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // ============================================================
     // ACTIVITIES (shared admin + faculty)
     // ============================================================
-    Route::prefix('activities')->group(function () {
+    Route::middleware(RequireRoles::class . ':admin,super_admin,faculty')->prefix('activities')->group(function () {
         Route::get('/', [AdminActivityController::class, 'index']);
         Route::post('/', [AdminActivityController::class, 'store']);
         Route::get('/{id}', [AdminActivityController::class, 'show']);
@@ -203,19 +215,19 @@ Route::middleware('auth:sanctum')->group(function () {
     // ============================================================
     // OCR (shared)
     // ============================================================
-    Route::post('/documents/save-ocr', [OCRController::class, 'saveOCR']);
-    Route::get('/documents/{documentId}/ocr-history', [OCRController::class, 'getOCRHistory']);
-    Route::get('/ocr-texts/{id}/download', [OCRController::class, 'downloadOCR']);
-    Route::delete('/ocr-texts/{id}', [OCRController::class, 'deleteOCR']);
-    Route::get('/ocr-stats', [OCRController::class, 'getStats']);
+    Route::post('/documents/save-ocr', [OCRController::class, 'saveOCR'])->middleware(RequireRoles::class . ':admin,super_admin');
+    Route::get('/documents/{documentId}/ocr-history', [OCRController::class, 'getOCRHistory'])->middleware(RequireRoles::class . ':admin,super_admin');
+    Route::get('/ocr-texts/{id}/download', [OCRController::class, 'downloadOCR'])->middleware(RequireRoles::class . ':admin,super_admin');
+    Route::delete('/ocr-texts/{id}', [OCRController::class, 'deleteOCR'])->middleware(RequireRoles::class . ':admin,super_admin');
+    Route::get('/ocr-stats', [OCRController::class, 'getStats'])->middleware(RequireRoles::class . ':admin,super_admin');
 
     // ============================================================
     // OFFICE DOCUMENTS (shared)
     // ============================================================
-    Route::get('/office-documents', [OfficeDocumentController::class, 'index']);
-    Route::post('/office-documents', [OfficeDocumentController::class, 'store']);
-    Route::delete('/office-documents/{id}', [OfficeDocumentController::class, 'destroy']);
-    Route::get('/office-documents/{id}/download', [OfficeDocumentController::class, 'download']);
+    Route::get('/office-documents', [OfficeDocumentController::class, 'index'])->middleware(RequireRoles::class . ':admin,super_admin');
+    Route::post('/office-documents', [OfficeDocumentController::class, 'store'])->middleware(RequireRoles::class . ':admin,super_admin');
+    Route::delete('/office-documents/{id}', [OfficeDocumentController::class, 'destroy'])->middleware(RequireRoles::class . ':admin,super_admin');
+    Route::get('/office-documents/{id}/download', [OfficeDocumentController::class, 'download'])->middleware(RequireRoles::class . ':admin,super_admin');
 
     // ============================================================
     // ============================================================
@@ -310,7 +322,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/classes', [AdminClasscontroller::class, 'store']);
         Route::get('/classes/{id}', [AdminClasscontroller::class, 'show']);
         Route::put('/classes/{id}', [AdminClasscontroller::class, 'update']);
-        Route::delete('/classes/{id}', [AdminClasscontroller::class, 'destroy']);
+
         Route::patch('/classes/{id}/toggle-archive', [AdminClasscontroller::class, 'toggleArchive']);
         Route::get('/classes/{id}/students', [AdminClasscontroller::class, 'getStudents']);
         Route::post('/classes/{id}/students', [AdminClasscontroller::class, 'addStudents']);
@@ -322,7 +334,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // SUPER ADMIN ROUTES
     // ============================================================
     // ============================================================
-    Route::prefix('superadmin')->group(function () {
+    Route::middleware('superadmin')->prefix('superadmin')->group(function () {
 
         // ---------- USERS (admin + faculty) ----------
         Route::get('/users', [SuperAdminController::class, 'index']);
@@ -396,6 +408,7 @@ Route::middleware('auth:sanctum')->group(function () {
         // Face embeddings
         Route::post('/face-embeddings', [FaceEmbeddingController::class, 'store']);
         Route::get('/face-status', [FaceEmbeddingController::class, 'status']);
+        Route::get('/face-template', [FaceEmbeddingController::class, 'template']);
 
         // Documents
         Route::get('/documents', [StudentDocumentController::class, 'myDocuments']);
@@ -440,7 +453,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // FACULTY MOBILE ROUTES
     // ============================================================
     // ============================================================
-    Route::prefix('faculty')->group(function () {
+    Route::middleware(RequireRoles::class . ':faculty,admin,super_admin')->prefix('faculty')->group(function () {
 
         // Dashboard
         Route::get('/dashboard', [FacultyDashboardController::class, 'stats']);
@@ -459,7 +472,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/classes', [FacultyClassController::class, 'store']);
         Route::get('/class/{id}', [FacultyClassController::class, 'show']);
         Route::put('/classes/{id}', [FacultyClassController::class, 'update']);
-        Route::delete('/classes/{id}', [FacultyClassController::class, 'destroy']);
+
         Route::patch('/classes/{id}/archive', [FacultyClassController::class, 'archive']);
         Route::post('/classes/{id}/regenerate-code', [FacultyClassController::class, 'regenerateCode']);
         Route::get('/classes/{id}/students', [FacultyClassController::class, 'students']);

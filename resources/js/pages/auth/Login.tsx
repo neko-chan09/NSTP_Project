@@ -5,51 +5,6 @@ import { authApi } from "../../services/api";
 import NstpLogo from "../components/common/NstpLogo";
 import toast from "react-hot-toast";
 
-// ============================================================
-// DEMO ACCOUNTS — matches DatabaseSeeder
-// Remove / hide in production via VITE_APP_ENV=production
-// ============================================================
-const DEMO_ACCOUNTS = [
-  {
-    role: "Super Admin",
-    email: "superadmin@nstp.edu",
-    password: "password",
-    icon: "fa-user-shield",
-    color: "purple",
-  },
-  {
-    role: "Admin",
-    email: "admin@nstp.edu",
-    password: "password",
-    icon: "fa-user-cog",
-    color: "blue",
-  },
-  {
-    role: "CWTS",
-    email: "faculty.cwts@nstp.edu",
-    password: "password",
-    icon: "fa-hands-helping",
-    color: "amber",
-  },
-  {
-    role: "ROTC",
-    email: "faculty.rotc@nstp.edu",
-    password: "password",
-    icon: "fa-shield",
-    color: "rose",
-  },
-  {
-    role: "LTS",
-    email: "faculty.lts@nstp.edu",
-    password: "password",
-    icon: "fa-chalkboard-teacher",
-    color: "emerald",
-  },
-];
-
-const SHOW_DEMO_ACCOUNTS =
-  import.meta.env.DEV || import.meta.env.VITE_APP_ENV !== "production";
-
 const Login: React.FC = () => {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
@@ -126,17 +81,6 @@ const Login: React.FC = () => {
   };
 
   // ============================================================
-  // Demo account autofill
-  // ============================================================
-  const fillDemo = (demoEmail: string, demoPassword: string, role: string) => {
-    setEmail(demoEmail);
-    setPassword(demoPassword);
-    toast.success(`Filled ${role} credentials — click Sign In`, {
-      icon: "🪄",
-    });
-  };
-
-  // ============================================================
   // Render: loading spinner
   // ============================================================
   if (isChecking) {
@@ -146,45 +90,6 @@ const Login: React.FC = () => {
       </div>
     );
   }
-
-  // ============================================================
-  // Style map for demo chip colors
-  // ============================================================
-  const colorMap: Record<
-    string,
-    { bg: string; text: string; ring: string; icon: string }
-  > = {
-    purple: {
-      bg: "bg-purple-100 hover:bg-purple-200",
-      text: "text-purple-800",
-      ring: "ring-purple-200",
-      icon: "text-purple-600",
-    },
-    blue: {
-      bg: "bg-blue-100 hover:bg-blue-200",
-      text: "text-blue-800",
-      ring: "ring-blue-200",
-      icon: "text-blue-600",
-    },
-    amber: {
-      bg: "bg-amber-100 hover:bg-amber-200",
-      text: "text-amber-800",
-      ring: "ring-amber-200",
-      icon: "text-amber-600",
-    },
-    rose: {
-      bg: "bg-rose-100 hover:bg-rose-200",
-      text: "text-rose-800",
-      ring: "ring-rose-200",
-      icon: "text-rose-600",
-    },
-    emerald: {
-      bg: "bg-emerald-100 hover:bg-emerald-200",
-      text: "text-emerald-800",
-      ring: "ring-emerald-200",
-      icon: "text-emerald-600",
-    },
-  };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 p-4 relative overflow-hidden">
@@ -272,61 +177,6 @@ const Login: React.FC = () => {
                 Sign in to your account to continue
               </p>
             </div>
-
-            {/* ============================================================ */}
-            {/* DEMO ACCOUNTS */}
-            {/* ============================================================ */}
-            {SHOW_DEMO_ACCOUNTS && (
-              <div className="mb-6">
-                <div className="flex items-center gap-2 mb-2">
-                  <i className="fas fa-wand-magic-sparkles text-gold-500 text-xs" />
-                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                    Demo Accounts
-                  </span>
-                  <span className="text-[10px] text-slate-400 italic">
-                    (dev only)
-                  </span>
-                </div>
-
-                {/* 2 columns × 3 rows = 5 accounts + 1 empty */}
-                <div className="grid grid-cols-2 gap-2">
-                  {DEMO_ACCOUNTS.map((acc) => {
-                    const colors = colorMap[acc.color] || colorMap.blue;
-                    return (
-                      <button
-                        key={acc.email}
-                        type="button"
-                        onClick={() =>
-                          fillDemo(acc.email, acc.password, acc.role)
-                        }
-                        className={`${colors.bg} rounded-lg p-2.5 text-left transition-all hover:-translate-y-0.5 ring-1 ${colors.ring} flex items-center gap-2`}
-                        title={`${acc.email} / ${acc.password}`}
-                      >
-                        <div
-                          className={`w-8 h-8 rounded-md bg-white/70 flex items-center justify-center flex-shrink-0 ${colors.icon}`}
-                        >
-                          <i className={`fas ${acc.icon} text-sm`} />
-                        </div>
-                        <div className="min-w-0">
-                          <div
-                            className={`text-[10px] font-bold uppercase tracking-wide leading-tight ${colors.text}`}
-                          >
-                            {acc.role}
-                          </div>
-                          <div className="text-[9px] text-slate-500 truncate">
-                            {acc.email.split("@")[0]}
-                          </div>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <p className="text-[10px] text-slate-400 mt-2 text-center">
-                  Click a card to auto-fill credentials
-                </p>
-              </div>
-            )}
 
             {/* ============================================================ */}
             {/* LOGIN FORM */}

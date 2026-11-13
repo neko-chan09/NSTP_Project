@@ -1,3 +1,4 @@
+import ProfileAvatar from '../components/common/ProfileAvatar';
 // resources/js/pages/admin/Students.tsx
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
@@ -628,20 +629,7 @@ const Students: React.FC = () => {
                     >
                       <td>
                         <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0 bg-gold-100">
-                            {s.user.profile_photo_url ? (
-                              <img
-                                src={s.user.profile_photo_url}
-                                alt={`${s.user.first_name} ${s.user.last_name}`}
-                                className="w-full h-full object-cover"
-                              />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center font-bold text-sm text-white bg-navy-600">
-                                {s.user.first_name?.charAt(0)}
-                                {s.user.last_name?.charAt(0)}
-                              </div>
-                            )}
-                          </div>
+                          <ProfileAvatar src={s.user.profile_photo_url} firstName={s.user.first_name} lastName={s.user.last_name} className="w-10 h-10 text-sm" />
                           <div>
                             <div className="font-medium text-navy-900 group-hover:text-gold-600 transition-colors">
                               {s.user.first_name} {s.user.last_name}

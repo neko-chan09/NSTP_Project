@@ -14,12 +14,12 @@ class PasswordResetOtp extends Model
         'email',
         'otp',
         'expires_at',
-        'is_used',
+        'is_used', 'reset_token_hash', 'reset_expires_at', 'otp_attempts',
     ];
 
     protected $casts = [
         'expires_at' => 'datetime',
-        'is_used' => 'boolean',
+        'is_used' => 'boolean', 'reset_expires_at' => 'datetime', 'otp_attempts' => 'integer',
     ];
 
     /**
@@ -67,16 +67,15 @@ class PasswordResetOtp extends Model
      */
     public static function verifyOtp(string $email, string $otp): ?self
     {
-        $record = self::where('email', $email)
-            ->where('otp', $otp)
-            ->where('is_used', false)
-            ->latest()
-            ->first();
-
-        if ($record && !$record->isExpired()) {
+        return \Illuminate\Support\Facades\DB::transaction(function () use ($email, $otp) {
+            $record = self::where('email', $email)->where('is_used', false)->latest('id')->lockForUpdate()->first();
+            if (!$record || $record->isExpired() || $record->otp_attempts >= 5) return null;
+            if (!hash_equals($record->otp, $otp)) {
+                $record->increment('otp_attempts');
+                return null;
+            }
+            $record->update(['is_used' => true]);
             return $record;
-        }
-
-        return null;
+        });
     }
 }

@@ -25,7 +25,7 @@ import type {
   UpdateClassRequest,
 } from "../types/api";
 
-import { getToken, setToken, removeToken } from "../lib/token";
+import { getToken, setToken, removeToken, getCurrentUserId } from "../lib/token";
 import {
   queueMutation,
   serializeFormData,
@@ -89,6 +89,7 @@ async function mutateWithQueue(
   } = {},
 ): Promise<any> {
   const token = getToken();
+  const ownerId = getCurrentUserId();
   const online = typeof navigator === "undefined" ? true : navigator.onLine;
 
   const doFetch = async () => {
@@ -127,6 +128,7 @@ async function mutateWithQueue(
   }
 
   const id = await queueMutation({
+    ownerId: ownerId ?? undefined,
     url,
     method,
     body: options.body,
@@ -1102,13 +1104,6 @@ export const adminApi = {
     return result.data ?? result;
   },
 
-  deleteClass: async (id: number): Promise<{ message: string }> => {
-    return mutateWithQueue(`${API_URL}/admin/classes/${id}`, "DELETE", {
-      label: `Delete class ${id}`,
-      tag: "class-delete",
-    });
-  },
-
   toggleArchiveClass: async (id: number): Promise<ClassGroup> => {
     const result = await mutateWithQueue(
       `${API_URL}/admin/classes/${id}/toggle-archive`,
@@ -1496,8 +1491,8 @@ export const adminApi = {
 
   // ---------------- BULLETIN ----------------
   getBulletin: async (): Promise<BulletinPost[]> => {
-    const response = await fetch(`${API_URL}/bulletin`, {
-      headers: headers(),
+    const response = await fetch(`${API_URL}/bulletin?fresh=${Date.now()}`, {
+      cache: "no-store", headers: headers(),
     });
     const result = await handleResponse(response);
     return result.data ?? result;
@@ -2045,13 +2040,6 @@ export const facultyApi = {
       },
     );
     return result.data ?? result;
-  },
-
-  deleteClass: async (id: number): Promise<{ message: string }> => {
-    return mutateWithQueue(`${API_URL}/faculty/classes/${id}`, "DELETE", {
-      label: `Delete class ${id}`,
-      tag: "faculty-class-delete",
-    });
   },
 
   archiveClass: async (id: number): Promise<any> => {

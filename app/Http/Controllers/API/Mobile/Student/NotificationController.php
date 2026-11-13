@@ -19,6 +19,7 @@ class NotificationController extends Controller
         return response()->json([
             'status' => 'success',
             'data'   => $notifications->items(),
+            'unread_count' => Notification::where('user_id', $user->id)->where('is_read', false)->count(),
             'meta'   => [
                 'current_page' => $notifications->currentPage(),
                 'last_page'    => $notifications->lastPage(),

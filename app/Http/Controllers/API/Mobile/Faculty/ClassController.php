@@ -167,22 +167,7 @@ class ClassController extends Controller
 
     public function destroy(Request $request, $id)
     {
-        try {
-            $teacher = $request->user();
-            $class = ClassGroup::where('id', $id)->where('teacher_id', $teacher->id)->first();
-            if (!$class) {
-                return response()->json(['message' => 'Class not found or not yours'], 404);
-            }
-            $class->students()->detach();
-            $class->delete();
-            return response()->json(['success' => true, 'message' => 'Class deleted']);
-        } catch (\Exception $e) {
-            Log::error('Error deleting class: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to delete class: ' . $e->getMessage(),
-            ], 500);
-        }
+        return response()->json(['message' => 'Class deletion is disabled. Archive the class instead.'], 405);
     }
 
     public function students(Request $request, $id)

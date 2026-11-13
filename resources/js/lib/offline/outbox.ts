@@ -1,10 +1,9 @@
+import { getCurrentUserId } from '../token';
 // resources/js/lib/offline/outbox.ts
 import {
   addToOutbox,
-  clearOutbox,
   deleteFromOutbox,
   getOutbox,
-  getOutboxCount,
   updateOutboxItem,
   type QueuedMutation,
 } from "./db";
@@ -21,6 +20,7 @@ export async function queueMutation(
     "id" | "createdAt" | "attempts" | "lastError"
   >,
 ): Promise<number> {
+  if (!mutation.ownerId) throw new Error('Sign in before saving offline changes.');
   const id = await addToOutbox({
     ...mutation,
     createdAt: Date.now(),
@@ -31,11 +31,12 @@ export async function queueMutation(
 }
 
 export async function listQueue(): Promise<QueuedMutation[]> {
-  return getOutbox();
+  const owner = getCurrentUserId();
+  return owner ? (await getOutbox()).filter(item => item.ownerId === owner) : [];
 }
 
 export async function queueCount(): Promise<number> {
-  return getOutboxCount();
+  return (await listQueue()).length;
 }
 
 export async function removeFromQueue(id: number): Promise<void> {
@@ -55,7 +56,7 @@ export async function markAttempt(id: number, error?: string): Promise<void> {
 }
 
 export async function clearQueue(): Promise<void> {
-  await clearOutbox();
+  for (const item of await listQueue()) { if (item.id != null) await deleteFromOutbox(item.id); }
   emitChange();
 }
 

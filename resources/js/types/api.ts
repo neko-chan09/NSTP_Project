@@ -183,6 +183,7 @@ export interface BatchGenerateCertificateRequest {
 
 // ============ BULLETIN TYPES ============
 export interface BulletinPost {
+  liked?: boolean; following?: boolean; likes_count?: number; comments_count?: number;
   id: number;
   title: string;
   content: string;

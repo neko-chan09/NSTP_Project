@@ -1,5 +1,7 @@
 // src/components/layouts/AdminLayout.tsx
 import React from "react";
+import NotificationInbox from '../common/NotificationInbox';
+import ProfileAvatar from '../common/ProfileAvatar';
 import { Outlet, useNavigate, Link } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import { SidebarProvider, useSidebar } from "./SidebarContext";
@@ -80,6 +82,7 @@ const AdminLayoutInner: React.FC<{ children?: React.ReactNode }> = ({
           </div>
 
           <div className="flex items-center gap-3 text-sm">
+            <NotificationInbox />
             <Link
   to={
     user?.role === "faculty"
@@ -88,19 +91,7 @@ const AdminLayoutInner: React.FC<{ children?: React.ReactNode }> = ({
   }
   className="flex items-center gap-2 font-medium text-navy-700 hover:text-gold-600 transition-colors"
 >
-  {user?.profile_photo_url ? (
-    <img
-      src={user.profile_photo_url}
-      alt={user.name || "Profile"}
-      className="w-8 h-8 rounded-full object-cover border-2 border-gold-200"
-    />
-  ) : (
-    <div
-      className={`${getRoleColor(user?.role || "admin")} w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold`}
-    >
-      {(user?.name || "U").charAt(0).toUpperCase()}
-    </div>
-  )}
+  <ProfileAvatar src={user?.profile_photo_url} firstName={user?.first_name || user?.name} lastName={user?.last_name} className="w-8 h-8 text-xs" />
   <span className="hidden md:inline">{user?.name || "User"}</span>
   <span
     className={`${getRoleColor(user?.role || "admin")} text-white px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider`}

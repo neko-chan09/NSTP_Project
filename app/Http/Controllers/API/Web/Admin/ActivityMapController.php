@@ -14,13 +14,17 @@ class ActivityMapController extends Controller
     /**
      * Get activity location data for mapping
      */
-    public function getActivityLocation($id)
+    public function getActivityLocation(Request $request, $id)
     {
         try {
             Log::info('Getting activity location for ID: ' . $id);
 
             // Fetch activity with participants and nested user models
-            $activity = Activity::with(['creator', 'participations.student.user'])->find($id);
+            $query = Activity::with(['creator', 'participations.student.user']);
+            if ($request->user()->role === 'faculty') {
+                $query->where(fn($q) => $q->where('created_by', $request->user()->id)->orWhere('component_type', $request->user()->nstp_component));
+            }
+            $activity = $query->find($id);
 
             if (!$activity) {
                 Log::error('Activity not found: ' . $id);
@@ -128,10 +132,17 @@ class ActivityMapController extends Controller
      */
     public function updateLocation(Request $request, $id)
     {
+            $request->validate([
+                'latitude' => 'required|numeric|between:-90,90',
+                'longitude' => 'required|numeric|between:-180,180',
+                'geofence_radius' => 'nullable|integer|min:10|max:1000',
+            ]);
         try {
             Log::info('Updating location for activity ID: ' . $id);
             
-            $activity = Activity::find($id);
+            $query = Activity::query();
+            if ($request->user()->role === 'faculty') $query->where('created_by', $request->user()->id);
+            $activity = $query->find($id);
 
             if (!$activity) {
                 return response()->json([
@@ -140,11 +151,7 @@ class ActivityMapController extends Controller
                 ], 404);
             }
 
-            $request->validate([
-                'latitude' => 'required|numeric|between:-90,90',
-                'longitude' => 'required|numeric|between:-180,180',
-                'geofence_radius' => 'nullable|integer|min:10|max:1000',
-            ]);
+
 
             $activity->update([
                 'latitude' => $request->latitude,
@@ -181,6 +188,10 @@ class ActivityMapController extends Controller
                 ->withCount('participations')
                 ->whereNotNull('latitude')
                 ->whereNotNull('longitude');
+
+            if ($request->user()->role === 'faculty') {
+                $query->where(fn($q) => $q->where('created_by', $request->user()->id)->orWhere('component_type', $request->user()->nstp_component));
+            }
 
             // Filter by status
             if ($request->has('status') && $request->status !== 'all') {

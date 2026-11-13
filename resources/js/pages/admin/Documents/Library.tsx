@@ -208,10 +208,10 @@ const DocumentLibrary: React.FC = () => {
     });
   };
 
-  const isImage = (doc: any) => {
+  const isScannable = (doc: any) => {
     return (
-      doc.file_type?.includes("image") ||
-      doc.file_name?.match(/\.(jpg|jpeg|png|gif|webp)$/i)
+      doc.file_type?.includes("image") || doc.file_type === "application/pdf" ||
+      doc.file_name?.match(/\.(jpg|jpeg|png|gif|webp|bmp|tif|tiff|pdf)$/i)
     );
   };
 
@@ -475,11 +475,11 @@ const DocumentLibrary: React.FC = () => {
                             <i className="fas fa-download" />
                           </a>
 
-                          {isImage(doc) && (
+                          {isScannable(doc) && (
                             <button
                               className="btn btn-warning btn-sm"
                               onClick={() => handleOCR(doc)}
-                              title="Scan and extract text"
+                              title="Scan and select document text"
                             >
                               <i className="fas fa-file-scan" /> Scan
                             </button>
@@ -562,11 +562,11 @@ const DocumentLibrary: React.FC = () => {
                   >
                     <i className="fas fa-download" /> Download
                   </a>
-                  {isImage(doc) && (
+                  {isScannable(doc) && (
                     <button
                       className="btn btn-warning btn-sm"
                       onClick={() => handleOCR(doc)}
-                      title="Scan and extract text"
+                      title="Scan and select document text"
                     >
                       <i className="fas fa-file-scan" /> Scan
                     </button>
@@ -686,8 +686,9 @@ const DocumentLibrary: React.FC = () => {
           file={scannerModal.file}
           fileName={scannerModal.fileName}
           documentId={scannerModal.documentId}
+          documentType="office"
           onTextExtracted={(text) => {
-            toast.success("Text extracted successfully!");
+            toast.success("Selected text ready");
           }}
         />
       )}

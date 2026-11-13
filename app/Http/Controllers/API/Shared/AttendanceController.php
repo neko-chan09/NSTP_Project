@@ -22,7 +22,12 @@ class AttendanceController extends Controller
     public function index(Request $request)
     {
         $user = $request->user();
-        $query = AttendanceSession::with(['faculty', 'logs.student.user', 'class']);
+        $query = AttendanceSession::with(['faculty', 'class']);
+        if ($user->role === 'student') {
+            abort_unless($user->student, 403);
+            $query->whereHas('class.students', fn($q) => $q->where('students.id', $user->student->id));
+            $query->with(['logs' => fn($q) => $q->where('student_id', $user->student->id)->with('student.user')]);
+        } else $query->with('logs.student.user');
 
         if ($user->role === 'faculty') {
             $query->where('faculty_id', $user->id);
@@ -65,7 +70,7 @@ class AttendanceController extends Controller
             'section' => 'nullable|string',
             'component' => 'required|string|in:cwts,rotc,lts',
             'scheduled_start' => 'required|date',
-            'scheduled_end' => 'required|date',
+            'scheduled_end' => 'required|date|after:scheduled_start',
             'description' => 'nullable|string',
             'grace_period_minutes' => 'nullable|integer|min:0|max:120',
             'class_id' => 'nullable|exists:classes,id',
@@ -131,6 +136,8 @@ class AttendanceController extends Controller
             }
         }
 
+        app(\App\Services\AttendanceAccess::class)->class($user, $class->id, true);
+
         $session = AttendanceSession::create([
             'faculty_id' => $user->role === 'faculty' ? $user->id : null,
             'class_id' => $class->id,
@@ -160,6 +167,7 @@ class AttendanceController extends Controller
 
     public function checkActiveBroadcast(Request $request)
     {
+        if ((int) $request->input('class_id')) app(\App\Services\AttendanceAccess::class)->class($request->user(), (int) $request->input('class_id'));
         try {
             $validator = Validator::make($request->all(), [
                 'class_id' => 'required|integer|exists:classes,id',
@@ -249,6 +257,7 @@ class AttendanceController extends Controller
 
     public function checkGeofence(Request $request)
     {
+        if ((int) $request->input('session_id')) app(\App\Services\AttendanceAccess::class)->session($request->user(), (int) $request->input('session_id'));
         try {
             $validator = Validator::make($request->all(), [
                 'session_id' => 'required|integer|exists:attendance_sessions,id',
@@ -289,9 +298,13 @@ class AttendanceController extends Controller
         }
     }
 
-    public function show($id)
+    public function show(Request $request, $id)
     {
-        $session = AttendanceSession::with(['faculty', 'logs.student.user', 'class'])->find($id);
+        app(\App\Services\AttendanceAccess::class)->session($request->user(), (int) $id);
+        $query = AttendanceSession::with(['faculty', 'class']);
+        if ($request->user()->role === 'student') $query->with(['logs' => fn($q) => $q->where('student_id', $request->user()->student->id)]);
+        else $query->with('logs.student.user');
+        $session = $query->find($id);
 
         if (!$session) {
             return response()->json([
@@ -306,8 +319,9 @@ class AttendanceController extends Controller
         ]);
     }
 
-    public function close($id)
+    public function close(Request $request, $id)
     {
+        app(\App\Services\AttendanceAccess::class)->session($request->user(), (int) $id, true);
         $session = AttendanceSession::find($id);
 
         if (!$session) {
@@ -329,8 +343,9 @@ class AttendanceController extends Controller
         ]);
     }
 
-    public function logs($id)
+    public function logs(Request $request, $id)
     {
+        app(\App\Services\AttendanceAccess::class)->session($request->user(), (int) $id, true);
         try {
             $session = AttendanceSession::with(['logs.student.user'])->find($id);
 
@@ -386,6 +401,7 @@ class AttendanceController extends Controller
 
     public function myStatus(Request $request, $sessionId)
     {
+        if ($sessionId) app(\App\Services\AttendanceAccess::class)->session($request->user(), $sessionId);
         try {
             $student = $request->user()->student;
 
@@ -431,6 +447,10 @@ class AttendanceController extends Controller
 
         $validator = Validator::make($request->all(), [
             'class_id' => 'required|integer|exists:classes,id',
+            'session_id' => 'required_if:offline,true|nullable|integer|exists:attendance_sessions,id',
+            'offline' => 'sometimes|boolean',
+            'captured_at' => 'required_if:offline,true|nullable|date',
+            'client_id' => 'nullable|string|max:100',
             'embedding' => "required|array|size:{$size}",
             'embedding.*' => 'numeric',
             'latitude' => 'nullable|numeric|between:-90,90',
@@ -454,24 +474,15 @@ class AttendanceController extends Controller
             ], 404);
         }
 
-        $session = AttendanceSession::where('class_id', $request->class_id)
-            ->where('status', 'active')
-            ->where(function ($q) {
-                $q->where('is_scheduled', false)
-                    ->orWhere(function ($q2) {
-                        $q2->where('scheduled_start', '<=', now())
-                            ->where('scheduled_end', '>=', now());
-                    });
-            })
-            ->latest('created_at')
-            ->first();
-
-        if (!$session) {
-            return response()->json([
-                'match' => false,
-                'message' => 'No active session for this class',
-            ], 404);
-        }
+        app(\App\Services\AttendanceAccess::class)->class($request->user(), (int) $request->class_id);
+        $sessionQuery = AttendanceSession::where('class_id', $request->class_id);
+        if ($request->filled('session_id')) $sessionQuery->where('id', $request->session_id);
+        else $sessionQuery->where('status', 'active')->where(function ($q) {
+            $q->where('is_scheduled', false)->orWhere(fn($q2) => $q2->where('scheduled_start', '<=', now())->where('scheduled_end', '>=', now()));
+        });
+        $session = $sessionQuery->latest('created_at')->first();
+        if (!$session) return response()->json(['match' => false, 'message' => 'Attendance session not found for this class.'], 404);
+        $capturedAt = app(\App\Services\AttendanceCaptureWindow::class)->time($session, $request->boolean('offline'), $request->input('captured_at'));
 
         $existing = AttendanceLog::where('session_id', $session->id)
             ->where('student_id', $student->id)
@@ -580,6 +591,9 @@ class AttendanceController extends Controller
         }
 
         $liveEmbedding = array_map('floatval', $request->input('embedding'));
+        if (!\App\Services\FaceMatchingService::validVector($liveEmbedding)) {
+            return response()->json(['match' => false, 'message' => 'The face scan is invalid. Please scan again.'], 422);
+        }
 
         /** @var \App\Services\FaceMatchingService $matcher */
         $matcher = app(\App\Services\FaceMatchingService::class);
@@ -610,19 +624,23 @@ class AttendanceController extends Controller
 
         if ($session->scheduled_start) {
             $cutoff = $session->getLateCutoffTime();
-            if (now()->gt($cutoff)) {
+            if ($capturedAt->gt($cutoff)) {
                 $status = 'late';
-                $minutesLate = $session->getMinutesLate(now());
+                $minutesLate = max(0, (int) $cutoff->diffInMinutes($capturedAt, false));
             }
         }
 
         // ============================================================
         // RECORD ATTENDANCE
         // ============================================================
-        $log = AttendanceLog::create([
+        $log = DB::transaction(function () use ($student, $session, $capturedAt, $status, $result, $latitude, $longitude, $minutesLate, $distanceFromVenue) {
+            $lockedStudent = Student::where('id', $student->id)->lockForUpdate()->firstOrFail();
+            $existing = AttendanceLog::where('session_id', $session->id)->where('student_id', $student->id)->first();
+            if ($existing) return $existing;
+            $log = AttendanceLog::create([
             'session_id'       => $session->id,
             'student_id'       => $student->id,
-            'check_in_at'      => now(),
+            'check_in_at'      => $capturedAt,
             'status'           => $status,
             'face_confidence'  => $result['similarity'],
             'location_lat'     => $latitude !== null ? (float) $latitude : null,
@@ -637,10 +655,13 @@ class AttendanceController extends Controller
             ),
         ]);
 
-        $student->increment('completed_training_hours', 1);
-        if (method_exists($student, 'updateTrainingGrade')) {
-            $student->updateTrainingGrade();
+            $lockedStudent->increment('completed_training_hours', 1);
+        if (method_exists($lockedStudent, 'updateTrainingGrade')) {
+            $lockedStudent->updateTrainingGrade();
         }
+
+            return $log;
+        });
 
         return response()->json([
             'match' => true,

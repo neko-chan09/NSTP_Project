@@ -16,3 +16,5 @@ Schedule::command('backup:run-due')
     ->everyMinute()
     ->withoutOverlapping()
     ->runInBackground();
+
+Schedule::command('bulletin:dispatch-updates')->everyMinute()->withoutOverlapping();

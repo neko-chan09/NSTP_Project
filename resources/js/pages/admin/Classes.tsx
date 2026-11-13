@@ -11,7 +11,6 @@ import {
   useClassSchoolYears,
   useCreateClass,
   useUpdateClass,
-  useDeleteClass,
   useToggleArchiveClass,
 } from "../hooks/useClasses";
 
@@ -83,7 +82,6 @@ const Classes: React.FC = () => {
 
   const createMutation = useCreateClass();
   const updateMutation = useUpdateClass();
-  const deleteMutation = useDeleteClass();
   const toggleArchiveMutation = useToggleArchiveClass();
 
   const filteredFaculty = useMemo(() => {
@@ -177,22 +175,6 @@ const Classes: React.FC = () => {
         onError: (err: any) => toast.error(err.message || "Failed"),
       });
     }
-  };
-
-  const handleDelete = (cls: ClassGroup) => {
-    if (
-      !window.confirm(
-        `Delete class "${cls.name}"?\n\nThis will remove all ${cls.students_count || 0} student enrollments.`,
-      )
-    )
-      return;
-    deleteMutation.mutate(cls.id, {
-      onSuccess: () => {
-        toast.success("Class deleted");
-        refetch();
-      },
-      onError: (err: any) => toast.error(err.message || "Failed"),
-    });
   };
 
   const handleToggleArchive = (cls: ClassGroup) => {
@@ -422,9 +404,7 @@ const Classes: React.FC = () => {
               </thead>
               <tbody>
                 {filteredClasses.map((cls) => {
-                  const isDeleting =
-                    deleteMutation.isPending &&
-                    deleteMutation.variables === cls.id;
+                  const isDeleting = false;
                   const isArchiving =
                     toggleArchiveMutation.isPending &&
                     toggleArchiveMutation.variables === cls.id;
@@ -570,20 +550,6 @@ const Classes: React.FC = () => {
                               {cls.status === "active" ? "Archive" : "Restore"}
                             </span>
                           </button>
-
-                          <button
-                            className="btn btn-danger btn-sm inline-flex items-center gap-1.5"
-                            onClick={() => handleDelete(cls)}
-                            disabled={isDeleting}
-                            title="Delete this class"
-                          >
-                            {isDeleting ? (
-                              <i className="fas fa-spinner fa-spin" />
-                            ) : (
-                              <i className="fas fa-trash" />
-                            )}
-                            <span>Delete</span>
-                          </button>
                         </div>
                       </td>
                     </tr>
@@ -596,8 +562,7 @@ const Classes: React.FC = () => {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredClasses.map((cls) => {
-            const isDeleting =
-              deleteMutation.isPending && deleteMutation.variables === cls.id;
+            const isDeleting = false;
             const isArchiving =
               toggleArchiveMutation.isPending &&
               toggleArchiveMutation.variables === cls.id;
@@ -659,14 +624,6 @@ const Classes: React.FC = () => {
                         cls.status === "active" ? "fa-archive" : "fa-undo"
                       }`}
                     />
-                  </button>
-                  <button
-                    className="btn btn-danger btn-sm inline-flex items-center gap-1.5"
-                    onClick={() => handleDelete(cls)}
-                    disabled={isDeleting}
-                    title="Delete"
-                  >
-                    <i className="fas fa-trash" />
                   </button>
                 </div>
               </div>

@@ -1,5 +1,5 @@
 // resources/js/lib/offline/sync.ts
-import { getToken } from "../token";
+import { getToken, getCurrentUserId } from "../token";
 import {
   listQueue,
   markAttempt,
@@ -35,7 +35,12 @@ export async function flushQueue(): Promise<{
     const items = await listQueue();
     if (items.length === 0) return { success, failed };
 
+    const owner = getCurrentUserId();
+    const authToken = getToken();
+    if (!owner || !authToken) return {success, failed};
     for (const item of items) {
+      if (item.ownerId !== owner) continue;
+      if (getCurrentUserId() !== owner || getToken() !== authToken) break;
       if (!item.id) continue;
 
       try {
@@ -67,7 +72,7 @@ export async function flushQueue(): Promise<{
           break;
         }
 
-        if (response.ok || response.status === 409) {
+        if (response.ok) {
           await removeFromQueue(item.id);
           success++;
         } else {
@@ -87,19 +92,19 @@ export async function flushQueue(): Promise<{
     }
   } finally {
     syncing = false;
-    await setMeta("lastSyncAt", Date.now());
+    if (success > 0) await setMeta("lastSyncAt", Date.now());
     emit(SYNC_FINISHED_EVENT, { success, failed });
   }
 
   return { success, failed };
 }
 
+const onOnline = () => { flushQueue().catch(() => {}); };
+
 export function startSyncEngine() {
   if (intervalId !== null) return;
 
-  window.addEventListener("online", () => {
-    flushQueue().catch(() => {});
-  });
+  window.addEventListener("online", onOnline);
 
   intervalId = window.setInterval(() => {
     if (navigator.onLine) flushQueue().catch(() => {});
@@ -111,6 +116,7 @@ export function startSyncEngine() {
 }
 
 export function stopSyncEngine() {
+  window.removeEventListener("online", onOnline);
   if (intervalId !== null) {
     window.clearInterval(intervalId);
     intervalId = null;

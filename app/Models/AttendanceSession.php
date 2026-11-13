@@ -150,7 +150,7 @@ class AttendanceSession extends Model
         $cutoff = $start->addMinutes($graceMinutes);
         $checkIn = Carbon::parse($checkInTime);
 
-        return $checkIn->diffInMinutes($cutoff);
+        return max(0, (int) $cutoff->diffInMinutes($checkIn, false));
     }
 
     public function close()

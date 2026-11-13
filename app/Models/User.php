@@ -32,6 +32,8 @@ class User extends Authenticatable
         'must_change_password',
     ];
 
+    protected $appends = ['profile_photo_url'];
+
     protected $hidden = [
         'password',
         'remember_token',
@@ -49,30 +51,13 @@ class User extends Authenticatable
      */
     public function getProfilePhotoUrlAttribute()
     {
-        // If no profile photo, return default avatar
-        if (!$this->profile_photo) {
-            return $this->getDefaultAvatar();
-        }
-
-        // If it's already a full URL (from external service)
-        if (filter_var($this->profile_photo, FILTER_VALIDATE_URL)) {
-            return $this->profile_photo;
-        }
-
-        // Remove any 'storage/' prefix if it exists to avoid duplication
-        $path = $this->profile_photo;
-        if (str_starts_with($path, 'storage/')) {
-            $path = substr($path, 8);
-        }
-
-        // Check if the file exists in storage
-        $storagePath = storage_path('app/public/' . $path);
-        if (file_exists($storagePath)) {
-            return asset('storage/' . $path);
-        }
-
-        // If file doesn't exist, return default avatar
-        return $this->getDefaultAvatar();
+        $path = ltrim((string) $this->profile_photo, '/');
+        if (!$path) return null;
+        if (filter_var($path, FILTER_VALIDATE_URL)) return $path;
+        $path = preg_replace('#^(?:storage/|public/)+#', '', $path);
+        if (!str_starts_with($path, 'profile_photos/') || str_contains($path, '..') ||
+            !\Illuminate\Support\Facades\Storage::disk('public')->exists($path)) return null;
+        return url('/api/profile-photos/' . $this->id) . '?v=' . substr(hash('sha256', $path), 0, 16);
     }
 
     /**

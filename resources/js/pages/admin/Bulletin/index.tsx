@@ -1,5 +1,11 @@
 // src/pages/admin/Bulletin/index.tsx
 import React, { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { useAuth } from '../../hooks/useAuth';
+import BulletinDiscussion from '../../components/common/BulletinDiscussion';
+import { communityRequest } from '../../../services/communityApi';
+import type { BulletinPost } from '../../../types/api';
 import { useBulletin, useCreateBulletin, useUpdateBulletin, useDeleteBulletin } from '../../hooks/useBulletin';
 import RefreshButton from '../../components/common/RefreshButton';
 import toast from 'react-hot-toast';
@@ -30,6 +36,15 @@ const getAudienceLabel = (value: string) => {
 
 const BulletinBoard: React.FC = () => {
   const { data: bulletins = [], isLoading, error, refresh, isRefreshing } = useBulletin();
+  const { user } = useAuth();
+  const [search] = useSearchParams();
+  const focusId = Number(search.get('post')) || undefined;
+  const focusComment = Number(search.get('comment')) || undefined;
+  const canCreate = ['admin', 'super_admin', 'faculty'].includes(user?.role);
+  const focused = useQuery({ queryKey: ['bulletin-focus', user?.id, focusId],
+    enabled: !!focusId && !bulletins.some(post => post.id === focusId),
+    queryFn: ({signal}) => communityRequest<{data: BulletinPost}>(`/bulletin/${focusId}`, 'GET', undefined, signal), retry: false });
+  const displayed = focusId && focused.data && !bulletins.some(post => post.id === focusId) ? [focused.data.data, ...bulletins] : bulletins;
   const createMut = useCreateBulletin();
   const updateMut = useUpdateBulletin();
   const deleteMut = useDeleteBulletin();
@@ -139,13 +154,13 @@ const BulletinBoard: React.FC = () => {
         </div>
         <div className="flex gap-2">
           <RefreshButton onRefresh={refresh} isLoading={isRefreshing} label="" className="btn-sm" />
-          <button
+          {canCreate && <button
             className={`btn ${showForm ? 'btn-secondary' : 'btn-primary'} btn-sm`}
             onClick={() => (showForm ? resetForm() : setShowForm(true))}
           >
             <i className={`fas ${showForm ? 'fa-times' : 'fa-plus'}`} />
             {showForm ? 'Cancel' : 'New Bulletin'}
-          </button>
+          </button>}
         </div>
       </div>
 
@@ -269,8 +284,9 @@ const BulletinBoard: React.FC = () => {
         </div>
       )}
 
+      {focused.error && <p role="alert" className="alert alert-danger">This notification’s post is unavailable or no longer visible to your account.</p>}
       {/* List */}
-      {bulletins.length === 0 ? (
+      {displayed.length === 0 ? (
         <div className="empty-state">
           <i className="fas fa-bullhorn" />
           <p>No bulletins created yet.</p>
@@ -278,7 +294,7 @@ const BulletinBoard: React.FC = () => {
         </div>
       ) : (
         <div className="space-y-3">
-          {bulletins.map((bulletin) => (
+          {displayed.map((bulletin) => (
             <div
               key={bulletin.id}
               className={`bg-white rounded-xl shadow-sm border ${bulletin.is_featured ? 'border-amber-300 shadow-md' : 'border-slate-200'} overflow-hidden transition-shadow hover:shadow-md`}
@@ -303,7 +319,7 @@ const BulletinBoard: React.FC = () => {
                     </div>
                     <p className="text-sm text-slate-600 whitespace-pre-line line-clamp-3">{bulletin.content}</p>
                   </div>
-                  <div className="flex gap-1.5">
+                  {(['admin', 'super_admin'].includes(user?.role) || bulletin.created_by === user?.id) && <div className="flex gap-1.5">
                     <button className="btn btn-info btn-sm" onClick={() => handleEdit(bulletin)} disabled={deleteMut.isPending}>
                       <i className="fas fa-pen" />
                     </button>
@@ -318,7 +334,7 @@ const BulletinBoard: React.FC = () => {
                         <i className="fas fa-trash" />
                       )}
                     </button>
-                  </div>
+                  </div>}
                 </div>
                 <div className="flex flex-wrap items-center gap-4 mt-3 pt-3 border-t border-slate-100 text-xs text-slate-400">
                   <span><i className="fas fa-calendar mr-1" /> {new Date(bulletin.display_from).toLocaleDateString()}</span>
@@ -327,6 +343,7 @@ const BulletinBoard: React.FC = () => {
                   )}
                   <span><i className="fas fa-eye mr-1" /> {bulletin.views || 0} views</span>
                 </div>
+                <BulletinDiscussion id={bulletin.id} summary={bulletin} focus={focusId === bulletin.id} focusCommentId={focusId === bulletin.id ? focusComment : undefined} />
               </div>
             </div>
           ))}

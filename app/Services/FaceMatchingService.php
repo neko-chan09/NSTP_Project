@@ -9,6 +9,16 @@ use Illuminate\Support\Facades\Log;
 
 class FaceMatchingService
 {
+    public static function validVector(array $vector): bool
+    {
+        if (count($vector) !== (int) config('face.embedding_size', 192)) return false;
+        $norm = 0.0;
+        foreach ($vector as $value) {
+            if (!is_numeric($value) || !is_finite((float) $value)) return false;
+            $norm += (float) $value * (float) $value;
+        }
+        return is_finite($norm) && $norm > 0;
+    }
     /**
      * L2-normalize an embedding vector.
      */
@@ -82,7 +92,7 @@ class FaceMatchingService
         foreach ($stored as $row) {
             $ref = $row->embedding;
 
-            if (!is_array($ref) || count($ref) === 0) {
+            if (!is_array($ref) || !self::validVector($ref)) {
                 continue;
             }
 

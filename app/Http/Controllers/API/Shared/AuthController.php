@@ -35,7 +35,7 @@ class AuthController extends Controller
 
         $user = User::where('email', $request->email)->first();
 
-        if (!$user || !Hash::check($request->password, $user->password)) {
+        if (!$user || !$user->is_active || !Hash::check($request->password, $user->password)) {
             return response()->json([
                 'message' => 'Invalid credentials',
             ], 401);
@@ -92,7 +92,7 @@ class AuthController extends Controller
 
         $user = User::where('student_id', $request->student_id)->first();
 
-        if (!$user || !Hash::check($request->password, $user->password)) {
+        if (!$user || !$user->is_active || !Hash::check($request->password, $user->password)) {
             return response()->json([
                 'message' => 'Invalid credentials',
             ], 401);
@@ -251,7 +251,7 @@ class AuthController extends Controller
             'last_name' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email',
             'password' => 'required|string|min:6',
-            'student_id' => 'required|string|unique:students,student_id',
+            'student_id' => 'required|string|max:255|unique:students,student_id|unique:users,student_id',
             'contact_number' => 'nullable|string|max:20|unique:users,contact_number',
         ]);
 
@@ -262,7 +262,8 @@ class AuthController extends Controller
             ], 422);
         }
 
-        $user = User::create([
+        $user = \Illuminate\Support\Facades\DB::transaction(function () use ($request) {
+            $user = User::create([
             'first_name' => $request->first_name,
             'last_name' => $request->last_name,
             'email' => $request->email,
@@ -271,6 +272,10 @@ class AuthController extends Controller
             'student_id' => $request->student_id,
             'contact_number' => $request->contact_number,
         ]);
+
+            \App\Models\Student::create(['user_id' => $user->id, 'student_id' => $request->student_id]);
+            return $user;
+        });
 
         $token = $user->createToken('auth_token')->plainTextToken;
 
@@ -457,23 +462,27 @@ class AuthController extends Controller
         $user = $request->user();
 
         try {
-            // Remove old photo if present
-            if ($user->profile_photo && Storage::disk('public')->exists($user->profile_photo)) {
-                Storage::disk('public')->delete($user->profile_photo);
-            }
-
+            $oldPhoto = $user->profile_photo;
             $file = $request->file('photo');
-            $ext = $file->getClientOriginalExtension() ?: 'jpg';
-            $filename = 'profile_photos/' . $user->id . '_' . time() . '.' . $ext;
-
-            Storage::disk('public')->putFileAs(
-                'profile_photos',
-                $file,
-                basename($filename)
-            );
-
-            $user->profile_photo = $filename;
-            $user->save();
+            $dimensions = @getimagesize($file->getPathname());
+            if (!$dimensions || $dimensions[0] * $dimensions[1] > 25000000) {
+                return response()->json(['message' => 'Choose a photo smaller than 25 megapixels.'], 422);
+            }
+            // Normalize orientation, transparency and encoding for Android/iOS/web.
+            $image = \Intervention\Image\ImageManager::gd()->read($file->getPathname())
+                ->orient()->scaleDown(width: 1024, height: 1024)->blendTransparency('#ffffff');
+            $filename = 'profile_photos/' . $user->id . '_' . \Illuminate\Support\Str::uuid() . '.jpg';
+            if (!Storage::disk('public')->put($filename, (string) $image->toJpeg(quality: 85))) {
+                throw new \RuntimeException('Photo storage failed.');
+            }
+            try {
+                $user->profile_photo = $filename;
+                $user->saveOrFail();
+            } catch (\Throwable $error) {
+                Storage::disk('public')->delete($filename);
+                throw $error;
+            }
+            if ($oldPhoto && str_starts_with($oldPhoto, 'profile_photos/')) Storage::disk('public')->delete($oldPhoto);
 
             $user->refresh();
 

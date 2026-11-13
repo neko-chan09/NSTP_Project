@@ -22,6 +22,7 @@ class ProfileController extends Controller
     public function profile(Request $request)
     {
         $student = $request->user()->student;
+        if (!$student) return response()->json(['message' => 'Student profile not found. Contact the NSTP office.'], 404);
         return response()->json(['success' => true, 'data' => $student->load('user')]);
     }
 
@@ -160,83 +161,11 @@ class ProfileController extends Controller
     }
      public function uploadPhoto(Request $request)
     {
-        $validator = Validator::make($request->all(), [
-            'photo' => 'required|image|mimes:jpeg,jpg,png,webp|max:5120', // 5 MB
-        ]);
-
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'errors' => $validator->errors(),
-            ], 422);
-        }
-
-        $user = $request->user();
-
-        try {
-            // Delete the old photo (if any)
-            if ($user->profile_photo && Storage::disk('public')->exists($user->profile_photo)) {
-                Storage::disk('public')->delete($user->profile_photo);
-            }
-
-            $file = $request->file('photo');
-            $ext = $file->getClientOriginalExtension() ?: 'jpg';
-            $filename = 'profile_photos/' . $user->id . '_' . time() . '.' . $ext;
-
-            // store on the public disk
-            Storage::disk('public')->putFileAs(
-                'profile_photos',
-                $file,
-                basename($filename)
-            );
-
-            $user->profile_photo = $filename;
-            $user->save();
-
-            Log::info('Profile photo uploaded', [
-                'user_id' => $user->id,
-                'path' => $filename,
-            ]);
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Profile photo updated',
-                'data' => [
-                    'profile_photo' => $user->profile_photo,
-                    'profile_photo_url' => $user->profile_photo_url,
-                ],
-            ]);
-        } catch (\Throwable $e) {
-            Log::error('Profile photo upload failed: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to upload photo',
-            ], 500);
-        }
+        return app(\App\Http\Controllers\API\Shared\AuthController::class)->uploadPhoto($request);
     }
 
     public function deletePhoto(Request $request)
     {
-        $user = $request->user();
-
-        try {
-            if ($user->profile_photo && Storage::disk('public')->exists($user->profile_photo)) {
-                Storage::disk('public')->delete($user->profile_photo);
-            }
-
-            $user->profile_photo = null;
-            $user->save();
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Profile photo removed',
-            ]);
-        } catch (\Throwable $e) {
-            Log::error('Profile photo delete failed: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Failed to remove photo',
-            ], 500);
-        }
+        return app(\App\Http\Controllers\API\Shared\AuthController::class)->deletePhoto($request);
     }
 }

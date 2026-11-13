@@ -46,6 +46,12 @@ class FaceEmbeddingController extends Controller
             ], 422);
         }
 
+        foreach (['front', 'left', 'right'] as $pose) {
+            if (!FaceMatchingService::validVector($request->input("embeddings.{$pose}"))) {
+                return response()->json(['message' => 'A face capture is invalid. Please scan all three poses again.'], 422);
+            }
+        }
+
         $student = $request->user()->student;
         if (!$student) {
             return response()->json([
@@ -147,6 +153,22 @@ class FaceEmbeddingController extends Controller
                 'poses_count' => $count,
             ],
         ]);
+    }
+
+    public function template(Request $request)
+    {
+        $student = $request->user()->student;
+        abort_unless($student, 404);
+        $stored = FaceEmbedding::where('student_id', $student->id)->get()->keyBy('pose');
+        $data = [];
+        foreach (['front', 'left', 'right'] as $pose) {
+            $vector = $stored->get($pose)?->embedding;
+            if (!is_array($vector) || count($vector) !== (int) config('face.embedding_size', 192)) {
+                return response()->json(['message' => 'A complete face template is not registered.'], 404)->header('Cache-Control', 'no-store');
+            }
+            $data[$pose] = array_map('floatval', $vector);
+        }
+        return response()->json(['data' => $data])->header('Cache-Control', 'private, no-store');
     }
 
     // NOTE: the student-facing destroy() was removed on purpose.

@@ -9092,10 +9092,10 @@ var OnlineManager = class extends Subscribable {
   #setup;
   constructor() {
     super();
-    this.#setup = (onOnline) => {
+    this.#setup = (onOnline2) => {
       if (typeof window !== "undefined" && window.addEventListener) {
-        const onlineListener = () => onOnline(true);
-        const offlineListener = () => onOnline(false);
+        const onlineListener = () => onOnline2(true);
+        const offlineListener = () => onOnline2(false);
         window.addEventListener("online", onlineListener, false);
         window.addEventListener("offline", offlineListener, false);
         return () => {
@@ -12343,6 +12343,15 @@ const removeToken = () => {
   localStorage.removeItem("user");
   localStorage.removeItem("nstp_user");
 };
+function getCurrentUserId() {
+  try {
+    const raw = localStorage.getItem("user") || localStorage.getItem("nstp_user");
+    const user = raw ? JSON.parse(raw) : null;
+    return user?.id == null ? null : String(user.id);
+  } catch {
+    return null;
+  }
+}
 const instanceOfAny = (object, constructors) => constructors.some((c2) => object instanceof c2);
 let idbProxyableTypes;
 let cursorAdvanceMethods;
@@ -12607,10 +12616,6 @@ async function getOutbox() {
   const db = await getDB();
   return db.getAll("outbox");
 }
-async function getOutboxCount() {
-  const db = await getDB();
-  return db.count("outbox");
-}
 async function deleteFromOutbox(id) {
   const db = await getDB();
   await db.delete("outbox", id);
@@ -12621,10 +12626,6 @@ async function updateOutboxItem(id, updates) {
   if (!existing) return;
   await db.put("outbox", { ...existing, ...updates, id });
 }
-async function clearOutbox() {
-  const db = await getDB();
-  await db.clear("outbox");
-}
 async function setMeta(key, value) {
   const db = await getDB();
   await db.put("meta", value, key);
@@ -12634,6 +12635,7 @@ function emitChange() {
   window.dispatchEvent(new CustomEvent(OUTBOX_CHANGED_EVENT));
 }
 async function queueMutation(mutation) {
+  if (!mutation.ownerId) throw new Error("Sign in before saving offline changes.");
   const id = await addToOutbox({
     ...mutation,
     createdAt: Date.now(),
@@ -12643,10 +12645,11 @@ async function queueMutation(mutation) {
   return id;
 }
 async function listQueue() {
-  return getOutbox();
+  const owner = getCurrentUserId();
+  return owner ? (await getOutbox()).filter((item) => item.ownerId === owner) : [];
 }
 async function queueCount() {
-  return getOutboxCount();
+  return (await listQueue()).length;
 }
 async function removeFromQueue(id) {
   await deleteFromOutbox(id);
@@ -12663,7 +12666,9 @@ async function markAttempt(id, error) {
   emitChange();
 }
 async function clearQueue() {
-  await clearOutbox();
+  for (const item of await listQueue()) {
+    if (item.id != null) await deleteFromOutbox(item.id);
+  }
   emitChange();
 }
 function serializeFormData(fd) {
@@ -12714,6 +12719,7 @@ const handleResponse = async (response) => {
 };
 async function mutateWithQueue(url, method, options = {}) {
   const token = getToken$1();
+  const ownerId = getCurrentUserId();
   const online = typeof navigator === "undefined" ? true : navigator.onLine;
   const doFetch = async () => {
     const h2 = {
@@ -12747,6 +12753,7 @@ async function mutateWithQueue(url, method, options = {}) {
     }
   }
   const id = await queueMutation({
+    ownerId: ownerId ?? void 0,
     url,
     method,
     body: options.body,
@@ -13545,12 +13552,6 @@ const adminApi = {
     );
     return result.data ?? result;
   },
-  deleteClass: async (id) => {
-    return mutateWithQueue(`${API_URL}/admin/classes/${id}`, "DELETE", {
-      label: `Delete class ${id}`,
-      tag: "class-delete"
-    });
-  },
   toggleArchiveClass: async (id) => {
     const result = await mutateWithQueue(
       `${API_URL}/admin/classes/${id}/toggle-archive`,
@@ -13867,7 +13868,8 @@ const adminApi = {
   },
   // ---------------- BULLETIN ----------------
   getBulletin: async () => {
-    const response = await fetch(`${API_URL}/bulletin`, {
+    const response = await fetch(`${API_URL}/bulletin?fresh=${Date.now()}`, {
+      cache: "no-store",
       headers: headers()
     });
     const result = await handleResponse(response);
@@ -13997,6 +13999,47 @@ const adminApi = {
     return response.blob();
   }
 };
+const ocrApi = {
+  saveOCR: async (data) => {
+    const result = await mutateWithQueue(`${API_URL}/documents/save-ocr`, "POST", {
+      body: data,
+      label: `Save OCR for document ${data.document_id}`,
+      tag: "ocr-save"
+    });
+    return result.data ?? result;
+  },
+  getOCRHistory: async (documentId) => {
+    const response = await fetch(
+      `${API_URL}/documents/${documentId}/ocr-history`,
+      { headers: headers() }
+    );
+    const result = await handleResponse(response);
+    return result.data ?? result;
+  },
+  downloadOCR: async (id) => {
+    const response = await fetch(`${API_URL}/ocr-texts/${id}/download`, {
+      headers: { Authorization: `Bearer ${getToken$1()}` }
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.message || `Download failed (${response.status})`);
+    }
+    return response.blob();
+  },
+  deleteOCR: async (id) => {
+    return mutateWithQueue(`${API_URL}/ocr-texts/${id}`, "DELETE", {
+      label: `Delete OCR ${id}`,
+      tag: "ocr-delete"
+    });
+  },
+  getOCRStats: async () => {
+    const response = await fetch(`${API_URL}/ocr-stats`, {
+      headers: headers()
+    });
+    const result = await handleResponse(response);
+    return result.data ?? result;
+  }
+};
 const facultyApi = {
   getClass: async (id) => {
     const response = await fetch(`${API_URL}/faculty/class/${id}`, {
@@ -14053,12 +14096,6 @@ const facultyApi = {
       }
     );
     return result.data ?? result;
-  },
-  deleteClass: async (id) => {
-    return mutateWithQueue(`${API_URL}/faculty/classes/${id}`, "DELETE", {
-      label: `Delete class ${id}`,
-      tag: "faculty-class-delete"
-    });
   },
   archiveClass: async (id) => {
     const result = await mutateWithQueue(
@@ -14248,15 +14285,6 @@ function useUpdateClass() {
     }
   });
 }
-function useDeleteClass() {
-  const queryClient2 = useQueryClient();
-  return useMutation({
-    mutationFn: (id) => adminApi.deleteClass(id),
-    onSuccess: () => {
-      queryClient2.invalidateQueries({ queryKey: CLASSES_KEY });
-    }
-  });
-}
 function useToggleArchiveClass() {
   const queryClient2 = useQueryClient();
   return useMutation({
@@ -14314,7 +14342,6 @@ const Classes = () => {
   });
   const createMutation = useCreateClass();
   const updateMutation = useUpdateClass();
-  const deleteMutation = useDeleteClass();
   const toggleArchiveMutation = useToggleArchiveClass();
   const filteredFaculty = reactExports.useMemo(() => {
     if (!facultyList.length) return [];
@@ -14392,21 +14419,6 @@ const Classes = () => {
         onError: (err) => zt.error(err.message || "Failed")
       });
     }
-  };
-  const handleDelete = (cls) => {
-    if (!window.confirm(
-      `Delete class "${cls.name}"?
-
-This will remove all ${cls.students_count || 0} student enrollments.`
-    ))
-      return;
-    deleteMutation.mutate(cls.id, {
-      onSuccess: () => {
-        zt.success("Class deleted");
-        refetch();
-      },
-      onError: (err) => zt.error(err.message || "Failed")
-    });
   };
   const handleToggleArchive = (cls) => {
     toggleArchiveMutation.mutate(cls.id, {
@@ -14614,12 +14626,12 @@ This will remove all ${cls.students_count || 0} student enrollments.`
         /* @__PURE__ */ jsxRuntimeExports.jsx("th", { className: "text-right", children: "Actions" })
       ] }) }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("tbody", { children: filteredClasses.map((cls) => {
-        const isDeleting = deleteMutation.isPending && deleteMutation.variables === cls.id;
+        const isDeleting = false;
         const isArchiving = toggleArchiveMutation.isPending && toggleArchiveMutation.variables === cls.id;
         return /* @__PURE__ */ jsxRuntimeExports.jsxs(
           "tr",
           {
-            className: `group hover:bg-slate-50 transition-colors ${isDeleting ? "opacity-50" : ""}`,
+            className: `group hover:bg-slate-50 transition-colors ${""}`,
             children: [
               /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-start gap-3 min-w-[220px]", children: [
                 /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -14706,19 +14718,6 @@ This will remove all ${cls.students_count || 0} student enrollments.`
                       /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: cls.status === "active" ? "Archive" : "Restore" })
                     ]
                   }
-                ),
-                /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                  "button",
-                  {
-                    className: "btn btn-danger btn-sm inline-flex items-center gap-1.5",
-                    onClick: () => handleDelete(cls),
-                    disabled: isDeleting,
-                    title: "Delete this class",
-                    children: [
-                      isDeleting ? /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-spinner fa-spin" }) : /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-trash" }),
-                      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "Delete" })
-                    ]
-                  }
                 )
               ] }) })
             ]
@@ -14727,12 +14726,11 @@ This will remove all ${cls.students_count || 0} student enrollments.`
         );
       }) })
     ] }) }) }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4", children: filteredClasses.map((cls) => {
-      const isDeleting = deleteMutation.isPending && deleteMutation.variables === cls.id;
       const isArchiving = toggleArchiveMutation.isPending && toggleArchiveMutation.variables === cls.id;
       return /* @__PURE__ */ jsxRuntimeExports.jsxs(
         "div",
         {
-          className: `bg-white rounded-xl shadow-sm border border-slate-200 p-5 ${isDeleting ? "opacity-50" : ""}`,
+          className: `bg-white rounded-xl shadow-sm border border-slate-200 p-5 ${""}`,
           children: [
             /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between items-start mb-2", children: [
               /* @__PURE__ */ jsxRuntimeExports.jsx("h3", { className: "font-semibold text-navy-900", children: cls.name }),
@@ -14785,16 +14783,6 @@ This will remove all ${cls.students_count || 0} student enrollments.`
                       className: `fas ${cls.status === "active" ? "fa-archive" : "fa-undo"}`
                     }
                   )
-                }
-              ),
-              /* @__PURE__ */ jsxRuntimeExports.jsx(
-                "button",
-                {
-                  className: "btn btn-danger btn-sm inline-flex items-center gap-1.5",
-                  onClick: () => handleDelete(cls),
-                  disabled: isDeleting,
-                  title: "Delete",
-                  children: /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-trash" })
                 }
               )
             ] })
@@ -15007,7 +14995,12 @@ async function flushQueue() {
   try {
     const items = await listQueue();
     if (items.length === 0) return { success, failed };
+    const owner = getCurrentUserId();
+    const authToken = getToken$1();
+    if (!owner || !authToken) return { success, failed };
     for (const item of items) {
+      if (item.ownerId !== owner) continue;
+      if (getCurrentUserId() !== owner || getToken$1() !== authToken) break;
       if (!item.id) continue;
       try {
         const token = getToken$1();
@@ -15033,7 +15026,7 @@ async function flushQueue() {
           failed++;
           break;
         }
-        if (response.ok || response.status === 409) {
+        if (response.ok) {
           await removeFromQueue(item.id);
           success++;
         } else {
@@ -15053,17 +15046,18 @@ async function flushQueue() {
     }
   } finally {
     syncing = false;
-    await setMeta("lastSyncAt", Date.now());
+    if (success > 0) await setMeta("lastSyncAt", Date.now());
     emit(SYNC_FINISHED_EVENT, { success, failed });
   }
   return { success, failed };
 }
+const onOnline = () => {
+  flushQueue().catch(() => {
+  });
+};
 function startSyncEngine() {
   if (intervalId !== null) return;
-  window.addEventListener("online", () => {
-    flushQueue().catch(() => {
-    });
-  });
+  window.addEventListener("online", onOnline);
   intervalId = window.setInterval(() => {
     if (navigator.onLine) flushQueue().catch(() => {
     });
@@ -15378,6 +15372,115 @@ const useAuth = () => {
     isStudent
   };
 };
+async function communityRequest(path, method = "GET", body, signal) {
+  const response = await fetch(`${API_URL}${path}`, {
+    method,
+    signal,
+    cache: "no-store",
+    headers: { Accept: "application/json", Authorization: `Bearer ${getToken$1()}`, ...body === void 0 ? {} : { "Content-Type": "application/json" } },
+    ...body === void 0 ? {} : { body: JSON.stringify(body) }
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(result.message || Object.values(result.errors ?? {}).flat().join(" ") || `Request failed (${response.status})`);
+  return result;
+}
+function commentSubmissionId() {
+  return globalThis.crypto?.randomUUID?.() ?? `comment-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+function NotificationInbox() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const client2 = useQueryClient();
+  const [open, setOpen] = reactExports.useState(false);
+  const [page, setPage] = reactExports.useState(1);
+  const [busy, setBusy] = reactExports.useState(false);
+  const ref = reactExports.useRef(null);
+  const inbox = useQuery({
+    queryKey: ["community-inbox", user?.id, page],
+    enabled: !!user,
+    queryFn: ({ signal }) => communityRequest(`/notifications?page=${page}`, "GET", void 0, signal),
+    refetchInterval: 3e4,
+    refetchIntervalInBackground: false
+  });
+  reactExports.useEffect(() => {
+    if (!open) return;
+    const close = (event) => {
+      if (!ref.current?.contains(event.target)) setOpen(false);
+    };
+    const key = (event) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("click", close);
+    document.addEventListener("keydown", key);
+    return () => {
+      document.removeEventListener("click", close);
+      document.removeEventListener("keydown", key);
+    };
+  }, [open]);
+  async function mark(item) {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await communityRequest(item ? `/notifications/${item.id}/read` : "/notifications/read-all", "POST");
+      await client2.invalidateQueries({ queryKey: ["community-inbox", user?.id] });
+      if (item?.data?.type === "bulletin" && item.data.bulletin_id) {
+        const prefix = user?.role === "faculty" ? "/faculty" : "/admin";
+        navigate(`${prefix}/bulletin?post=${item.data.bulletin_id}${item.data.comment_id ? `&comment=${item.data.comment_id}` : ""}`);
+        setOpen(false);
+      }
+    } catch (error) {
+      zt.error(error instanceof Error ? error.message : "Notification could not be updated.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { ref, className: "relative", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { type: "button", className: "btn btn-secondary btn-sm", "aria-label": `Notifications, ${inbox.data?.unread_count ?? 0} unread`, "aria-expanded": open, onClick: () => setOpen(!open), children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-bell" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: inbox.data?.unread_count ?? 0 })
+    ] }),
+    open && /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { "aria-label": "Notification inbox", className: "absolute right-0 top-full mt-2 bg-white border border-slate-200 shadow-xl rounded-xl w-[340px] max-w-[85vw] max-h-[70vh] overflow-y-auto z-50", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "p-4 border-b border-slate-100 flex justify-between gap-2", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("h3", { className: "font-semibold", children: "Notifications" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "text-xs text-blue-700", disabled: busy, onClick: () => mark(), children: "Mark all read" })
+      ] }),
+      inbox.isLoading && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "p-4 text-sm", role: "status", children: "Loading notifications…" }),
+      inbox.error && /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "p-4 text-sm text-red-700", role: "alert", children: [
+        inbox.error.message,
+        " ",
+        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "underline", onClick: () => inbox.refetch(), children: "Retry" })
+      ] }),
+      inbox.data?.data.map((item) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: `p-4 border-b border-slate-100 ${item.is_read ? "" : "bg-blue-50"}`, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "font-medium text-sm", children: item.title }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-slate-600 break-words mt-1", children: item.message }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-slate-400 mt-1", children: new Date(item.created_at).toLocaleString() }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "text-xs text-blue-700 mt-2", disabled: busy, onClick: () => mark(item), children: item.data?.type === "bulletin" ? "View post or reply" : item.is_read ? "Read" : "Mark read" })
+      ] }, item.id)),
+      inbox.data && !inbox.data.data.length && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "p-4 text-sm text-slate-500", children: "No notifications." }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "p-3 flex justify-between", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "text-xs text-blue-700", disabled: page <= 1, onClick: () => setPage(page - 1), children: "Newer" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "text-xs text-blue-700", disabled: !inbox.data || page >= inbox.data.meta.last_page, onClick: () => setPage(page + 1), children: "Older" })
+      ] })
+    ] })
+  ] });
+}
+function ProfileAvatar({ src: src2, firstName, lastName, className = "" }) {
+  const [failed, setFailed] = reactExports.useState(false);
+  reactExports.useEffect(() => setFailed(false), [src2]);
+  const initials = `${firstName?.[0] ?? ""}${lastName?.[0] ?? ""}`.toUpperCase() || "U";
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: `relative overflow-hidden rounded-full flex-shrink-0 bg-gold-100 text-navy-900 flex items-center justify-center font-semibold ${className}`, children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { "aria-hidden": !!src2 && !failed, children: initials }),
+    src2 && !failed && /* @__PURE__ */ jsxRuntimeExports.jsx(
+      "img",
+      {
+        src: src2,
+        alt: `${firstName ?? ""} ${lastName ?? ""}`.trim() || "Profile photo",
+        className: "absolute inset-0 h-full w-full object-cover",
+        onError: () => setFailed(true)
+      }
+    )
+  ] });
+}
 const SidebarContext = reactExports.createContext({
   collapsed: false,
   toggle: () => {
@@ -16107,26 +16210,14 @@ const AdminLayoutInner = ({
               ] })
             ] }),
             /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-3 text-sm", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(NotificationInbox, {}),
               /* @__PURE__ */ jsxRuntimeExports.jsxs(
                 Link,
                 {
                   to: user?.role === "faculty" ? "/faculty/profile" : "/admin/profile",
                   className: "flex items-center gap-2 font-medium text-navy-700 hover:text-gold-600 transition-colors",
                   children: [
-                    user?.profile_photo_url ? /* @__PURE__ */ jsxRuntimeExports.jsx(
-                      "img",
-                      {
-                        src: user.profile_photo_url,
-                        alt: user.name || "Profile",
-                        className: "w-8 h-8 rounded-full object-cover border-2 border-gold-200"
-                      }
-                    ) : /* @__PURE__ */ jsxRuntimeExports.jsx(
-                      "div",
-                      {
-                        className: `${getRoleColor(user?.role || "admin")} w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold`,
-                        children: (user?.name || "U").charAt(0).toUpperCase()
-                      }
-                    ),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(ProfileAvatar, { src: user?.profile_photo_url, firstName: user?.first_name || user?.name, lastName: user?.last_name, className: "w-8 h-8 text-xs" }),
                     /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "hidden md:inline", children: user?.name || "User" }),
                     /* @__PURE__ */ jsxRuntimeExports.jsx(
                       "span",
@@ -29818,11 +29909,14 @@ function useDashboard() {
 }
 const BULLETIN_KEY = ["bulletin"];
 function useBulletin() {
+  const { user } = useAuth();
   const queryClient2 = useQueryClient();
   const query = useQuery({
-    queryKey: BULLETIN_KEY,
+    queryKey: [...BULLETIN_KEY, user?.id],
     queryFn: () => adminApi.getBulletin(),
-    staleTime: 6e4
+    staleTime: 15e3,
+    refetchInterval: 3e4,
+    refetchIntervalInBackground: false
   });
   const refresh = () => {
     queryClient2.invalidateQueries({ queryKey: BULLETIN_KEY });
@@ -32191,17 +32285,7 @@ const Students = () => {
               onClick: () => openDetails(s2),
               children: [
                 /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-3", children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "w-10 h-10 rounded-full overflow-hidden flex-shrink-0 bg-gold-100", children: s2.user.profile_photo_url ? /* @__PURE__ */ jsxRuntimeExports.jsx(
-                    "img",
-                    {
-                      src: s2.user.profile_photo_url,
-                      alt: `${s2.user.first_name} ${s2.user.last_name}`,
-                      className: "w-full h-full object-cover"
-                    }
-                  ) : /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "w-full h-full flex items-center justify-center font-bold text-sm text-white bg-navy-600", children: [
-                    s2.user.first_name?.charAt(0),
-                    s2.user.last_name?.charAt(0)
-                  ] }) }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(ProfileAvatar, { src: s2.user.profile_photo_url, firstName: s2.user.first_name, lastName: s2.user.last_name, className: "w-10 h-10 text-sm" }),
                   /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
                     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "font-medium text-navy-900 group-hover:text-gold-600 transition-colors", children: [
                       s2.user.first_name,
@@ -33309,262 +33393,554 @@ function useDeleteOfficeDocument() {
     }
   });
 }
+function normalizeScanPage(page, metrics) {
+  const width = Number(page?.dims?.width ?? metrics?.dims?.width);
+  const height = Number(page?.dims?.height ?? metrics?.dims?.height);
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    throw new Error("The scanner could not read the page dimensions.");
+  }
+  const words = [];
+  (page?.lines ?? []).forEach((line, lineIndex) => {
+    (line.words ?? []).forEach((word, wordIndex) => {
+      const text = String(word.text ?? "").trim();
+      const box = word.bbox;
+      if (!text || !box || ![box.left, box.top, box.right, box.bottom].every(Number.isFinite)) return;
+      const left = Math.max(0, Math.min(width, box.left));
+      const top = Math.max(0, Math.min(height, box.top));
+      const right = Math.max(left, Math.min(width, box.right));
+      const bottom = Math.max(top, Math.min(height, box.bottom));
+      if (right <= left || bottom <= top) return;
+      words.push({
+        id: `${lineIndex}-${wordIndex}`,
+        text,
+        line: lineIndex,
+        left,
+        top,
+        width: right - left,
+        height: bottom - top
+      });
+    });
+  });
+  return { width, height, words };
+}
+function selectedScanText(page, anchor, end) {
+  if (anchor < 0 || end < 0 || anchor >= page.words.length || end >= page.words.length) return "";
+  const selected = page.words.slice(Math.min(anchor, end), Math.max(anchor, end) + 1);
+  return selected.map((word, i2) => `${i2 ? word.line === selected[i2 - 1].line ? " " : "\n" : ""}${word.text}`).join("");
+}
+function nearestScanWord(page, x, y) {
+  let distance = Infinity;
+  let index = -1;
+  page.words.forEach((word, i2) => {
+    const dx = Math.max(word.left - x, 0, x - word.left - word.width);
+    const dy = Math.max(word.top - y, 0, y - word.top - word.height);
+    const d2 = dx * dx + dy * dy;
+    if (d2 < distance) {
+      distance = d2;
+      index = i2;
+    }
+  });
+  return index;
+}
 let scribePromise = null;
-const getScribe = async () => {
+let sessionInUse = false;
+const getScribe = () => {
   if (!scribePromise) {
-    scribePromise = __vitePreload(() => import("./scribe-CYVc3XHg.js").then((n2) => n2.s), true ? [] : void 0).then((m2) => m2.default ?? m2);
+    scribePromise = __vitePreload(() => import("./scribe-CYVc3XHg.js").then((n2) => n2.s), true ? [] : void 0).then((m2) => m2.default ?? m2).catch((error) => {
+      scribePromise = null;
+      throw error;
+    });
   }
   return scribePromise;
 };
-const toNamedFile = (input) => {
-  const type = input.type || "image/jpeg";
-  const extByType = {
-    "application/pdf": "pdf",
-    "image/png": "png",
-    "image/jpeg": "jpg",
-    "image/jpg": "jpg",
-    "image/webp": "webp",
-    "image/bmp": "bmp",
-    "image/tiff": "tif"
+function namedFile(input, fileName) {
+  const name = fileName || (input instanceof File ? input.name : "") || "document.jpg";
+  const extension = name.split(".").pop()?.toLowerCase() ?? "";
+  const types = {
+    pdf: "application/pdf",
+    png: "image/png",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    webp: "image/webp",
+    bmp: "image/bmp",
+    tif: "image/tiff",
+    tiff: "image/tiff",
+    gif: "image/gif"
   };
-  const ext = extByType[type] ?? "jpg";
-  if (input instanceof File && input.name && input.type) {
-    return input;
+  const type = input.type && input.type !== "application/octet-stream" ? input.type : types[extension];
+  if (!type || !type.startsWith("image/") && type !== "application/pdf") {
+    throw new Error("Select an image or PDF document to scan.");
   }
-  const name = input instanceof File && input.name ? input.name : `scan-${Date.now()}.${ext}`;
   return new File([input], name, { type });
-};
-const scanDocument = async (file, onProgress) => {
-  const scribe = await getScribe();
-  if (onProgress) {
-    scribe.opt.progressHandler = (msg) => {
-      if (msg?.type === "recognize") {
-        onProgress(`Recognizing text... ${Math.round((msg.progress || 0) * 100)}%`);
-      } else if (msg?.type === "export") {
-        onProgress("Generating document...");
+}
+async function scanDocument(file, onProgress, options = {}) {
+  if (sessionInUse) throw new Error("The previous scanner is finishing. Please try again in a moment.");
+  sessionInUse = true;
+  let doc = null;
+  let scribe = null;
+  let closed = false;
+  const assertOpen = () => {
+    if (options.signal?.aborted || closed) throw new DOMException("Scan cancelled", "AbortError");
+  };
+  const close = async () => {
+    if (closed) return;
+    closed = true;
+    try {
+      if (doc) await doc.close();
+    } finally {
+      sessionInUse = false;
+    }
+  };
+  try {
+    const input = namedFile(file, options.fileName);
+    assertOpen();
+    scribe = await getScribe();
+    assertOpen();
+    onProgress?.("Opening document…");
+    doc = await scribe.openDocument([input]);
+    assertOpen();
+    doc.progressHandler = (message) => {
+      if (!options.signal?.aborted && !closed && message?.type === "recognize") onProgress?.("Recognizing document text…");
+    };
+    onProgress?.("Detecting words and their positions…");
+    await doc.recognize({ langs: ["eng"], modeAdv: "lstm", ocrPages: "autoShallow", signal: options.signal });
+    assertOpen();
+    const pages = doc.pageMetrics.map((metrics, i2) => normalizeScanPage(doc.ocr.active[i2], metrics));
+    const text = String(await doc.exportData("txt"));
+    assertOpen();
+    if (!text.trim() && !pages.some((page) => page.words.length)) {
+      throw new Error("No readable text was found. Try a clearer image or another document.");
+    }
+    let operations = Promise.resolve();
+    const run = (operation) => {
+      const next = operations.then(() => {
+        assertOpen();
+        return operation();
+      });
+      operations = next.catch(() => {
+      });
+      return next;
+    };
+    return {
+      text,
+      pages,
+      pageImage: (pageIndex) => run(async () => {
+        if (!Number.isInteger(pageIndex) || !pages[pageIndex]) throw new Error("Invalid document page.");
+        const image = await doc.images.getNative(pageIndex, { rotated: false, upscaled: false, colorMode: "color" });
+        const src2 = image?.ensureSrc?.() ?? image?.src;
+        if (!src2) throw new Error("The document page preview could not be loaded.");
+        assertOpen();
+        return src2;
+      }),
+      exportDocument: (format) => run(async () => {
+        const data = await doc.exportData(format);
+        assertOpen();
+        return new Blob([data], { type: format === "pdf" ? "application/pdf" : "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+      }),
+      close: async () => {
+        await operations;
+        await close();
       }
     };
-  }
-  let doc;
-  try {
-    onProgress?.("Opening document...");
-    doc = await scribe.openDocument([toNamedFile(file)]);
-  } catch (err) {
-    console.error("scribe.openDocument failed:", err);
-    throw new Error(`Failed to open document: ${err?.message || "Unknown error"}`);
-  }
-  try {
-    onProgress?.("Running OCR...");
-    await doc.recognize({
-      langs: ["eng"],
-      modeAdv: "lstm"
+  } catch (error) {
+    await close().catch(() => {
     });
-  } catch (err) {
-    console.error("recognize failed:", err);
-    try {
-      await doc.terminate();
-    } catch {
-    }
-    throw new Error(`OCR failed: ${err?.message || String(err) || "Recognition error"}`);
+    throw error;
   }
-  let text = "";
-  let pdfBlob = null;
-  let docxBlob = null;
-  try {
-    onProgress?.("Extracting text...");
-    text = await doc.exportData("text");
-    if (typeof text !== "string") text = String(text);
-  } catch (err) {
-    console.warn("Text export failed:", err);
-  }
-  try {
-    onProgress?.("Generating PDF...");
-    const pdfArrayBuffer = await doc.exportData("pdf");
-    pdfBlob = new Blob([pdfArrayBuffer], { type: "application/pdf" });
-  } catch (err) {
-    console.warn("PDF export failed:", err);
-  }
-  try {
-    onProgress?.("Generating Word document...");
-    const docxArrayBuffer = await doc.exportData("docx");
-    docxBlob = new Blob([docxArrayBuffer], {
-      type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    });
-  } catch (err) {
-    console.warn("DOCX export failed:", err);
-  }
-  try {
-    await doc.terminate();
-  } catch {
-  }
-  return { text, pdfBlob, docxBlob };
-};
-const downloadBlob = (blob, filename) => {
+}
+function downloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob);
   const a2 = document.createElement("a");
   a2.href = url;
   a2.download = filename;
   document.body.appendChild(a2);
   a2.click();
-  document.body.removeChild(a2);
-  URL.revokeObjectURL(url);
-};
-const ScannerModal = ({
+  a2.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1e3);
+}
+const emptyRange = { anchor: -1, end: -1 };
+function ScannerModal({
   isOpen,
   onClose,
   file,
   fileName,
   documentId,
+  documentType,
   onTextExtracted
-}) => {
+}) {
   const [step, setStep] = reactExports.useState("idle");
-  const [progressMsg, setProgressMsg] = reactExports.useState("");
+  const [message, setMessage] = reactExports.useState("");
+  const [error, setError] = reactExports.useState("");
   const [result, setResult] = reactExports.useState(null);
-  const [error, setError] = reactExports.useState(null);
+  const [pageIndex, setPageIndex] = reactExports.useState(0);
+  const [image, setImage] = reactExports.useState("");
+  const [imageError, setImageError] = reactExports.useState("");
+  const [imageReady, setImageReady] = reactExports.useState(false);
+  const [range, setRange] = reactExports.useState(emptyRange);
+  const [draft, setDraft] = reactExports.useState("");
+  const [scope, setScope] = reactExports.useState("page");
+  const [zoom, setZoom] = reactExports.useState(100);
+  const [busy, setBusy] = reactExports.useState(false);
+  const session = reactExports.useRef(null);
+  const controller = reactExports.useRef(null);
+  const generation = reactExports.useRef(0);
+  const rangeRef = reactExports.useRef(emptyRange);
+  const dragging = reactExports.useRef(null);
+  const surface = reactExports.useRef(null);
+  const textArea = reactExports.useRef(null);
+  const closeButton = reactExports.useRef(null);
+  const dialog = reactExports.useRef(null);
+  const page = result?.pages[pageIndex];
+  const usable = !!draft.trim();
+  const wordCount = draft.trim() ? draft.trim().split(/\s+/).length : 0;
+  const baseName = fileName.replace(/\.[^/.]+$/, "") || "document";
   reactExports.useEffect(() => {
-    if (!isOpen) {
-      setStep("idle");
-      setResult(null);
-      setError(null);
-      setProgressMsg("");
-    }
-  }, [isOpen]);
-  const handleScan = async () => {
-    if (!file) return;
-    setStep("scanning");
-    setError(null);
+    generation.current++;
+    controller.current?.abort();
+    const old = session.current;
+    session.current = null;
+    void old?.close().catch(() => {
+    });
+    setStep("idle");
     setResult(null);
-    try {
-      const scanResult = await scanDocument(file, (msg) => {
-        setProgressMsg(msg);
+    setDraft("");
+    setError("");
+    setMessage("");
+    setPageIndex(0);
+    setZoom(100);
+    setBusy(false);
+    setScope("page");
+    setRange(emptyRange);
+    rangeRef.current = emptyRange;
+    return () => {
+      generation.current++;
+      controller.current?.abort();
+      const current = session.current;
+      session.current = null;
+      void current?.close().catch(() => {
       });
-      setResult(scanResult);
-      onTextExtracted(scanResult.text);
+    };
+  }, [isOpen, file]);
+  reactExports.useEffect(() => {
+    if (!isOpen) return;
+    const previous = document.activeElement;
+    closeButton.current?.focus();
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = overflow;
+      previous?.focus();
+    };
+  }, [isOpen]);
+  reactExports.useEffect(() => {
+    let current = true;
+    setImage("");
+    setImageError("");
+    setImageReady(false);
+    if (result) {
+      result.pageImage(pageIndex).then((src2) => {
+        if (current) setImage(src2);
+      }).catch((err) => {
+        if (current) setImageError(err instanceof Error ? err.message : "Page preview failed.");
+      });
+    }
+    return () => {
+      current = false;
+    };
+  }, [result, pageIndex]);
+  async function startScan() {
+    if (!file || step === "scanning") return;
+    const current = ++generation.current;
+    controller.current?.abort();
+    const abort = new AbortController();
+    controller.current = abort;
+    setStep("scanning");
+    setError("");
+    setResult(null);
+    setDraft("");
+    try {
+      await session.current?.close();
+      session.current = null;
+      const scanned = await scanDocument(file, (msg) => {
+        if (current === generation.current) setMessage(msg);
+      }, { fileName, signal: abort.signal });
+      if (current !== generation.current || abort.signal.aborted) {
+        await scanned.close();
+        return;
+      }
+      session.current = scanned;
+      setResult(scanned);
+      setPageIndex(0);
       setStep("done");
-      zt.success("Document scanned successfully!");
+      setMessage("Select text on the document, then review your selection.");
     } catch (err) {
-      console.error("Scan error:", err);
-      setError(err.message || "Failed to scan document");
+      if (current !== generation.current || abort.signal.aborted) return;
+      setError(err instanceof Error ? err.message : "The document could not be scanned.");
       setStep("error");
     }
-  };
-  const handleDownloadPDF = () => {
-    if (result?.pdfBlob) {
-      downloadBlob(result.pdfBlob, `${fileName.replace(/\.[^/.]+$/, "")}_scan.pdf`);
-      zt.success("PDF downloaded");
+  }
+  function choose(next) {
+    if (!page) return;
+    rangeRef.current = next;
+    setRange(next);
+    setScope("page");
+    setDraft(selectedScanText(page, next.anchor, next.end));
+  }
+  function changePage(next) {
+    if (!result || next < 0 || next >= result.pages.length) return;
+    setPageIndex(next);
+    setDraft("");
+    setScope("page");
+    rangeRef.current = emptyRange;
+    setRange(emptyRange);
+    dragging.current = null;
+  }
+  function pointerIndex(event) {
+    if (!surface.current || !page) return -1;
+    const bounds = surface.current.getBoundingClientRect();
+    return nearestScanWord(
+      page,
+      (event.clientX - bounds.left) / bounds.width * page.width,
+      (event.clientY - bounds.top) / bounds.height * page.height
+    );
+  }
+  function startPointer(event) {
+    const target = event.target.closest("[data-word], [data-handle]");
+    if (!target || !page || !imageReady || event.button !== 0) return;
+    const index = pointerIndex(event);
+    if (index < 0) return;
+    event.preventDefault();
+    const mode = target.dataset.handle;
+    dragging.current = mode ?? "range";
+    const old = rangeRef.current;
+    if (mode === "start") choose({ anchor: index, end: Math.max(old.anchor, old.end) });
+    else if (mode === "end") choose({ anchor: Math.min(old.anchor, old.end), end: index });
+    else choose({ anchor: event.shiftKey && old.anchor >= 0 ? old.anchor : index, end: index });
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+  function movePointer(event) {
+    if (!dragging.current) return;
+    const index = pointerIndex(event);
+    if (index < 0) return;
+    const old = rangeRef.current;
+    choose(dragging.current === "start" ? { anchor: index, end: old.end } : { anchor: old.anchor, end: index });
+  }
+  async function copyText() {
+    try {
+      await navigator.clipboard.writeText(draft);
+      zt.success("Selected text copied");
+    } catch {
+      textArea.current?.focus();
+      textArea.current?.select();
+      zt("Use Copy on your device or press Ctrl+C.");
     }
-  };
-  const handleDownloadDOCX = () => {
-    if (result?.docxBlob) {
-      downloadBlob(result.docxBlob, `${fileName.replace(/\.[^/.]+$/, "")}_scan.docx`);
-      zt.success("Word document downloaded");
+  }
+  async function saveText() {
+    if (!usable || !documentId || !documentType || busy) return;
+    const current = generation.current;
+    setBusy(true);
+    try {
+      const response = await ocrApi.saveOCR({
+        document_id: documentId,
+        document_type: documentType,
+        extracted_text: draft,
+        file_name: fileName
+      });
+      if (current !== generation.current) return;
+      zt.success(response?.queued ? "Selected text queued for sync" : "Selected text saved to system");
+    } catch (err) {
+      if (current === generation.current) zt.error(err instanceof Error ? err.message : "Selected text could not be saved.");
+    } finally {
+      if (current === generation.current) setBusy(false);
     }
-  };
-  const handleCopyText = () => {
-    if (result?.text) {
-      navigator.clipboard.writeText(result.text);
-      zt.success("Text copied to clipboard");
+  }
+  async function exportFull(format) {
+    if (!result || busy) return;
+    const current = generation.current;
+    setBusy(true);
+    try {
+      const blob = await result.exportDocument(format);
+      if (current === generation.current) downloadBlob(blob, `${baseName}_full_scan.${format}`);
+    } catch (err) {
+      if (current === generation.current) zt.error(err instanceof Error ? err.message : "Document export failed.");
+    } finally {
+      if (current === generation.current) setBusy(false);
     }
-  };
+  }
+  function trapKeys(event) {
+    if (event.key === "Escape") {
+      event.stopPropagation();
+      onClose();
+    }
+    if (event.key !== "Tab") return;
+    const elements = Array.from(dialog.current?.querySelectorAll('button:not(:disabled), textarea, select, summary, [tabindex="0"]') ?? []).filter((element) => element.getClientRects().length > 0);
+    const first = elements[0], last = elements[elements.length - 1];
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last?.focus();
+    }
+    if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first?.focus();
+    }
+  }
   if (!isOpen) return null;
-  return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "modal-overlay", onClick: onClose, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "modal max-w-2xl", onClick: (e2) => e2.stopPropagation(), children: [
+  const low = Math.min(range.anchor, range.end), high = Math.max(range.anchor, range.end);
+  const handle = (index, side) => {
+    const word = page?.words[index];
+    if (!word || scope === "document") return null;
+    return /* @__PURE__ */ jsxRuntimeExports.jsx(
+      "button",
+      {
+        type: "button",
+        className: `scanner-handle scanner-handle-${side}`,
+        "data-handle": side,
+        "aria-label": `Move selection ${side}`,
+        style: {
+          left: `${(word.left + (side === "end" ? word.width : 0)) / page.width * 100}%`,
+          top: `${(word.top + word.height) / page.height * 100}%`
+        },
+        onKeyDown: (event) => {
+          if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return;
+          event.preventDefault();
+          const next = Math.max(0, Math.min(page.words.length - 1, index + (event.key === "ArrowRight" ? 1 : -1)));
+          choose(side === "start" ? { anchor: next, end: high } : { anchor: low, end: next });
+        }
+      }
+    );
+  };
+  return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "modal-overlay scanner-overlay", onClick: (event) => {
+    if (event.target === event.currentTarget) onClose();
+  }, children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "modal scanner-modal", ref: dialog, role: "dialog", "aria-modal": "true", "aria-labelledby": "scanner-title", onKeyDown: trapKeys, children: [
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "modal-header", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("h3", { className: "text-lg font-semibold text-navy-900", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-file-scan text-gold-500 mr-2" }),
-          "Document Scanner"
-        ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-slate-500 mt-0.5", children: fileName })
+        /* @__PURE__ */ jsxRuntimeExports.jsx("h3", { id: "scanner-title", children: "Scan & select text" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "scanner-filename", children: fileName })
       ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "modal-close", onClick: onClose, children: "×" })
+      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "modal-close", ref: closeButton, onClick: onClose, "aria-label": "Close scanner", children: "×" })
     ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "modal-body space-y-4", children: [
-      step === "idle" && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-center py-8", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "w-16 h-16 rounded-full bg-gold-100 flex items-center justify-center mx-auto mb-4", children: /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-file-scan text-2xl text-gold-600" }) }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-slate-600 mb-4", children: "Scan this document to extract text and generate a document file." }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { className: "btn btn-primary", onClick: handleScan, children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-play mr-1" }),
-          " Start Scanning"
-        ] })
-      ] }),
-      step === "scanning" && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-center py-8", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "spinner mb-3" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-slate-500", children: progressMsg || "Scanning..." })
-      ] }),
-      step === "error" && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "p-4 bg-red-50 border border-red-200 rounded-lg", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-sm text-red-700", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-exclamation-triangle mr-2" }),
-          error
-        ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { className: "btn btn-primary btn-sm mt-3", onClick: handleScan, children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-redo mr-1" }),
-          " Try Again"
-        ] })
-      ] }),
-      step === "done" && result && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-4", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "p-3 bg-emerald-50 border border-emerald-200 rounded-lg", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-sm text-emerald-700", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-check-circle mr-1" }),
-          "Scan complete! Text extracted and document files ready."
-        ] }) }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-between mb-2", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-sm font-medium text-navy-700", children: "Extracted Text" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs(
-              "button",
-              {
-                className: "text-xs text-gold-600 hover:text-gold-700",
-                onClick: handleCopyText,
-                children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-copy mr-1" }),
-                  " Copy"
-                ]
-              }
-            )
+    step !== "done" ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "modal-body scanner-start", children: step === "scanning" ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "spinner" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { role: "status", children: message || "Preparing scanner…" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-slate-500", children: "Large documents may take longer. You can close this window to cancel." })
+    ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-expand text-gold-500 text-3xl", "aria-hidden": "true" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "Detect text, select words directly on the document, and review before using them." }),
+      error && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-red-700", role: "alert", children: error }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "btn btn-primary", onClick: startScan, disabled: !file, children: step === "error" ? "Try scanning again" : "Detect text" })
+    ] }) }) : /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "scanner-layout", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "scanner-viewer", "aria-label": "Scanned document", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "scanner-toolbar", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "scanner-page-nav", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "btn btn-secondary btn-sm", "aria-label": "Previous page", disabled: pageIndex === 0, onClick: () => changePage(pageIndex - 1), children: "‹" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
+              "Page ",
+              pageIndex + 1,
+              " of ",
+              result?.pages.length
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "btn btn-secondary btn-sm", "aria-label": "Next page", disabled: !result || pageIndex === result.pages.length - 1, onClick: () => changePage(pageIndex + 1), children: "›" })
           ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "p-3 bg-slate-50 rounded-lg border border-slate-200 max-h-48 overflow-y-auto", children: /* @__PURE__ */ jsxRuntimeExports.jsx("pre", { className: "text-sm text-navy-800 whitespace-pre-wrap font-sans", children: result.text || "(No text found)" }) })
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "scanner-zoom", children: [
+            "Zoom ",
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("select", { "aria-label": "Document zoom", value: zoom, onChange: (e2) => setZoom(Number(e2.target.value)), children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: 100, children: "Fit" }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: 150, children: "150%" }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: 200, children: "200%" })
+            ] })
+          ] })
         ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-wrap gap-2", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsxs(
-            "button",
-            {
-              className: "btn btn-info",
-              onClick: handleDownloadPDF,
-              disabled: !result.pdfBlob,
-              children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-file-pdf mr-1" }),
-                " Download PDF"
-              ]
-            }
-          ),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs(
-            "button",
-            {
-              className: "btn btn-info",
-              onClick: handleDownloadDOCX,
-              disabled: !result.docxBlob,
-              children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-file-word mr-1" }),
-                " Download Word"
-              ]
-            }
-          ),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs(
-            "button",
-            {
-              className: "btn btn-secondary",
-              onClick: handleCopyText,
-              children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-copy mr-1" }),
-                " Copy Text"
-              ]
-            }
-          )
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "scanner-hint", children: "Tap a word or drag across words. Drag the blue handles to adjust; Shift + click extends a selection." }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "scanner-scroll", children: imageError ? /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "scanner-preview-status", role: "alert", children: [
+          imageError,
+          " You can still select all document text on the right."
+        ] }) : !image ? /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "scanner-preview-status", role: "status", children: "Loading page preview…" }) : /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "div",
+          {
+            ref: surface,
+            className: "scanner-paper",
+            style: { width: `${zoom}%`, aspectRatio: `${page?.width ?? 1} / ${page?.height ?? 1}` },
+            onPointerDown: startPointer,
+            onPointerMove: movePointer,
+            onPointerUp: () => {
+              dragging.current = null;
+            },
+            onPointerCancel: () => {
+              dragging.current = null;
+            },
+            onLostPointerCapture: () => {
+              dragging.current = null;
+            },
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("img", { src: image, alt: `Original document page ${pageIndex + 1}`, draggable: false, onLoad: () => setImageReady(true), onError: () => {
+                setImageReady(false);
+                setImageError("The page image could not be displayed.");
+              } }),
+              imageReady && page?.words.map((word, i2) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "button",
+                {
+                  type: "button",
+                  "data-word": i2,
+                  className: `scanner-word ${scope === "document" || low >= 0 && i2 >= low && i2 <= high ? "is-selected" : ""}`,
+                  "aria-label": `Select ${word.text}`,
+                  "aria-pressed": scope === "document" || low >= 0 && i2 >= low && i2 <= high,
+                  style: { left: `${word.left / page.width * 100}%`, top: `${word.top / page.height * 100}%`, width: `${word.width / page.width * 100}%`, height: `${word.height / page.height * 100}%` },
+                  onClick: (event) => {
+                    if (event.detail === 0) choose({ anchor: event.shiftKey && rangeRef.current.anchor >= 0 ? rangeRef.current.anchor : i2, end: i2 });
+                  }
+                },
+                word.id
+              )),
+              imageReady && low >= 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+                handle(low, "start"),
+                handle(high, "end")
+              ] })
+            ]
+          }
+        ) }),
+        !page?.words.length && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "scanner-hint", children: "No selectable word positions on this page. Use Select entire document to review the extracted text." })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "scanner-review", "aria-label": "Selected text review", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "scanner-review-heading", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("h4", { children: "Selected text" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { "aria-live": "polite", children: [
+            wordCount,
+            " words"
+          ] })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "scanner-selection-actions", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "btn btn-secondary btn-sm", disabled: !page?.words.length, onClick: () => choose({ anchor: 0, end: page.words.length - 1 }), children: "Select page" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "btn btn-secondary btn-sm", onClick: () => {
+            setScope("document");
+            setDraft(result?.text ?? "");
+            setRange(emptyRange);
+            rangeRef.current = emptyRange;
+          }, children: "Select entire document" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "btn btn-secondary btn-sm", onClick: () => choose(emptyRange), children: "Clear" })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("label", { htmlFor: "scanner-selected-text", children: scope === "document" ? "Entire document · editable" : `Page ${pageIndex + 1} selection · editable` }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("textarea", { ref: textArea, id: "scanner-selected-text", value: draft, onChange: (event) => setDraft(event.target.value), placeholder: "Select words on the page to review and correct them here." }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "scanner-hint", children: "Only this reviewed text is copied, applied, saved, or downloaded as TXT. Switching pages starts a new selection." }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "scanner-selection-actions", children: [
+          documentId && documentType ? /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "btn btn-primary", disabled: !usable || busy, onClick: saveText, children: busy ? "Please wait…" : "Save selected text to system" }) : /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "btn btn-primary", disabled: !usable || busy, onClick: () => {
+            onTextExtracted(draft);
+            onClose();
+          }, children: "Apply selected text" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "btn btn-secondary", disabled: !usable, onClick: copyText, children: "Copy" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "btn btn-secondary", disabled: !usable, onClick: () => downloadBlob(new Blob([draft], { type: "text/plain;charset=utf-8" }), `${baseName}_selected.txt`), children: "Download TXT" })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("details", { className: "scanner-exports", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("summary", { children: "Full document exports" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "scanner-hint", children: "PDF and Word contain the full scan. Selection edits above are included only in selected-text actions." }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "scanner-selection-actions", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "btn btn-secondary btn-sm", disabled: busy, onClick: () => exportFull("pdf"), children: "Full scan PDF" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "btn btn-secondary btn-sm", disabled: busy, onClick: () => exportFull("docx"), children: "Full scan Word" })
+          ] })
         ] })
       ] })
-    ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "modal-footer", children: /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-secondary", onClick: onClose, children: "Close" }) })
+    ] })
   ] }) });
-};
+}
 const COMPONENTS = [
   { key: "cwts", label: "CWTS", icon: "fa-hands-helping" },
   { key: "rotc", label: "ROTC", icon: "fa-shield" },
@@ -33867,6 +34243,7 @@ const DocumentSubmissions = () => {
   };
   const renderDocument = (doc, studentName2) => {
     const isImage = doc.file_name?.match(/\.(jpg|jpeg|png|gif|webp)$/i);
+    const isScannable = doc.file_name?.match(/\.(jpg|jpeg|png|gif|webp|bmp|tif|tiff|pdf)$/i);
     const isSelected = selectedDocs.has(doc.id);
     const isActing = verifyMut.isPending && verifyMut.variables?.id === doc.id;
     return /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -33968,12 +34345,12 @@ const DocumentSubmissions = () => {
                 }
               )
             ] }),
-            isImage && /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            isScannable && /* @__PURE__ */ jsxRuntimeExports.jsxs(
               "button",
               {
                 className: "btn btn-info btn-sm",
                 onClick: () => handleOCR(doc),
-                title: "Scan and extract text",
+                title: "Scan and select document text",
                 children: [
                   /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-file-scan" }),
                   " Scan"
@@ -34515,8 +34892,9 @@ const DocumentSubmissions = () => {
         file: scannerModal.file,
         fileName: scannerModal.fileName,
         documentId: scannerModal.documentId,
+        documentType: "student",
         onTextExtracted: (text) => {
-          zt.success("Text extracted from document!");
+          zt.success("Selected text ready");
         }
       }
     )
@@ -35909,8 +36287,8 @@ const DocumentLibrary = () => {
       year: "numeric"
     });
   };
-  const isImage = (doc) => {
-    return doc.file_type?.includes("image") || doc.file_name?.match(/\.(jpg|jpeg|png|gif|webp)$/i);
+  const isScannable = (doc) => {
+    return doc.file_type?.includes("image") || doc.file_type === "application/pdf" || doc.file_name?.match(/\.(jpg|jpeg|png|gif|webp|bmp|tif|tiff|pdf)$/i);
   };
   if (isLoading) {
     return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-center py-16", children: [
@@ -36126,12 +36504,12 @@ const DocumentLibrary = () => {
                       children: /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-download" })
                     }
                   ),
-                  isImage(doc) && /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                  isScannable(doc) && /* @__PURE__ */ jsxRuntimeExports.jsxs(
                     "button",
                     {
                       className: "btn btn-warning btn-sm",
                       onClick: () => handleOCR(doc),
-                      title: "Scan and extract text",
+                      title: "Scan and select document text",
                       children: [
                         /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-file-scan" }),
                         " Scan"
@@ -36204,12 +36582,12 @@ const DocumentLibrary = () => {
                     ]
                   }
                 ),
-                isImage(doc) && /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                isScannable(doc) && /* @__PURE__ */ jsxRuntimeExports.jsxs(
                   "button",
                   {
                     className: "btn btn-warning btn-sm",
                     onClick: () => handleOCR(doc),
-                    title: "Scan and extract text",
+                    title: "Scan and select document text",
                     children: [
                       /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-file-scan" }),
                       " Scan"
@@ -36327,8 +36705,9 @@ const DocumentLibrary = () => {
         file: scannerModal.file,
         fileName: scannerModal.fileName,
         documentId: scannerModal.documentId,
+        documentType: "office",
         onTextExtracted: (text) => {
-          zt.success("Text extracted successfully!");
+          zt.success("Selected text ready");
         }
       }
     )
@@ -45911,6 +46290,159 @@ const BackupPage = () => {
     )
   ] });
 };
+function BulletinDiscussion({ id, summary, focus = false, focusCommentId }) {
+  const { user } = useAuth();
+  const client2 = useQueryClient();
+  const [open, setOpen] = reactExports.useState(focus);
+  const [page, setPage] = reactExports.useState(0);
+  const [body, setBody] = reactExports.useState("");
+  const [reply, setReply] = reactExports.useState(null);
+  const [busy, setBusy] = reactExports.useState(false);
+  const submission = reactExports.useRef(null);
+  const ref = reactExports.useRef(null);
+  const discussion = useQuery({
+    queryKey: ["bulletin-discussion", user?.id, id, page, focusCommentId],
+    queryFn: ({ signal }) => communityRequest(`/bulletin/${id}/discussion?page=${page || 1}${!page && focusCommentId ? `&comment_id=${focusCommentId}` : ""}`, "GET", void 0, signal),
+    enabled: open,
+    refetchInterval: open ? 3e4 : false,
+    refetchIntervalInBackground: false
+  });
+  const counts = discussion.data?.summary ?? summary;
+  reactExports.useEffect(() => {
+    if (focus) {
+      setOpen(true);
+      setPage(0);
+      ref.current?.scrollIntoView({ block: "center" });
+    }
+  }, [focus, focusCommentId]);
+  const refresh = async () => {
+    await Promise.all([
+      client2.invalidateQueries({ queryKey: ["bulletin-discussion", user?.id, id] }),
+      client2.invalidateQueries({ queryKey: ["bulletin"] }),
+      client2.invalidateQueries({ queryKey: ["community-inbox"] })
+    ]);
+  };
+  async function change(kind) {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const response = await communityRequest(`/bulletin/${id}/${kind}`, "PUT", kind === "like" ? { liked: !counts?.liked } : { following: !counts?.following });
+      client2.setQueriesData({ queryKey: ["bulletin-discussion", user?.id, id] }, (old) => old ? { ...old, summary: response.data } : old);
+      await refresh();
+    } catch (error) {
+      zt.error(error instanceof Error ? error.message : "Could not update this post.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function submit(event) {
+    event.preventDefault();
+    if (!body.trim() || busy) return;
+    setBusy(true);
+    const clientId = submission.current ?? (submission.current = commentSubmissionId());
+    try {
+      await communityRequest(`/bulletin/${id}/comments`, "POST", { body: body.trim(), parent_id: reply, client_id: clientId });
+      setBody("");
+      setReply(null);
+      submission.current = null;
+      setPage(Math.max(1, Math.ceil(((counts?.comments_count ?? 0) + 1) / 30)));
+      zt.success("Comment posted");
+      await refresh();
+    } catch (error) {
+      zt.error(error instanceof Error ? error.message : "Could not post comment.");
+    } finally {
+      setBusy(false);
+    }
+  }
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { ref, className: "border-t border-slate-100 mt-4 pt-3", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-wrap gap-2 items-center text-sm", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { type: "button", className: `btn btn-sm ${counts?.liked ? "btn-info" : "btn-secondary"}`, disabled: busy, "aria-pressed": !!counts?.liked, onClick: () => change("like"), children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-thumbs-up" }),
+        " ",
+        counts?.liked ? "Liked" : "Like",
+        " · ",
+        counts?.likes_count ?? 0
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { type: "button", className: "btn btn-secondary btn-sm", onClick: () => setOpen(!open), "aria-expanded": open, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-comment" }),
+        " Comments · ",
+        counts?.comments_count ?? 0
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { type: "button", className: "btn btn-secondary btn-sm", disabled: busy, "aria-pressed": !!counts?.following, onClick: () => change("follow"), children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-bell" }),
+        " ",
+        counts?.following ? "Following updates" : "Follow updates"
+      ] })
+    ] }),
+    open && /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "mt-4 space-y-3", "aria-label": "Post comments", children: [
+      discussion.isLoading && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { role: "status", className: "text-sm text-slate-500", children: "Loading comments…" }),
+      discussion.error && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { role: "alert", className: "text-sm text-red-700", children: [
+        discussion.error.message,
+        " ",
+        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "underline", onClick: () => discussion.refetch(), children: "Retry" })
+      ] }),
+      discussion.data?.data.map((comment) => /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: `rounded-lg p-3 ${comment.id === focusCommentId ? "bg-gold-50 ring-2 ring-gold-400" : "bg-slate-50"} ${comment.parent_id ? "ml-4 border-l-2 border-slate-200" : ""}`, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-wrap gap-2 items-center", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-sm font-semibold text-navy-900", children: [
+            comment.first_name,
+            " ",
+            comment.last_name
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-xs text-slate-500", children: [
+            comment.role,
+            " · ",
+            new Date(comment.created_at).toLocaleString()
+          ] })
+        ] }),
+        comment.parent_id && /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-xs text-slate-500", children: [
+          "Reply to comment #",
+          comment.parent_id
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm whitespace-pre-wrap break-words mt-1", children: comment.body }),
+        !comment.parent_id && /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "text-xs text-blue-700 mt-2", disabled: busy, onClick: () => {
+          setReply(comment.id);
+          submission.current = null;
+        }, children: "Reply" })
+      ] }, comment.id)),
+      discussion.data && !discussion.data.data.length && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-slate-500", children: "Be the first to comment." }),
+      discussion.data && discussion.data.meta.last_page > 1 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-3 items-center text-sm", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "btn btn-secondary btn-sm", disabled: discussion.data.meta.current_page <= 1, onClick: () => {
+          setPage(discussion.data.meta.current_page - 1);
+          setReply(null);
+          submission.current = null;
+        }, children: "Previous" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
+          "Page ",
+          discussion.data.meta.current_page,
+          " of ",
+          discussion.data.meta.last_page
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "btn btn-secondary btn-sm", disabled: discussion.data.meta.current_page >= discussion.data.meta.last_page, onClick: () => {
+          setPage(discussion.data.meta.current_page + 1);
+          setReply(null);
+          submission.current = null;
+        }, children: "Next" })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("form", { onSubmit: submit, className: "space-y-2", children: [
+        reply && /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-xs text-blue-700", children: [
+          "Replying to comment #",
+          reply,
+          " ",
+          /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "underline ml-2", disabled: busy, onClick: () => {
+            setReply(null);
+            submission.current = null;
+          }, children: "Cancel" })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "block text-sm", htmlFor: `bulletin-comment-${id}`, children: reply ? "Your reply" : "Your comment" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("textarea", { id: `bulletin-comment-${id}`, className: "form-control w-full", maxLength: 2e3, rows: 3, value: body, disabled: busy, onChange: (event) => {
+          setBody(event.target.value);
+          submission.current = null;
+        }, placeholder: "Write a comment or ask a question…" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "submit", className: "btn btn-primary btn-sm", disabled: busy || !body.trim() || !!discussion.error, children: busy ? "Please wait…" : reply ? "Post reply" : "Post comment" })
+      ] })
+    ] })
+  ] });
+}
 const getCategoryColor = (cat) => {
   const colors = {
     general: "bg-slate-500",
@@ -45935,6 +46467,18 @@ const getAudienceLabel = (value) => {
 };
 const BulletinBoard = () => {
   const { data: bulletins = [], isLoading, error, refresh, isRefreshing } = useBulletin();
+  const { user } = useAuth();
+  const [search] = useSearchParams();
+  const focusId = Number(search.get("post")) || void 0;
+  const focusComment = Number(search.get("comment")) || void 0;
+  const canCreate = ["admin", "super_admin", "faculty"].includes(user?.role);
+  const focused = useQuery({
+    queryKey: ["bulletin-focus", user?.id, focusId],
+    enabled: !!focusId && !bulletins.some((post) => post.id === focusId),
+    queryFn: ({ signal }) => communityRequest(`/bulletin/${focusId}`, "GET", void 0, signal),
+    retry: false
+  });
+  const displayed = focusId && focused.data && !bulletins.some((post) => post.id === focusId) ? [focused.data.data, ...bulletins] : bulletins;
   const createMut = useCreateBulletin();
   const updateMut = useUpdateBulletin();
   const deleteMut = useDeleteBulletin();
@@ -46038,7 +46582,7 @@ const BulletinBoard = () => {
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-2", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx(RefreshButton, { onRefresh: refresh, isLoading: isRefreshing, label: "", className: "btn-sm" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+        canCreate && /* @__PURE__ */ jsxRuntimeExports.jsxs(
           "button",
           {
             className: `btn ${showForm ? "btn-secondary" : "btn-primary"} btn-sm`,
@@ -46196,11 +46740,12 @@ const BulletinBoard = () => {
         ] })
       ] })
     ] }),
-    bulletins.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "empty-state", children: [
+    focused.error && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { role: "alert", className: "alert alert-danger", children: "This notification’s post is unavailable or no longer visible to your account." }),
+    displayed.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "empty-state", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-bullhorn" }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "No bulletins created yet." }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-slate-400 mt-1", children: 'Click "New Bulletin" to get started.' })
-    ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "space-y-3", children: bulletins.map((bulletin) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+    ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "space-y-3", children: displayed.map((bulletin) => /* @__PURE__ */ jsxRuntimeExports.jsx(
       "div",
       {
         className: `bg-white rounded-xl shadow-sm border ${bulletin.is_featured ? "border-amber-300 shadow-md" : "border-slate-200"} overflow-hidden transition-shadow hover:shadow-md`,
@@ -46221,7 +46766,7 @@ const BulletinBoard = () => {
               ] }),
               /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-slate-600 whitespace-pre-line line-clamp-3", children: bulletin.content })
             ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-1.5", children: [
+            (["admin", "super_admin"].includes(user?.role) || bulletin.created_by === user?.id) && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-1.5", children: [
               /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-info btn-sm", onClick: () => handleEdit(bulletin), disabled: deleteMut.isPending, children: /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-pen" }) }),
               /* @__PURE__ */ jsxRuntimeExports.jsx(
                 "button",
@@ -46251,7 +46796,8 @@ const BulletinBoard = () => {
               bulletin.views || 0,
               " views"
             ] })
-          ] })
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(BulletinDiscussion, { id: bulletin.id, summary: bulletin, focus: focusId === bulletin.id, focusCommentId: focusId === bulletin.id ? focusComment : void 0 })
         ] })
       },
       bulletin.id
@@ -48382,7 +48928,7 @@ const Profile = () => {
       )
     ] });
   }
-  const initials = profile.initials || `${profile.first_name?.[0] || ""}${profile.last_name?.[0] || ""}`.toUpperCase() || "?";
+  profile.initials || `${profile.first_name?.[0] || ""}${profile.last_name?.[0] || ""}`.toUpperCase() || "?";
   const roleLabel = {
     super_admin: "Super Admin",
     admin: "Admin",
@@ -48430,17 +48976,7 @@ const Profile = () => {
           /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "h-20 bg-gradient-to-br from-navy-900 via-navy-800 to-navy-700 relative", children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute inset-0 opacity-[0.15] bg-[radial-gradient(circle_at_top_right,_rgba(212,175,55,0.8),_transparent_60%)]" }) }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "px-5 pb-5 -mt-12", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex justify-center", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "relative", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-lg bg-navy-600 flex items-center justify-center", children: profile.profile_photo_url ? /* @__PURE__ */ jsxRuntimeExports.jsx(
-                "img",
-                {
-                  src: profile.profile_photo_url,
-                  alt: profile.full_name || "Profile",
-                  className: "w-full h-full object-cover",
-                  onError: (e2) => {
-                    e2.target.style.display = "none";
-                  }
-                }
-              ) : /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-3xl font-bold text-white tracking-wide", children: initials }) }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "w-24 h-24 rounded-full overflow-hidden border-4 border-white shadow-lg bg-navy-600 flex items-center justify-center", children: /* @__PURE__ */ jsxRuntimeExports.jsx(ProfileAvatar, { src: profile.profile_photo_url, firstName: profile.first_name, lastName: profile.last_name, className: "w-full h-full text-3xl" }) }),
               /* @__PURE__ */ jsxRuntimeExports.jsx(
                 "button",
                 {
@@ -48959,43 +49495,6 @@ const PasswordField = ({
     error
   ] }) : hint ? /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-slate-400 mt-1.5", children: hint }) : null
 ] });
-const DEMO_ACCOUNTS = [
-  {
-    role: "Super Admin",
-    email: "superadmin@nstp.edu",
-    password: "password",
-    icon: "fa-user-shield",
-    color: "purple"
-  },
-  {
-    role: "Admin",
-    email: "admin@nstp.edu",
-    password: "password",
-    icon: "fa-user-cog",
-    color: "blue"
-  },
-  {
-    role: "CWTS",
-    email: "faculty.cwts@nstp.edu",
-    password: "password",
-    icon: "fa-hands-helping",
-    color: "amber"
-  },
-  {
-    role: "ROTC",
-    email: "faculty.rotc@nstp.edu",
-    password: "password",
-    icon: "fa-shield",
-    color: "rose"
-  },
-  {
-    role: "LTS",
-    email: "faculty.lts@nstp.edu",
-    password: "password",
-    icon: "fa-chalkboard-teacher",
-    color: "emerald"
-  }
-];
 const Login = () => {
   const navigate = useNavigate();
   const [email, setEmail] = reactExports.useState("");
@@ -49058,48 +49557,9 @@ const Login = () => {
       setLoading(false);
     }
   };
-  const fillDemo = (demoEmail, demoPassword, role) => {
-    setEmail(demoEmail);
-    setPassword(demoPassword);
-    zt.success(`Filled ${role} credentials — click Sign In`, {
-      icon: "🪄"
-    });
-  };
   if (isChecking) {
     return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "min-h-screen flex items-center justify-center bg-slate-50", children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "spinner" }) });
   }
-  const colorMap = {
-    purple: {
-      bg: "bg-purple-100 hover:bg-purple-200",
-      text: "text-purple-800",
-      ring: "ring-purple-200",
-      icon: "text-purple-600"
-    },
-    blue: {
-      bg: "bg-blue-100 hover:bg-blue-200",
-      text: "text-blue-800",
-      ring: "ring-blue-200",
-      icon: "text-blue-600"
-    },
-    amber: {
-      bg: "bg-amber-100 hover:bg-amber-200",
-      text: "text-amber-800",
-      ring: "ring-amber-200",
-      icon: "text-amber-600"
-    },
-    rose: {
-      bg: "bg-rose-100 hover:bg-rose-200",
-      text: "text-rose-800",
-      ring: "ring-rose-200",
-      icon: "text-rose-600"
-    },
-    emerald: {
-      bg: "bg-emerald-100 hover:bg-emerald-200",
-      text: "text-emerald-800",
-      ring: "ring-emerald-200",
-      icon: "text-emerald-600"
-    }
-  };
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 p-4 relative overflow-hidden", children: [
     /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute top-[-50%] right-[-20%] w-[800px] h-[800px] bg-gold-500/5 rounded-full pointer-events-none" }),
     /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute bottom-[-40%] left-[-10%] w-[600px] h-[600px] bg-navy-600/5 rounded-full pointer-events-none" }),
@@ -49156,46 +49616,6 @@ const Login = () => {
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mb-6", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "text-2xl font-bold text-navy-900", children: "Welcome Back" }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-slate-500", children: "Sign in to your account to continue" })
-        ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mb-6", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2 mb-2", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-wand-magic-sparkles text-gold-500 text-xs" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs font-semibold text-slate-500 uppercase tracking-wider", children: "Demo Accounts" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-[10px] text-slate-400 italic", children: "(dev only)" })
-          ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid grid-cols-2 gap-2", children: DEMO_ACCOUNTS.map((acc) => {
-            const colors = colorMap[acc.color] || colorMap.blue;
-            return /* @__PURE__ */ jsxRuntimeExports.jsxs(
-              "button",
-              {
-                type: "button",
-                onClick: () => fillDemo(acc.email, acc.password, acc.role),
-                className: `${colors.bg} rounded-lg p-2.5 text-left transition-all hover:-translate-y-0.5 ring-1 ${colors.ring} flex items-center gap-2`,
-                title: `${acc.email} / ${acc.password}`,
-                children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx(
-                    "div",
-                    {
-                      className: `w-8 h-8 rounded-md bg-white/70 flex items-center justify-center flex-shrink-0 ${colors.icon}`,
-                      children: /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: `fas ${acc.icon} text-sm` })
-                    }
-                  ),
-                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "min-w-0", children: [
-                    /* @__PURE__ */ jsxRuntimeExports.jsx(
-                      "div",
-                      {
-                        className: `text-[10px] font-bold uppercase tracking-wide leading-tight ${colors.text}`,
-                        children: acc.role
-                      }
-                    ),
-                    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-[9px] text-slate-500 truncate", children: acc.email.split("@")[0] })
-                  ] })
-                ]
-              },
-              acc.email
-            );
-          }) }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-[10px] text-slate-400 mt-2 text-center", children: "Click a card to auto-fill credentials" })
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("form", { onSubmit: handleSubmit, className: "space-y-5", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
@@ -49732,4 +50152,4 @@ startSyncEngine();
 ReactDOM.createRoot(document.getElementById("root")).render(
   /* @__PURE__ */ jsxRuntimeExports.jsx(React.StrictMode, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(App, {}) })
 );
-//# sourceMappingURL=main-DfHqrsTp.js.map
+//# sourceMappingURL=main-Cbh-4Hd7.js.map

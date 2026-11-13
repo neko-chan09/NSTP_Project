@@ -1,162 +1,118 @@
-// resources/js/utils/scribeScanner.ts
+import { normalizeScanPage, type ScanPage } from './scanSelection';
 
 export interface ScanResult {
   text: string;
-  pdfBlob: Blob | null;
-  docxBlob: Blob | null;
+  pages: ScanPage[];
+  pageImage: (pageIndex: number) => Promise<string>;
+  exportDocument: (format: 'pdf' | 'docx') => Promise<Blob>;
+  close: () => Promise<void>;
 }
 
-/**
- * Lazy-load scribe so its large code stays out of the main bundle
- * and is only fetched when a scan is actually started.
- */
 let scribePromise: Promise<any> | null = null;
-
-const getScribe = async () => {
+let sessionInUse = false;
+const getScribe = () => {
   if (!scribePromise) {
-    scribePromise = import('scribe.js-ocr').then((m: any) => m.default ?? m);
+    scribePromise = import('scribe.js-ocr').then((m: any) => m.default ?? m).catch(error => {
+      scribePromise = null;
+      throw error;
+    });
   }
   return scribePromise;
 };
 
-/**
- * Scribe inspects file.name and file.type with regexes. A raw Blob
- * (canvas export, camera capture) has no name, which causes
- * "Cannot read properties of undefined (reading 'match')".
- * Always hand scribe a real File with a name and a MIME type.
- */
-const toNamedFile = (input: File | Blob): File => {
-  const type = input.type || 'image/jpeg';
-
-  const extByType: Record<string, string> = {
-    'application/pdf': 'pdf',
-    'image/png': 'png',
-    'image/jpeg': 'jpg',
-    'image/jpg': 'jpg',
-    'image/webp': 'webp',
-    'image/bmp': 'bmp',
-    'image/tiff': 'tif',
-  };
-  const ext = extByType[type] ?? 'jpg';
-
-  if (input instanceof File && input.name && input.type) {
-    return input;
+function namedFile(input: File | Blob, fileName?: string): File {
+  const name = fileName || (input instanceof File ? input.name : '') || 'document.jpg';
+  const extension = name.split('.').pop()?.toLowerCase() ?? '';
+  const types: Record<string, string> = { pdf: 'application/pdf', png: 'image/png', jpg: 'image/jpeg',
+    jpeg: 'image/jpeg', webp: 'image/webp', bmp: 'image/bmp', tif: 'image/tiff', tiff: 'image/tiff', gif: 'image/gif' };
+  const type = input.type && input.type !== 'application/octet-stream' ? input.type : types[extension];
+  if (!type || (!type.startsWith('image/') && type !== 'application/pdf')) {
+    throw new Error('Select an image or PDF document to scan.');
   }
-
-  const name =
-    input instanceof File && input.name ? input.name : `scan-${Date.now()}.${ext}`;
-
   return new File([input], name, { type });
-};
-
-/**
- * Scan an image or PDF with Scribe.js.
- * Returns extracted text plus optional PDF and DOCX blobs.
- *
- * Language files must be in public/tessdata/ (e.g. eng.traineddata.gz).
- */
-export const scanDocument = async (
-  file: File | Blob,
-  onProgress?: (message: string) => void
-): Promise<ScanResult> => {
-  const scribe = await getScribe();
-
-  // Configure self-hosted language data before any recognition
-//   scribe.opt.langPath = '/tessdata';
-
-  if (onProgress) {
-    scribe.opt.progressHandler = (msg: any) => {
-      if (msg?.type === 'recognize') {
-        onProgress(`Recognizing text... ${Math.round((msg.progress || 0) * 100)}%`);
-      } else if (msg?.type === 'export') {
-        onProgress('Generating document...');
-      }
-    };
-  }
-
-  let doc: any;
-  try {
-    onProgress?.('Opening document...');
-    doc = await scribe.openDocument([toNamedFile(file)]);
-  } catch (err: any) {
-    console.error('scribe.openDocument failed:', err);
-    throw new Error(`Failed to open document: ${err?.message || 'Unknown error'}`);
-  }
-
-  try {
-    onProgress?.('Running OCR...');
-    await doc.recognize({
-  langs: ['eng'],
-  modeAdv: 'lstm',
-});
-  } catch (err: any) {
-  console.error('recognize failed:', err);
-  try { await doc.terminate(); } catch { /* ignore */ }
-  throw new Error(`OCR failed: ${err?.message || String(err) || 'Recognition error'}`);
 }
 
-  let text = '';
-  let pdfBlob: Blob | null = null;
-  let docxBlob: Blob | null = null;
-
+/** Own one session; never terminate the process-wide engine used by other documents. */
+export async function scanDocument(file: File | Blob, onProgress?: (message: string) => void,
+  options: { fileName?: string; signal?: AbortSignal } = {}): Promise<ScanResult> {
+  if (sessionInUse) throw new Error('The previous scanner is finishing. Please try again in a moment.');
+  sessionInUse = true;
+  let doc: any = null;
+  let scribe: any = null;
+  let closed = false;
+  const assertOpen = () => {
+    if (options.signal?.aborted || closed) throw new DOMException('Scan cancelled', 'AbortError');
+  };
+  const close = async () => {
+    if (closed) return;
+    closed = true;
+    try { if (doc) await doc.close(); }
+    finally {
+      sessionInUse = false;
+    }
+  };
   try {
-    onProgress?.('Extracting text...');
-    text = await doc.exportData('text');
-    if (typeof text !== 'string') text = String(text);
-  } catch (err: any) {
-    console.warn('Text export failed:', err);
+    const input = namedFile(file, options.fileName);
+    assertOpen();
+    scribe = await getScribe();
+    assertOpen();
+    onProgress?.('Opening document…');
+    doc = await scribe.openDocument([input]);
+    assertOpen();
+    doc.progressHandler = (message: any) => {
+      if (!options.signal?.aborted && !closed && message?.type === 'recognize') onProgress?.('Recognizing document text…');
+    };
+    onProgress?.('Detecting words and their positions…');
+    await doc.recognize({ langs: ['eng'], modeAdv: 'lstm', ocrPages: 'autoShallow', signal: options.signal });
+    assertOpen();
+    const pages = doc.pageMetrics.map((metrics: any, i: number) => normalizeScanPage(doc.ocr.active[i], metrics));
+    const text = String(await doc.exportData('txt'));
+    assertOpen();
+    if (!text.trim() && !pages.some((page: ScanPage) => page.words.length)) {
+      throw new Error('No readable text was found. Try a clearer image or another document.');
+    }
+    let operations: Promise<unknown> = Promise.resolve();
+    const run = <T,>(operation: () => Promise<T>): Promise<T> => {
+      const next = operations.then(() => { assertOpen(); return operation(); });
+      operations = next.catch(() => {});
+      return next;
+    };
+    return {
+      text, pages,
+      pageImage: (pageIndex) => run(async () => {
+        if (!Number.isInteger(pageIndex) || !pages[pageIndex]) throw new Error('Invalid document page.');
+        // Raw image and OCR boxes share this coordinate space; avoid deskewed/upscaled rasters.
+        const image = await doc.images.getNative(pageIndex, { rotated: false, upscaled: false, colorMode: 'color' });
+        const src = image?.ensureSrc?.() ?? image?.src;
+        if (!src) throw new Error('The document page preview could not be loaded.');
+        assertOpen();
+        return src;
+      }),
+      exportDocument: (format) => run(async () => {
+        const data = await doc.exportData(format);
+        assertOpen();
+        return new Blob([data], { type: format === 'pdf' ? 'application/pdf' :
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+      }),
+      close: async () => { await operations; await close(); },
+    };
+  } catch (error) {
+    await close().catch(() => {});
+    throw error;
   }
+}
 
-  try {
-    onProgress?.('Generating PDF...');
-    const pdfArrayBuffer = await doc.exportData('pdf');
-    pdfBlob = new Blob([pdfArrayBuffer], { type: 'application/pdf' });
-  } catch (err: any) {
-    console.warn('PDF export failed:', err);
-  }
-
-  try {
-    onProgress?.('Generating Word document...');
-    const docxArrayBuffer = await doc.exportData('docx');
-    docxBlob = new Blob([docxArrayBuffer], {
-      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    });
-  } catch (err: any) {
-    console.warn('DOCX export failed:', err);
-  }
-
-  try {
-    await doc.terminate();
-  } catch {
-    /* ignore cleanup errors */
-  }
-
-  return { text, pdfBlob, docxBlob };
-};
-
-/**
- * Trigger a browser download for a Blob.
- */
-export const downloadBlob = (blob: Blob, filename: string): void => {
+export function downloadBlob(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-};
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
 
-/**
- * Check if language data is available before attempting a scan.
- */
-export const checkLanguageData = async (): Promise<boolean> => {
+export async function checkLanguageData(): Promise<boolean> {
   try {
-    const res = await fetch('/tessdata/eng.traineddata.gz', { method: 'HEAD' });
-    const type = res.headers.get('content-type') || '';
-    return res.ok && !type.includes('text/html');
-  } catch {
-    return false;
-  }
-};
+    const response = await fetch('/tessdata/eng.traineddata.gz', { method: 'HEAD' });
+    return response.ok && !(response.headers.get('content-type') || '').includes('text/html');
+  } catch { return false; }
+}

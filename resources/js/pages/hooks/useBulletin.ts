@@ -1,3 +1,4 @@
+import { useAuth } from './useAuth';
 // src/hooks/useBulletin.ts
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { adminApi, type BulletinPost } from "../../services/api";
@@ -5,12 +6,15 @@ import { adminApi, type BulletinPost } from "../../services/api";
 export const BULLETIN_KEY = ["bulletin"];
 
 export function useBulletin() {
+  const { user } = useAuth();
   const queryClient = useQueryClient();
 
   const query = useQuery<BulletinPost[]>({
-    queryKey: BULLETIN_KEY,
+    queryKey: [...BULLETIN_KEY, user?.id],
     queryFn: () => adminApi.getBulletin(),
-    staleTime: 60000,
+    staleTime: 15000,
+    refetchInterval: 30000,
+    refetchIntervalInBackground: false,
   });
 
   const refresh = () => {
