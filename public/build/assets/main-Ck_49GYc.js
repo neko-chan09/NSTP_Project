@@ -29412,11 +29412,11 @@ function locationStatus(distance, accuracy, radius) {
   return "Near boundary · GPS uncertain";
 }
 function fitGeofence(map, lat, lng, radius, people, venueOnly = false) {
-  const bounds = L$1.circle([lat, lng], { radius }).getBounds();
+  const bounds = L$1.latLng(lat, lng).toBounds(radius * 2);
   if (!venueOnly) people.forEach((p2) => {
     if (!validCoordinates(p2.latitude, p2.longitude)) return;
     const accuracy = p2.accuracy;
-    if (accuracy != null && Number.isFinite(accuracy) && accuracy > 0) bounds.extend(L$1.circle([Number(p2.latitude), Number(p2.longitude)], { radius: accuracy }).getBounds());
+    if (accuracy != null && Number.isFinite(accuracy) && accuracy > 0) bounds.extend(L$1.latLng(Number(p2.latitude), Number(p2.longitude)).toBounds(accuracy * 2));
     else bounds.extend([Number(p2.latitude), Number(p2.longitude)]);
   });
   map.invalidateSize();
@@ -50048,4 +50048,4 @@ startSyncEngine();
 ReactDOM.createRoot(document.getElementById("root")).render(
   /* @__PURE__ */ jsxRuntimeExports.jsx(React.StrictMode, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(App, {}) })
 );
-//# sourceMappingURL=main-Be4I2QwN.js.map
+//# sourceMappingURL=main-Ck_49GYc.js.map

@@ -17,11 +17,11 @@ export function locationStatus(distance: number | null, accuracy: number | null 
   return "Near boundary · GPS uncertain";
 }
 export function fitGeofence(map: L.Map, lat: number, lng: number, radius: number, people: LocationPoint[], venueOnly = false) {
-  const bounds = L.circle([lat, lng], {radius}).getBounds();
+  const bounds = L.latLng(lat, lng).toBounds(radius * 2);
   if (!venueOnly) people.forEach(p => {
     if (!validCoordinates(p.latitude, p.longitude)) return;
     const accuracy = p.accuracy;
-    if (accuracy != null && Number.isFinite(accuracy) && accuracy > 0) bounds.extend(L.circle([Number(p.latitude), Number(p.longitude)], {radius: accuracy}).getBounds());
+    if (accuracy != null && Number.isFinite(accuracy) && accuracy > 0) bounds.extend(L.latLng(Number(p.latitude), Number(p.longitude)).toBounds(accuracy * 2));
     else bounds.extend([Number(p.latitude), Number(p.longitude)]);
   });
   map.invalidateSize();
