@@ -29401,6 +29401,56 @@ const leafletSrc = /* @__PURE__ */ _mergeNamespaces({
   __proto__: null,
   default: L$1
 }, [leafletSrcExports]);
+function validCoordinates(lat, lng) {
+  return lat !== null && lat !== void 0 && lat !== "" && lng !== null && lng !== void 0 && lng !== "" && Number.isFinite(Number(lat)) && Number.isFinite(Number(lng)) && Math.abs(Number(lat)) <= 90 && Math.abs(Number(lng)) <= 180;
+}
+function locationStatus(distance, accuracy, radius) {
+  if (distance === null || !Number.isFinite(distance)) return "Location unavailable";
+  if (accuracy === null || accuracy === void 0 || !Number.isFinite(accuracy) || accuracy < 0) return distance <= radius ? "Inside · accuracy unknown" : "Outside · accuracy unknown";
+  if (distance + accuracy <= radius) return "Inside";
+  if (distance - accuracy > radius) return "Outside";
+  return "Near boundary · GPS uncertain";
+}
+function fitGeofence(map, lat, lng, radius, people, venueOnly = false) {
+  const bounds = L$1.circle([lat, lng], { radius }).getBounds();
+  if (!venueOnly) people.forEach((p2) => {
+    if (!validCoordinates(p2.latitude, p2.longitude)) return;
+    const accuracy = p2.accuracy;
+    if (accuracy != null && Number.isFinite(accuracy) && accuracy > 0) bounds.extend(L$1.circle([Number(p2.latitude), Number(p2.longitude)], { radius: accuracy }).getBounds());
+    else bounds.extend([Number(p2.latitude), Number(p2.longitude)]);
+  });
+  map.invalidateSize();
+  map.fitBounds(bounds, { padding: [45, 45], maxZoom: 19 });
+}
+function drawGeofence(map, lat, lng, radius, people, showAccuracy, venue) {
+  map.eachLayer((layer) => {
+    if (layer instanceof L$1.Marker || layer instanceof L$1.Path) map.removeLayer(layer);
+  });
+  L$1.circle([lat, lng], { radius, color: "#b77900", fillColor: "#f5b928", fillOpacity: 0.18, weight: 3, dashArray: "7 5" }).addTo(map).bindTooltip(`Allowed boundary · ${radius} m radius`, { permanent: true, direction: "top" });
+  const venueLabel = document.createElement("div");
+  venueLabel.textContent = venue;
+  L$1.marker([lat, lng], { icon: L$1.divIcon({ className: "", html: '<div style="width:18px;height:18px;border:3px solid white;border-radius:50%;background:#b77900;box-shadow:0 1px 5px #555"></div>', iconSize: [18, 18], iconAnchor: [9, 9] }) }).addTo(map).bindPopup(venueLabel);
+  people.forEach((p2) => {
+    if (!validCoordinates(p2.latitude, p2.longitude)) return;
+    const position = [Number(p2.latitude), Number(p2.longitude)];
+    const distance = map.distance([lat, lng], position);
+    const status = locationStatus(distance, p2.accuracy, radius);
+    const color = status.startsWith("Near") ? "#b77900" : distance <= radius ? "#00855a" : "#d12e45";
+    if (showAccuracy && p2.accuracy != null && Number.isFinite(p2.accuracy) && p2.accuracy > 0) {
+      L$1.circle(position, { radius: p2.accuracy, color: "#2563eb", weight: 1, fillColor: "#2563eb", fillOpacity: 0.12 }).addTo(map).bindTooltip(`Reported GPS accuracy: ±${Math.round(p2.accuracy)} m`);
+    }
+    const icon = document.createElement("div");
+    icon.textContent = p2.student_name.slice(0, 1);
+    Object.assign(icon.style, { width: "30px", height: "30px", borderRadius: "50%", border: "2px solid white", background: color, color: "white", display: "grid", placeItems: "center", fontWeight: "bold" });
+    const popup = document.createElement("div");
+    for (const line of [p2.student_name, p2.student_id, status, `Distance: ${distance.toFixed(1)} m`, p2.accuracy == null ? "GPS accuracy unknown" : `Reported GPS accuracy: ±${Math.round(p2.accuracy)} m`, p2.location_recorded_at ? `Location recorded: ${new Date(p2.location_recorded_at).toLocaleString()}` : "Location time unknown"]) {
+      const row = document.createElement("div");
+      row.textContent = line;
+      popup.appendChild(row);
+    }
+    L$1.marker(position, { icon: L$1.divIcon({ className: "", html: icon, iconSize: [30, 30], iconAnchor: [15, 15] }) }).addTo(map).bindPopup(popup);
+  });
+}
 delete L$1.Icon.Default.prototype._getIconUrl;
 L$1.Icon.Default.mergeOptions({
   iconUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png",
@@ -29415,6 +29465,8 @@ const FacultyActivityLocationView = () => {
   const mapContainerRef = reactExports.useRef(null);
   const mapInstanceRef = reactExports.useRef(null);
   const [mapLoaded, setMapLoaded] = reactExports.useState(false);
+  const [showAccuracy, setShowAccuracy] = reactExports.useState(true);
+  const fittedActivity = reactExports.useRef(null);
   const [filterType, setFilterType] = reactExports.useState("all");
   const canAccess = isFaculty ? true : isAdmin || isSuperAdmin ? "viewer" : false;
   const { data: responseData, isLoading, refetch } = useQuery({
@@ -29425,6 +29477,7 @@ const FacultyActivityLocationView = () => {
     },
     enabled: !!id && !isNaN(parseInt(id)),
     staleTime: 3e4,
+    refetchInterval: 3e4,
     retry: 1
   });
   const activity = responseData?.activity;
@@ -29436,131 +29489,34 @@ const FacultyActivityLocationView = () => {
   });
   const [error, setError] = reactExports.useState(null);
   reactExports.useEffect(() => {
-    if (!activity || !mapContainerRef.current) return;
+    if (!activity || !mapContainerRef.current || !validCoordinates(activity.latitude, activity.longitude)) return;
+    const lat = Number(activity.latitude), lng = Number(activity.longitude);
+    const radius = Number(activity.geofence_radius) > 0 ? Number(activity.geofence_radius) : 100;
     if (!mapInstanceRef.current) {
-      const map2 = L$1.map(mapContainerRef.current, {
-        center: [venueLat, venueLng],
-        zoom: 16,
-        zoomControl: false,
-        dragging: true,
-        touchZoom: false,
-        doubleClickZoom: false,
-        scrollWheelZoom: false,
-        boxZoom: false,
-        keyboard: true,
-        attributionControl: true
-      });
-      map2.on("wheel", (e2) => {
-        e2.originalEvent.preventDefault();
-        e2.originalEvent.stopPropagation();
-        return false;
-      });
+      const map2 = L$1.map(mapContainerRef.current, { center: [lat, lng], zoom: 18, scrollWheelZoom: false });
       L$1.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
         maxZoom: 19
       }).addTo(map2);
-      L$1.control.zoom({ position: "topright" }).addTo(map2);
+      L$1.control.scale({ imperial: false }).addTo(map2);
       mapInstanceRef.current = map2;
       setMapLoaded(true);
     }
     const map = mapInstanceRef.current;
-    setTimeout(() => {
-      map.invalidateSize();
-    }, 250);
-    map.eachLayer((layer) => {
-      if (layer instanceof L$1.Marker || layer instanceof L$1.Circle) {
-        map.removeLayer(layer);
-      }
-    });
-    const venueIcon = L$1.divIcon({
-      className: "custom-venue-marker cursor-pointer",
-      html: `<div class="w-12 h-12 bg-amber-500 rounded-full flex items-center justify-center text-white text-xl font-bold shadow-lg border-2 border-white hover:scale-110 transition-transform cursor-pointer">
-              <i class="fas fa-map-pin"></i>
-            </div>`,
-      iconSize: [48, 48],
-      iconAnchor: [24, 48],
-      popupAnchor: [0, -48]
-    });
-    const venueMarker = L$1.marker([venueLat, venueLng], { icon: venueIcon }).addTo(map);
-    const venuePopupContent = `
-      <div class="text-center min-w-[200px]">
-        <strong class="text-slate-800 text-lg block">${activity.title}</strong>
-        <span class="text-sm text-slate-500 block">${activity.venue || "Venue"}</span>
-        <hr class="my-2 border-slate-200" />
-        <span class="text-xs text-slate-400 block">
-          📍 ${venueLat.toFixed(6)}, ${venueLng.toFixed(6)}
-        </span>
-        <span class="text-xs text-emerald-600 block">
-          🎯 Geofence: ${activity.geofence_radius || 100}m
-        </span>
-      </div>
-    `;
-    venueMarker.bindPopup(venuePopupContent);
-    if (activity.geofence_radius) {
-      const circle = L$1.circle([venueLat, venueLng], {
-        radius: Number(activity.geofence_radius),
-        color: "#D4AF37",
-        fillColor: "#D4AF37",
-        fillOpacity: 0.1,
-        weight: 2,
-        dashArray: "5, 5"
-      }).addTo(map);
-      circle.bindPopup(`
-        <div class="text-center">
-          <span class="text-sm text-slate-800 font-semibold">Geofence Boundary</span><br />
-          <span class="text-xs text-slate-500">Radius: ${activity.geofence_radius}m</span>
-        </div>
-      `);
+    drawGeofence(map, lat, lng, radius, participants, showAccuracy, activity.venue || activity.title);
+    if (fittedActivity.current !== activity.id) {
+      fitGeofence(map, lat, lng, radius, participants, true);
+      fittedActivity.current = activity.id;
     }
-    const allLatLngs = [[venueLat, venueLng]];
-    participants.forEach((participant) => {
-      const pLat = Number(participant.latitude);
-      const pLng = Number(participant.longitude);
-      if (participant.latitude === null || participant.longitude === null || isNaN(pLat) || isNaN(pLng) || pLat === 0 && pLng === 0) {
-        return;
-      }
-      allLatLngs.push([pLat, pLng]);
-      const isWithin = participant.is_within_geofence === true;
-      const color = isWithin ? "#22C55E" : "#EF4444";
-      const statusText = isWithin ? "Within Geofence ✅" : "Outside Geofence ❌";
-      const studentIcon = L$1.divIcon({
-        className: "custom-student-marker cursor-pointer",
-        html: `<div class="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-md border-2 border-white hover:scale-110 transition-transform cursor-pointer" 
-                     style="background-color: ${color}">
-                    ${participant.student_name.charAt(0)}
-                  </div>`,
-        iconSize: [32, 32],
-        iconAnchor: [16, 16]
-      });
-      const marker = L$1.marker([pLat, pLng], { icon: studentIcon }).addTo(map);
-      const studentPopupContent = `
-        <div class="text-center min-w-[180px]">
-          <div class="flex items-center gap-2 justify-center mb-2">
-            ${participant.profile_photo ? `<img src="${participant.profile_photo}" class="w-10 h-10 rounded-full object-cover border-2 border-amber-500" />` : `<div class="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-white font-bold text-sm">${participant.student_name.charAt(0)}</div>`}
-            <div>
-              <strong class="text-slate-800 block">${participant.student_name}</strong>
-              <span class="text-xs text-slate-500">${participant.student_id}</span>
-            </div>
-          </div>
-          <hr class="my-2 border-slate-200" />
-          <span class="text-xs ${isWithin ? "text-emerald-600" : "text-red-600"} block font-semibold">
-            ${statusText}
-          </span>
-          <span class="text-xs text-slate-500 block">
-            📏 ${participant.distance_from_venue ? Math.round(participant.distance_from_venue) : 0}m from venue
-          </span>
-          <span class="text-xs text-slate-400 block">
-            📍 ${pLat.toFixed(6)}, ${pLng.toFixed(6)}
-          </span>
-        </div>
-      `;
-      marker.bindPopup(studentPopupContent);
-    });
-    if (allLatLngs.length > 1) {
-      const bounds = L$1.latLngBounds(allLatLngs);
-      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+    const resize = new ResizeObserver(() => map.invalidateSize());
+    resize.observe(mapContainerRef.current);
+    return () => resize.disconnect();
+  }, [activity, participants, showAccuracy]);
+  const fitLocations = () => {
+    if (mapInstanceRef.current && activity && validCoordinates(activity.latitude, activity.longitude)) {
+      fitGeofence(mapInstanceRef.current, Number(activity.latitude), Number(activity.longitude), Number(activity.geofence_radius) || 100, participants);
     }
-  }, [activity, participants]);
+  };
   reactExports.useEffect(() => {
     return () => {
       if (mapInstanceRef.current) {
@@ -29570,7 +29526,7 @@ const FacultyActivityLocationView = () => {
     };
   }, []);
   const zoomToVenueLocation = () => {
-    if (mapInstanceRef.current && activity?.latitude && activity?.longitude) {
+    if (mapInstanceRef.current && activity && validCoordinates(activity.latitude, activity.longitude)) {
       mapInstanceRef.current.flyTo([Number(activity.latitude), Number(activity.longitude)], 18, {
         duration: 1.2
       });
@@ -29652,9 +29608,6 @@ const FacultyActivityLocationView = () => {
       ] })
     ] });
   }
-  const hasActivityCoords = activity.latitude && activity.longitude;
-  const venueLat = hasActivityCoords ? Number(activity.latitude) : 8.521826076323629;
-  const venueLng = hasActivityCoords ? Number(activity.longitude) : 124.57249491758405;
   const outsideCount = participants.filter((p2) => p2.is_within_geofence === false).length;
   const withinCount = participants.filter((p2) => p2.is_within_geofence === true).length;
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-4", children: [
@@ -29673,7 +29626,7 @@ const FacultyActivityLocationView = () => {
           ] })
         ] })
       ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex gap-2", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { className: "btn btn-secondary btn-sm", onClick: () => refetch(), children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex flex-wrap gap-2", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { className: "btn btn-secondary btn-sm", onClick: () => refetch(), children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-sync" }),
         " Refresh"
       ] }) })
@@ -29698,7 +29651,7 @@ const FacultyActivityLocationView = () => {
     ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "bg-white rounded-xl shadow-sm border border-slate-200 p-4", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-wrap items-center gap-3", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-sm font-medium text-slate-700", children: "Filter by:" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-2", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-wrap gap-2", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs(
           "button",
           {
@@ -29748,6 +29701,7 @@ const FacultyActivityLocationView = () => {
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
             /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "font-semibold text-slate-800 flex items-center gap-2", children: [
               "📍 Venue Location",
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "badge bg-amber-100 text-amber-900", children: "Near boundary / uncertain" }),
               /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "badge badge-gold text-xs", children: "Click to Zoom" })
             ] }),
             /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-sm text-slate-600", children: [
@@ -29768,10 +29722,10 @@ const FacultyActivityLocationView = () => {
         /* @__PURE__ */ jsxRuntimeExports.jsx("thead", { className: "bg-slate-50 border-b border-slate-200 text-slate-600", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("tr", { children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("th", { className: "p-3", children: "Student" }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("th", { className: "p-3", children: "Student ID" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("th", { className: "p-3", children: "Attendance Status" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("th", { className: "p-3", children: "Geofence / GPS" }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("th", { className: "p-3", children: "Coordinates" }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("th", { className: "p-3", children: "Distance" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("th", { className: "p-3", children: "Attendance Time" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("th", { className: "p-3", children: "Location recorded" }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("th", { className: "p-3", children: "Action" })
         ] }) }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("tbody", { children: !filteredParticipants || filteredParticipants.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("tr", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("td", { colSpan: 7, className: "text-center py-8 text-slate-500", children: filterType === "all" ? "No participants checked in with location yet" : filterType === "within" ? "No participants within the geofence" : "No participants outside the geofence" }) }) : filteredParticipants.map((participant) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
@@ -29788,33 +29742,34 @@ const FacultyActivityLocationView = () => {
               /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "p-3", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                 "span",
                 {
-                  className: `px-2.5 py-1 rounded-full text-xs font-semibold ${participant.is_within_geofence ? "bg-emerald-100 text-emerald-800" : "bg-red-100 text-red-800"}`,
-                  children: participant.is_within_geofence ? "✅ Within" : "❌ Outside"
+                  className: `px-2.5 py-1 rounded-full text-xs font-semibold ${locationStatus(participant.distance_from_venue, participant.accuracy, Number(activity.geofence_radius) || 100).startsWith("Near") ? "bg-amber-100 text-amber-900" : participant.is_within_geofence === true ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-700"}`,
+                  children: locationStatus(participant.distance_from_venue, participant.accuracy, Number(activity.geofence_radius) || 100)
                 }
               ) }),
               /* @__PURE__ */ jsxRuntimeExports.jsxs("td", { className: "p-3 text-sm text-slate-600 font-mono", children: [
-                participant.latitude ? Number(participant.latitude).toFixed(4) : "N/A",
+                participant.latitude != null ? Number(participant.latitude).toFixed(6) : "N/A",
                 ",",
                 " ",
-                participant.longitude ? Number(participant.longitude).toFixed(4) : "N/A"
+                participant.longitude != null ? Number(participant.longitude).toFixed(6) : "N/A"
               ] }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "p-3", children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
+              /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "p-3", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                 "span",
                 {
                   className: `font-medium ${(participant.distance_from_venue || 0) <= (activity.geofence_radius || 100) ? "text-emerald-600" : "text-red-600"}`,
-                  children: [
-                    participant.distance_from_venue ? Math.round(participant.distance_from_venue) : 0,
-                    "m"
-                  ]
+                  children: participant.distance_from_venue != null ? `${Number(participant.distance_from_venue).toFixed(1)} m` : "Unknown"
                 }
               ) }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "p-3 text-sm text-slate-600", children: participant.check_in_at ? new Date(participant.check_in_at).toLocaleString() : "N/A" }),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("td", { className: "p-3 text-sm text-slate-600", children: [
+                participant.location_recorded_at ? new Date(participant.location_recorded_at).toLocaleString() : "Unknown",
+                participant.location_recorded_at && Date.now() - new Date(participant.location_recorded_at).getTime() > 12e4 && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs font-semibold text-amber-700", children: "Stale reading · over 2 minutes old" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-slate-500", children: participant.accuracy != null ? `GPS ±${Math.round(participant.accuracy)} m` : "GPS accuracy unknown" })
+              ] }),
               /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "p-3", children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
                 "button",
                 {
                   className: "btn btn-sm bg-blue-50 text-blue-600 hover:bg-blue-100",
                   onClick: () => {
-                    if (mapInstanceRef.current && participant.latitude && participant.longitude) {
+                    if (mapInstanceRef.current && validCoordinates(participant.latitude, participant.longitude)) {
                       mapInstanceRef.current.flyTo([Number(participant.latitude), Number(participant.longitude)], 18, {
                         duration: 1.2
                       });
@@ -29834,36 +29789,54 @@ const FacultyActivityLocationView = () => {
       ] }) })
     ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "p-4 border-b border-slate-200 flex justify-between items-center", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "p-4 border-b border-slate-200 flex flex-wrap gap-3 justify-between items-center", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
           /* @__PURE__ */ jsxRuntimeExports.jsxs("h4", { className: "font-semibold text-slate-800", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-map-pin text-amber-500 mr-2" }),
             "Venue Location Map"
           ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-slate-400", children: "Click on markers to view details • Drag to pan map" })
+          /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-slate-400", children: "Boundary uses the saved radius • Blue circles show reported GPS uncertainty" })
         ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-2", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-wrap gap-2", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "badge badge-success flex items-center gap-1", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-circle text-[8px]" }),
-            " Within Geofence"
+            " Inside estimate"
           ] }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "badge badge-danger flex items-center gap-1", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-circle text-[8px]" }),
-            " Outside Geofence"
+            " Outside estimate"
           ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "badge bg-amber-100 text-amber-900", children: "Near boundary / uncertain" }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "badge badge-gold flex items-center gap-1", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-map-pin" }),
             " Venue"
           ] })
         ] })
       ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "p-4 flex flex-wrap items-center gap-4 border-b border-slate-200", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("strong", { className: "text-amber-700", children: [
+          "Allowed radius: ",
+          activity.geofence_radius || 100,
+          " m"
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "flex items-center gap-2 text-sm", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "checkbox", checked: showAccuracy, onChange: (e2) => setShowAccuracy(e2.target.checked) }),
+          "Show GPS uncertainty"
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "btn btn-sm", onClick: fitLocations, children: "Fit boundary + students" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "btn btn-sm", onClick: () => {
+          if (mapInstanceRef.current && validCoordinates(activity.latitude, activity.longitude)) fitGeofence(mapInstanceRef.current, Number(activity.latitude), Number(activity.longitude), Number(activity.geofence_radius) || 100, [], true);
+        }, children: "Focus boundary" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-slate-500", children: "Refreshes every 30 seconds. Location timestamps indicate stale readings." })
+      ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "relative", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", { ref: mapContainerRef, className: "h-[500px] w-full bg-slate-100", style: { minHeight: "500px" } }),
         !mapLoaded && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute inset-0 flex items-center justify-center bg-slate-100/80", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-center", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-spinner fa-spin text-3xl text-amber-500 mb-2" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-slate-500", children: "Loading map..." })
+          /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-slate-500", children: validCoordinates(activity.latitude, activity.longitude) ? "Loading map..." : "Set the venue coordinates to display the geofence." })
         ] }) })
       ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "px-4 pt-3 text-xs text-slate-500", children: "GPS accuracy is an estimate, not a guaranteed boundary. Unknown or stale readings need review. This display does not change attendance decisions." }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "p-4 border-t border-slate-200 bg-slate-50", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-wrap gap-4 text-xs", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "w-4 h-4 rounded-full bg-amber-500 border-2 border-white shadow-md" }),
@@ -29871,11 +29844,11 @@ const FacultyActivityLocationView = () => {
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "w-4 h-4 rounded-full bg-emerald-500 border-2 border-white shadow-md" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-slate-600", children: "Student (Within Geofence)" })
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-slate-600", children: "Student (Inside estimate)" })
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "w-4 h-4 rounded-full bg-red-500 border-2 border-white shadow-md" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-slate-600", children: "Student (Outside Geofence)" })
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-slate-600", children: "Student (Outside estimate)" })
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "w-6 h-6 rounded-full border-2 border-amber-500 border-dashed" }),
@@ -45506,6 +45479,8 @@ const ActivityLocationView = () => {
   const mapContainerRef = reactExports.useRef(null);
   const mapInstanceRef = reactExports.useRef(null);
   const [mapLoaded, setMapLoaded] = reactExports.useState(false);
+  const [showAccuracy, setShowAccuracy] = reactExports.useState(true);
+  const fittedActivity = reactExports.useRef(null);
   const [error, setError] = reactExports.useState(null);
   const [filterType, setFilterType] = reactExports.useState("all");
   const canAccess = isFaculty ? true : isAdmin || isSuperAdmin ? "viewer" : false;
@@ -45522,6 +45497,7 @@ const ActivityLocationView = () => {
     },
     enabled: !!id && !isNaN(parseInt(id)),
     staleTime: 3e4,
+    refetchInterval: 3e4,
     retry: 1
   });
   const activity = responseData?.activity;
@@ -45532,131 +45508,34 @@ const ActivityLocationView = () => {
     return true;
   });
   reactExports.useEffect(() => {
-    if (!activity || !mapContainerRef.current) return;
+    if (!activity || !mapContainerRef.current || !validCoordinates(activity.latitude, activity.longitude)) return;
+    const lat = Number(activity.latitude), lng = Number(activity.longitude);
+    const radius = Number(activity.geofence_radius) > 0 ? Number(activity.geofence_radius) : 100;
     if (!mapInstanceRef.current) {
-      const map2 = L$1.map(mapContainerRef.current, {
-        center: [venueLat, venueLng],
-        zoom: 16,
-        zoomControl: false,
-        dragging: true,
-        touchZoom: false,
-        doubleClickZoom: false,
-        scrollWheelZoom: false,
-        boxZoom: false,
-        keyboard: true,
-        attributionControl: true
-      });
-      map2.on("wheel", (e2) => {
-        e2.originalEvent.preventDefault();
-        e2.originalEvent.stopPropagation();
-        return false;
-      });
+      const map2 = L$1.map(mapContainerRef.current, { center: [lat, lng], zoom: 18, scrollWheelZoom: false });
       L$1.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
         maxZoom: 19
       }).addTo(map2);
-      L$1.control.zoom({ position: "topright" }).addTo(map2);
+      L$1.control.scale({ imperial: false }).addTo(map2);
       mapInstanceRef.current = map2;
       setMapLoaded(true);
     }
     const map = mapInstanceRef.current;
-    setTimeout(() => {
-      map.invalidateSize();
-    }, 250);
-    map.eachLayer((layer) => {
-      if (layer instanceof L$1.Marker || layer instanceof L$1.Circle) {
-        map.removeLayer(layer);
-      }
-    });
-    const venueIcon = L$1.divIcon({
-      className: "custom-venue-marker cursor-pointer",
-      html: `<div class="w-12 h-12 bg-amber-500 rounded-full flex items-center justify-center text-white text-xl font-bold shadow-lg border-2 border-white hover:scale-110 transition-transform cursor-pointer">
-              <i class="fas fa-map-pin"></i>
-            </div>`,
-      iconSize: [48, 48],
-      iconAnchor: [24, 48],
-      popupAnchor: [0, -48]
-    });
-    const venueMarker = L$1.marker([venueLat, venueLng], { icon: venueIcon }).addTo(map);
-    const venuePopupContent = `
-      <div class="text-center min-w-[200px]">
-        <strong class="text-slate-800 text-lg block">${activity.title}</strong>
-        <span class="text-sm text-slate-500 block">${activity.venue || "Venue"}</span>
-        <hr class="my-2 border-slate-200" />
-        <span class="text-xs text-slate-400 block">
-          📍 ${venueLat.toFixed(6)}, ${venueLng.toFixed(6)}
-        </span>
-        <span class="text-xs text-emerald-600 block">
-          🎯 Geofence: ${activity.geofence_radius || 100}m
-        </span>
-      </div>
-    `;
-    venueMarker.bindPopup(venuePopupContent);
-    if (activity.geofence_radius) {
-      const circle = L$1.circle([venueLat, venueLng], {
-        radius: Number(activity.geofence_radius),
-        color: "#D4AF37",
-        fillColor: "#D4AF37",
-        fillOpacity: 0.1,
-        weight: 2,
-        dashArray: "5, 5"
-      }).addTo(map);
-      circle.bindPopup(`
-        <div class="text-center">
-          <span class="text-sm text-slate-800 font-semibold">Geofence Boundary</span><br />
-          <span class="text-xs text-slate-500">Radius: ${activity.geofence_radius}m</span>
-        </div>
-      `);
+    drawGeofence(map, lat, lng, radius, participants, showAccuracy, activity.venue || activity.title);
+    if (fittedActivity.current !== activity.id) {
+      fitGeofence(map, lat, lng, radius, participants, true);
+      fittedActivity.current = activity.id;
     }
-    const allLatLngs = [[venueLat, venueLng]];
-    participants.forEach((participant) => {
-      const pLat = Number(participant.latitude);
-      const pLng = Number(participant.longitude);
-      if (participant.latitude === null || participant.longitude === null || isNaN(pLat) || isNaN(pLng) || pLat === 0 && pLng === 0) {
-        return;
-      }
-      allLatLngs.push([pLat, pLng]);
-      const isWithin = participant.is_within_geofence === true;
-      const color = isWithin ? "#22C55E" : "#EF4444";
-      const statusText = isWithin ? "Within Geofence ✅" : "Outside Geofence ❌";
-      const studentIcon = L$1.divIcon({
-        className: "custom-student-marker cursor-pointer",
-        html: `<div class="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-md border-2 border-white hover:scale-110 transition-transform cursor-pointer" 
-                     style="background-color: ${color}">
-                    ${participant.student_name.charAt(0)}
-                  </div>`,
-        iconSize: [32, 32],
-        iconAnchor: [16, 16]
-      });
-      const marker = L$1.marker([pLat, pLng], { icon: studentIcon }).addTo(map);
-      const studentPopupContent = `
-        <div class="text-center min-w-[180px]">
-          <div class="flex items-center gap-2 justify-center mb-2">
-            ${participant.profile_photo ? `<img src="${participant.profile_photo}" class="w-10 h-10 rounded-full object-cover border-2 border-amber-500" />` : `<div class="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center text-white font-bold text-sm">${participant.student_name.charAt(0)}</div>`}
-            <div>
-              <strong class="text-slate-800 block">${participant.student_name}</strong>
-              <span class="text-xs text-slate-500">${participant.student_id}</span>
-            </div>
-          </div>
-          <hr class="my-2 border-slate-200" />
-          <span class="text-xs ${isWithin ? "text-emerald-600" : "text-red-600"} block font-semibold">
-            ${statusText}
-          </span>
-          <span class="text-xs text-slate-500 block">
-            📏 ${participant.distance_from_venue ? Math.round(participant.distance_from_venue) : 0}m from venue
-          </span>
-          <span class="text-xs text-slate-400 block">
-            📍 ${pLat.toFixed(6)}, ${pLng.toFixed(6)}
-          </span>
-        </div>
-      `;
-      marker.bindPopup(studentPopupContent);
-    });
-    if (allLatLngs.length > 1) {
-      const bounds = L$1.latLngBounds(allLatLngs);
-      map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+    const resize = new ResizeObserver(() => map.invalidateSize());
+    resize.observe(mapContainerRef.current);
+    return () => resize.disconnect();
+  }, [activity, participants, showAccuracy]);
+  const fitLocations = () => {
+    if (mapInstanceRef.current && activity && validCoordinates(activity.latitude, activity.longitude)) {
+      fitGeofence(mapInstanceRef.current, Number(activity.latitude), Number(activity.longitude), Number(activity.geofence_radius) || 100, participants);
     }
-  }, [activity, participants]);
+  };
   reactExports.useEffect(() => {
     return () => {
       if (mapInstanceRef.current) {
@@ -45666,7 +45545,7 @@ const ActivityLocationView = () => {
     };
   }, []);
   const zoomToVenueLocation = () => {
-    if (mapInstanceRef.current && activity?.latitude && activity?.longitude) {
+    if (mapInstanceRef.current && activity && validCoordinates(activity.latitude, activity.longitude)) {
       mapInstanceRef.current.flyTo([Number(activity.latitude), Number(activity.longitude)], 18, {
         duration: 1.2
       });
@@ -45748,9 +45627,6 @@ const ActivityLocationView = () => {
       ] })
     ] });
   }
-  const hasActivityCoords = activity.latitude && activity.longitude;
-  const venueLat = hasActivityCoords ? Number(activity.latitude) : 8.521826076323629;
-  const venueLng = hasActivityCoords ? Number(activity.longitude) : 124.57249491758405;
   const outsideCount = participants.filter((p2) => p2.is_within_geofence === false).length;
   const withinCount = participants.filter((p2) => p2.is_within_geofence === true).length;
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-4", children: [
@@ -45769,7 +45645,7 @@ const ActivityLocationView = () => {
           ] })
         ] })
       ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex gap-2", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { className: "btn btn-secondary btn-sm", onClick: () => refetch(), children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex flex-wrap gap-2", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { className: "btn btn-secondary btn-sm", onClick: () => refetch(), children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-sync" }),
         " Refresh"
       ] }) })
@@ -45794,7 +45670,7 @@ const ActivityLocationView = () => {
     ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "bg-white rounded-xl shadow-sm border border-slate-200 p-4", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-wrap items-center gap-3", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-sm font-medium text-slate-700", children: "Filter by:" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-2", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-wrap gap-2", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs(
           "button",
           {
@@ -45844,6 +45720,7 @@ const ActivityLocationView = () => {
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
             /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "font-semibold text-slate-800 flex items-center gap-2", children: [
               "📍 Venue Location",
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "badge bg-amber-100 text-amber-900", children: "Near boundary / uncertain" }),
               /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "badge badge-gold text-xs", children: "Click to Zoom" })
             ] }),
             /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-sm text-slate-600", children: [
@@ -45864,10 +45741,10 @@ const ActivityLocationView = () => {
         /* @__PURE__ */ jsxRuntimeExports.jsx("thead", { className: "bg-slate-50 border-b border-slate-200 text-slate-600", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("tr", { children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("th", { className: "p-3", children: "Student" }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("th", { className: "p-3", children: "Student ID" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("th", { className: "p-3", children: "Attendance Status" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("th", { className: "p-3", children: "Geofence / GPS" }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("th", { className: "p-3", children: "Coordinates" }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("th", { className: "p-3", children: "Distance" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("th", { className: "p-3", children: "Attendance Time" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("th", { className: "p-3", children: "Location recorded" }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("th", { className: "p-3", children: "Action" })
         ] }) }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("tbody", { children: !filteredParticipants || filteredParticipants.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsx("tr", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("td", { colSpan: 7, className: "text-center py-8 text-slate-500", children: filterType === "all" ? "No participants checked in with location yet" : filterType === "within" ? "No participants within the geofence" : "No participants outside the geofence" }) }) : filteredParticipants.map((participant) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
@@ -45884,33 +45761,34 @@ const ActivityLocationView = () => {
               /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "p-3", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                 "span",
                 {
-                  className: `px-2.5 py-1 rounded-full text-xs font-semibold ${participant.is_within_geofence ? "bg-emerald-100 text-emerald-800" : "bg-red-100 text-red-800"}`,
-                  children: participant.is_within_geofence ? "✅ Within" : "❌ Outside"
+                  className: `px-2.5 py-1 rounded-full text-xs font-semibold ${locationStatus(participant.distance_from_venue, participant.accuracy, Number(activity.geofence_radius) || 100).startsWith("Near") ? "bg-amber-100 text-amber-900" : participant.is_within_geofence === true ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-700"}`,
+                  children: locationStatus(participant.distance_from_venue, participant.accuracy, Number(activity.geofence_radius) || 100)
                 }
               ) }),
               /* @__PURE__ */ jsxRuntimeExports.jsxs("td", { className: "p-3 text-sm text-slate-600 font-mono", children: [
-                participant.latitude ? Number(participant.latitude).toFixed(4) : "N/A",
+                participant.latitude != null ? Number(participant.latitude).toFixed(6) : "N/A",
                 ",",
                 " ",
-                participant.longitude ? Number(participant.longitude).toFixed(4) : "N/A"
+                participant.longitude != null ? Number(participant.longitude).toFixed(6) : "N/A"
               ] }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "p-3", children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
+              /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "p-3", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                 "span",
                 {
                   className: `font-medium ${(participant.distance_from_venue || 0) <= (activity.geofence_radius || 100) ? "text-emerald-600" : "text-red-600"}`,
-                  children: [
-                    participant.distance_from_venue ? Math.round(participant.distance_from_venue) : 0,
-                    "m"
-                  ]
+                  children: participant.distance_from_venue != null ? `${Number(participant.distance_from_venue).toFixed(1)} m` : "Unknown"
                 }
               ) }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "p-3 text-sm text-slate-600", children: participant.check_in_at ? new Date(participant.check_in_at).toLocaleString() : "N/A" }),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("td", { className: "p-3 text-sm text-slate-600", children: [
+                participant.location_recorded_at ? new Date(participant.location_recorded_at).toLocaleString() : "Unknown",
+                participant.location_recorded_at && Date.now() - new Date(participant.location_recorded_at).getTime() > 12e4 && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs font-semibold text-amber-700", children: "Stale reading · over 2 minutes old" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-slate-500", children: participant.accuracy != null ? `GPS ±${Math.round(participant.accuracy)} m` : "GPS accuracy unknown" })
+              ] }),
               /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "p-3", children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
                 "button",
                 {
                   className: "btn btn-sm bg-blue-50 text-blue-600 hover:bg-blue-100",
                   onClick: () => {
-                    if (mapInstanceRef.current && participant.latitude && participant.longitude) {
+                    if (mapInstanceRef.current && validCoordinates(participant.latitude, participant.longitude)) {
                       mapInstanceRef.current.flyTo([Number(participant.latitude), Number(participant.longitude)], 18, {
                         duration: 1.2
                       });
@@ -45930,36 +45808,54 @@ const ActivityLocationView = () => {
       ] }) })
     ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "p-4 border-b border-slate-200 flex justify-between items-center", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "p-4 border-b border-slate-200 flex flex-wrap gap-3 justify-between items-center", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
           /* @__PURE__ */ jsxRuntimeExports.jsxs("h4", { className: "font-semibold text-slate-800", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-map-pin text-amber-500 mr-2" }),
             "Venue Location Map"
           ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-slate-400", children: "Click on markers to view details • Drag to pan map" })
+          /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-slate-400", children: "Boundary uses the saved radius • Blue circles show reported GPS uncertainty" })
         ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-2", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-wrap gap-2", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "badge badge-success flex items-center gap-1", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-circle text-[8px]" }),
-            " Within Geofence"
+            " Inside estimate"
           ] }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "badge badge-danger flex items-center gap-1", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-circle text-[8px]" }),
-            " Outside Geofence"
+            " Outside estimate"
           ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "badge bg-amber-100 text-amber-900", children: "Near boundary / uncertain" }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "badge badge-gold flex items-center gap-1", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-map-pin" }),
             " Venue"
           ] })
         ] })
       ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "p-4 flex flex-wrap items-center gap-4 border-b border-slate-200", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("strong", { className: "text-amber-700", children: [
+          "Allowed radius: ",
+          activity.geofence_radius || 100,
+          " m"
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "flex items-center gap-2 text-sm", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "checkbox", checked: showAccuracy, onChange: (e2) => setShowAccuracy(e2.target.checked) }),
+          "Show GPS uncertainty"
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "btn btn-sm", onClick: fitLocations, children: "Fit boundary + students" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "btn btn-sm", onClick: () => {
+          if (mapInstanceRef.current && validCoordinates(activity.latitude, activity.longitude)) fitGeofence(mapInstanceRef.current, Number(activity.latitude), Number(activity.longitude), Number(activity.geofence_radius) || 100, [], true);
+        }, children: "Focus boundary" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-slate-500", children: "Refreshes every 30 seconds. Location timestamps indicate stale readings." })
+      ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "relative", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", { ref: mapContainerRef, className: "h-[500px] w-full bg-slate-100", style: { minHeight: "500px" } }),
         !mapLoaded && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute inset-0 flex items-center justify-center bg-slate-100/80", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-center", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-spinner fa-spin text-3xl text-amber-500 mb-2" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-slate-500", children: "Loading map..." })
+          /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-slate-500", children: validCoordinates(activity.latitude, activity.longitude) ? "Loading map..." : "Set the venue coordinates to display the geofence." })
         ] }) })
       ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "px-4 pt-3 text-xs text-slate-500", children: "GPS accuracy is an estimate, not a guaranteed boundary. Unknown or stale readings need review. This display does not change attendance decisions." }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "p-4 border-t border-slate-200 bg-slate-50", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-wrap gap-4 text-xs", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "w-4 h-4 rounded-full bg-amber-500 border-2 border-white shadow-md" }),
@@ -45967,11 +45863,11 @@ const ActivityLocationView = () => {
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "w-4 h-4 rounded-full bg-emerald-500 border-2 border-white shadow-md" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-slate-600", children: "Student (Within Geofence)" })
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-slate-600", children: "Student (Inside estimate)" })
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "w-4 h-4 rounded-full bg-red-500 border-2 border-white shadow-md" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-slate-600", children: "Student (Outside Geofence)" })
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-slate-600", children: "Student (Outside estimate)" })
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-2", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "w-6 h-6 rounded-full border-2 border-amber-500 border-dashed" }),
@@ -50152,4 +50048,4 @@ startSyncEngine();
 ReactDOM.createRoot(document.getElementById("root")).render(
   /* @__PURE__ */ jsxRuntimeExports.jsx(React.StrictMode, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(App, {}) })
 );
-//# sourceMappingURL=main-Cbh-4Hd7.js.map
+//# sourceMappingURL=main-Be4I2QwN.js.map

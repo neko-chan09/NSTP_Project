@@ -6,6 +6,7 @@ namespace App\Http\Controllers\API\Web\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Activity;
 use App\Models\ActivityParticipation;
+use App\Models\StudentLocation;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
@@ -35,20 +36,25 @@ class ActivityMapController extends Controller
             }
 
             $allParticipations = $activity->participations;
+            // One scoped query: each student's latest recorded fix, including its own accuracy/time.
+            $latestLocations = StudentLocation::where('activity_id', $activity->id)
+                ->whereIn('id', StudentLocation::selectRaw('MAX(id)')->where('activity_id', $activity->id)->groupBy('student_id'))
+                ->get()->keyBy('student_id');
 
-            $participants = $allParticipations->map(function ($participation) use ($activity) {
+            $participants = $allParticipations->map(function ($participation) use ($activity, $latestLocations) {
                 $student = $participation->student;
                 $user = $student->user ?? null;
                 $distance = null;
+                $fix = $latestLocations->get($participation->student_id);
 
                 // FIX 1: Support both checkin_latitude/longitude AND latitude/longitude database columns
-                $lat = $participation->checkin_latitude ?? $participation->latitude;
-                $lng = $participation->checkin_longitude ?? $participation->longitude;
+                $lat = $fix ? $fix->latitude : ($participation->checkin_latitude ?? $participation->latitude);
+                $lng = $fix ? $fix->longitude : ($participation->checkin_longitude ?? $participation->longitude);
 
                 // Validate coordinates are present and not zero
-                $hasCheckIn = !is_null($lat) && !is_null($lng) && (float)$lat !== 0.0 && (float)$lng !== 0.0;
+                $hasCheckIn = is_numeric($lat) && is_numeric($lng) && is_finite((float)$lat) && is_finite((float)$lng) && abs((float)$lat) <= 90 && abs((float)$lng) <= 180;
 
-                if ($hasCheckIn && $activity->latitude && $activity->longitude) {
+                if ($hasCheckIn && $activity->latitude !== null && $activity->longitude !== null) {
                     $distance = $this->calculateDistance(
                         (float)$lat,
                         (float)$lng,
@@ -71,6 +77,8 @@ class ActivityMapController extends Controller
                     'latitude' => $hasCheckIn ? (float)$lat : null,
                     'longitude' => $hasCheckIn ? (float)$lng : null,
                     'has_checked_in' => $hasCheckIn,
+                    'accuracy' => $fix && $fix->accuracy !== null ? (float)$fix->accuracy : null,
+                    'location_recorded_at' => $fix ? $fix->tracked_at : ($participation->check_in_at ?? $participation->attended_at),
                     'check_in_at' => $participation->check_in_at ?? $participation->attended_at ?? $participation->created_at,
                     'attendance_status' => $participation->attendance_status ?? 'registered',
                     'is_within_geofence' => $isWithin, // Returns true, false, or null if no GPS
@@ -89,8 +97,8 @@ class ActivityMapController extends Controller
                 'title' => $activity->title,
                 'description' => $activity->description,
                 'venue' => $activity->venue,
-                'latitude' => $activity->latitude !== null ? (float)$activity->latitude : 0.0,
-                'longitude' => $activity->longitude !== null ? (float)$activity->longitude : 0.0,
+                'latitude' => $activity->latitude !== null ? (float)$activity->latitude : null,
+                'longitude' => $activity->longitude !== null ? (float)$activity->longitude : null,
                 'geofence_radius' => $activity->geofence_radius ?? 100,
                 'status' => $activity->status,
                 'start_datetime' => $activity->start_datetime,
@@ -220,8 +228,8 @@ class ActivityMapController extends Controller
                         'id' => $activity->id,
                         'title' => $activity->title,
                         'venue' => $activity->venue,
-                        'latitude' => $activity->latitude !== null ? (float)$activity->latitude : 0.0,
-                        'longitude' => $activity->longitude !== null ? (float)$activity->longitude : 0.0,
+                        'latitude' => $activity->latitude !== null ? (float)$activity->latitude : null,
+                        'longitude' => $activity->longitude !== null ? (float)$activity->longitude : null,
                         'geofence_radius' => $activity->geofence_radius ?? 100,
                         'status' => $activity->status,
                         'start_datetime' => $activity->start_datetime,
