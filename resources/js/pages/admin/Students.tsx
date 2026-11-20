@@ -1,3 +1,5 @@
+import {useQueryClient} from "@tanstack/react-query";
+import DirectoryFilters from "../components/common/DirectoryFilters";
 import ProfileAvatar from '../components/common/ProfileAvatar';
 // resources/js/pages/admin/Students.tsx
 import React, { useState, useEffect, useRef, useCallback } from "react";
@@ -99,7 +101,11 @@ const Students: React.FC = () => {
     return () => clearTimeout(t);
   }, [searchInput]);
 
+  const [course,setCourse]=useState("");
+  const [section,setSection]=useState("");
+  const cache=useQueryClient();
   const filters: StudentFilters = {
+    course,section,
     search,
     component,
     status,
@@ -152,6 +158,10 @@ const Students: React.FC = () => {
       } finally {
         loopActiveRef.current = false;
         refresh();
+        cache.invalidateQueries({queryKey:["reports","enrollment"]});
+        cache.invalidateQueries({queryKey:["directory-options"]});
+        cache.invalidateQueries({queryKey:["class-record"]});
+        cache.invalidateQueries({queryKey:["faculty"]});
       }
     },
     [refresh],
@@ -308,7 +318,7 @@ const Students: React.FC = () => {
   const handleExport = async () => {
     setExporting(true);
     try {
-      await downloadStudentCsv(component || undefined);
+      await downloadStudentCsv(filters);
       toast.success("Export started");
     } finally {
       setExporting(false);
@@ -512,7 +522,7 @@ const Students: React.FC = () => {
             onClick={() => setShowImportModal(true)}
             disabled={!!batch && batch.is_running}
           >
-            <i className="fas fa-file-import" /> Import CSV
+            <i className="fas fa-file-import" /> Import CSV / Excel
           </button>
           <button className="btn btn-primary btn-sm" onClick={openCreate}>
             <i className="fas fa-plus" /> Add Student
@@ -520,6 +530,7 @@ const Students: React.FC = () => {
         </div>
       </div>
 
+      <DirectoryFilters course={course} section={section} onCourse={v=>{setCourse(v);setPage(1)}} onSection={v=>{setSection(v);setPage(1)}}/>
       {/* FILTERS */}
       <div className="flex flex-wrap gap-3 bg-white p-4 rounded-xl shadow-sm border border-slate-200">
         <div className="search-box flex-1 min-w-[200px]">
@@ -816,6 +827,7 @@ const Students: React.FC = () => {
                   />
                 </div>
 
+                {!editing && <>
                 <div className="form-group">
                   <label className="label">
                     Password{" "}
@@ -837,6 +849,8 @@ const Students: React.FC = () => {
                   />
                 </div>
 
+                </>}
+                {editing && <p className="text-sm">Password recovery is available through Super Admin → Reset password → Student ID.</p>}
                 <div className="form-group">
                   <label className="label">
                     Course <span className="text-red-500">*</span>

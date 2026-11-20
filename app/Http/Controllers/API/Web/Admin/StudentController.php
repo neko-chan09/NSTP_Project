@@ -210,6 +210,7 @@ class StudentController extends Controller
 
     public function update(Request $request, $id)
     {
+        $request->validate(['password'=>'prohibited']);
         $student = Student::find($id);
         if (!$student) {
             return response()->json([
@@ -283,13 +284,6 @@ class StudentController extends Controller
 
         if (!empty($studentData)) {
             $student->update($studentData);
-        }
-
-        // If password is provided, update it
-        if ($request->filled('password')) {
-            $student->user->update([
-                'password' => Hash::make($request->password)
-            ]);
         }
 
         return response()->json([

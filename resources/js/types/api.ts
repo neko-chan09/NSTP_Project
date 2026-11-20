@@ -53,6 +53,7 @@ export interface ClassStudent {
 // ============ AUTH TYPES ============
 export interface User {
   id: number;
+  must_change_password?:boolean;
   name?: string;
   first_name: string;
   last_name: string;

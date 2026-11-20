@@ -1,10 +1,15 @@
 // src/pages/admin/Reports/Enrollment.tsx
-import React from 'react';
+import React,{useState} from 'react';
+import {useQuery} from '@tanstack/react-query';
+import DirectoryFilters from '../../components/common/DirectoryFilters';
+import {secureRequest} from '../../../services/secureRequest';
 import { useEnrollmentReport } from '../../hooks/useReports';
 import RefreshButton from '../../components/common/RefreshButton';
 
 const EnrollmentReport: React.FC = () => {
-  const { data, isLoading, error, refresh, isRefreshing } = useEnrollmentReport();
+  const [course,setCourse]=useState(''),[section,setSection]=useState(''),[year,setYear]=useState('');
+  const years=useQuery({queryKey:['academic-years'],queryFn:()=>secureRequest('/admin/academic-years')});
+  const { data, isLoading, error, refresh, isRefreshing } = useEnrollmentReport({course,section,...(year?{academic_year_id:year}:{})});
 
   if (isLoading) {
     return (
@@ -42,6 +47,10 @@ const EnrollmentReport: React.FC = () => {
         </div>
       </div>
 
+      <p className="text-sm text-slate-600">Distinct actively enrolled students. Counts refresh after import and every 30 seconds.</p>
+      <DirectoryFilters course={course} section={section} onCourse={setCourse} onSection={setSection}/>
+      <label>Enrollment period<select className="input" value={year} onChange={e=>setYear(e.target.value)}><option value="">All enrollment periods</option>{(years.data?.data??[]).map((y:any)=><option value={y.id} key={y.id}>{y.academic_year} · {y.semester}</option>)}</select></label>
+      <p className="text-sm">Missing component: {data?.unassigned_component??0}</p>
       {/* Stats Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[

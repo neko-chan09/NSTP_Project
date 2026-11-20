@@ -642,6 +642,8 @@ class AttendanceController extends Controller
             'student_id'       => $student->id,
             'check_in_at'      => $capturedAt,
             'status'           => $status,
+            'attendance_mark' => $status,
+            'review_status' => app(\App\Services\AttendanceLedger::class)->afterEnd($session,$capturedAt) ? 'pending' : 'approved',
             'face_confidence'  => $result['similarity'],
             'location_lat'     => $latitude !== null ? (float) $latitude : null,
             'location_lng'     => $longitude !== null ? (float) $longitude : null,
@@ -655,19 +657,13 @@ class AttendanceController extends Controller
             ),
         ]);
 
-            $lockedStudent->increment('completed_training_hours', 1);
-        if (method_exists($lockedStudent, 'updateTrainingGrade')) {
-            $lockedStudent->updateTrainingGrade();
-        }
-
+            \App\Services\AuditTrail::record($student->user_id,'attendance.timein','attendance_log',$log->id);
             return $log;
         });
 
         return response()->json([
             'match' => true,
-            'message' => $status === 'late'
-                ? sprintf('Attendance recorded (late by %d min)', $minutesLate)
-                : 'Attendance recorded successfully',
+            'message' => $log->review_status==='pending' ? 'After-session time in saved. Pending faculty approval.' : 'Time in saved. Record time out to calculate hours.',
             'confidence' => $result['similarity'],
             'data' => $log->load('student.user'),
             'location_status' => $session->require_location

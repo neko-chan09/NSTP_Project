@@ -153,7 +153,7 @@ class AuthController extends Controller
     {
         $validator = Validator::make($request->all(), [
             'current_password' => 'required|string',
-            'new_password' => 'required|string|min:6|confirmed',
+            'new_password' => 'required|string|min:8|max:128|confirmed',
         ]);
 
         if ($validator->fails()) {
@@ -203,7 +203,7 @@ class AuthController extends Controller
 
         $validator = Validator::make($request->all(), [
             'current_password' => 'required|string',
-            'new_password' => 'required|string|min:6|confirmed',
+            'new_password' => 'required|string|min:8|max:128|confirmed',
         ]);
 
         if ($validator->fails()) {
@@ -230,6 +230,9 @@ class AuthController extends Controller
         $user->password = Hash::make($request->new_password);
         $user->must_change_password = false;
         $user->save();
+        $current=$user->currentAccessToken();
+        $user->tokens()->when($current,fn($q)=>$q->where('id','!=',$current->id))->delete();
+        \App\Services\AuditTrail::record($user->id,'password.temporary_changed','user',$user->id);
 
         return response()->json([
             'success' => true,

@@ -1,3 +1,4 @@
+import {secureRequest} from "../../../services/secureRequest";
 // src/pages/admin/SuperAdmin/Backup.tsx
 
 import React, { useState } from "react";
@@ -273,6 +274,7 @@ const BackupPage: React.FC = () => {
                       <div className="flex items-center justify-end gap-1.5">
                         {b.status === "completed" && (
                           <>
+                            <button type="button" className="btn btn-secondary btn-sm" onClick={async()=>{try{const r=await secureRequest(`/superadmin/backups/${b.id}/verify`,"POST");toast.success(r.message)}catch(e:any){toast.error(e.message)}}}>Verify archive</button>
                             <button
                               className="btn btn-info btn-sm"
                               onClick={() =>

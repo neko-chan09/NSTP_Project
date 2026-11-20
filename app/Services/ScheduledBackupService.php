@@ -53,6 +53,10 @@ class ScheduledBackupService
      */
     public function runSchedule(BackupSchedule $schedule): SystemBackup
     {
+        $lock=\Illuminate\Support\Facades\Cache::lock('backup-schedule:'.$schedule->id,900);
+        if(!$lock->get())throw new \RuntimeException('This backup schedule is already running.');
+        try {
+
         $backup = $this->backupService->createBackup(
             'auto',
             $schedule->created_by
@@ -70,6 +74,7 @@ class ScheduledBackupService
         $schedule->markRun();
 
         return $backup;
+        } finally {$lock->release();}
     }
 
     /**

@@ -1282,6 +1282,10 @@
     margin-inline: auto;
   }
 
+  .my-3 {
+    margin-block: calc(var(--spacing) * 3);
+  }
+
   .-mt-12 {
     margin-top: calc(var(--spacing) * -12);
   }
@@ -2179,6 +2183,10 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     overflow: hidden;
+  }
+
+  .overflow-auto {
+    overflow: auto;
   }
 
   .overflow-hidden {

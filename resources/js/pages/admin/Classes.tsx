@@ -1,3 +1,4 @@
+import {Link} from "react-router-dom";
 // resources/js/pages/admin/Classes.tsx
 
 import React, { useState, useMemo } from "react";
@@ -515,6 +516,7 @@ const Classes: React.FC = () => {
                       {/* Actions */}
                       <td>
                         <div className="flex items-center justify-end gap-2 flex-wrap">
+                          <Link className="btn btn-secondary btn-sm" to={`/admin/classes/${cls.id}/record`}>Class record</Link>
                           <button
                             className="btn btn-info btn-sm inline-flex items-center gap-1.5"
                             onClick={() => openEdit(cls)}
@@ -606,6 +608,7 @@ const Classes: React.FC = () => {
                   </div>
                 )}
                 <div className="flex flex-wrap gap-2 pt-3 border-t border-slate-100">
+                  <Link className="btn btn-secondary btn-sm" to={`/admin/classes/${cls.id}/record`}>Class record</Link>
                   <button
                     className="btn btn-info btn-sm flex-1 inline-flex items-center justify-center gap-1.5"
                     onClick={() => openEdit(cls)}

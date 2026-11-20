@@ -15,10 +15,8 @@ class AttendanceCaptureWindow
             throw ValidationException::withMessages(['captured_at' => 'Capture time must be within the last seven days.']);
         }
         $start = $session->scheduled_start ?? $session->start_time;
-        $end = $session->is_scheduled ? $session->scheduled_end : $session->end_time;
-        if ($session->status === 'closed' && $session->end_time && (!$end || $session->end_time->lt($end))) $end = $session->end_time;
-        if ($session->status === 'cancelled' || (!$offline && $session->status !== 'active') || ($start && $time->lt($start)) || ($end && $time->gt($end))) {
-            throw ValidationException::withMessages(['session_id' => 'The capture is outside this attendance session’s time window.']);
+        if ($session->status === 'cancelled' || ($start && $time->lt($start))) {
+            throw ValidationException::withMessages(['session_id' => 'The session is cancelled or has not started yet.']);
         }
         return $time;
     }

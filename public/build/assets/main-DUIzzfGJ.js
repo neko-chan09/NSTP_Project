@@ -12101,237 +12101,6 @@ function useMutation(options, queryClient2) {
     mutateAsync: result.mutate
   };
 }
-let e = { data: "" }, t = (t2) => {
-  if ("object" == typeof window) {
-    let e2 = (t2 ? t2.querySelector("#_goober") : window._goober) || Object.assign(document.createElement("style"), { innerHTML: " ", id: "_goober" });
-    return e2.nonce = window.__nonce__, e2.parentNode || (t2 || document.head).appendChild(e2), e2.firstChild;
-  }
-  return t2 || e;
-}, a = /(?:([\u0080-\uFFFF\w-%@]+) *:? *([^{;]+?);|([^;}{]*?) *{)|(}\s*)/g, l = /\/\*[^]*?\*\/|  +/g, n$1 = /\n+/g, o = (e2, t2) => {
-  let r = "", a2 = "", l2 = "";
-  for (let n2 in e2) {
-    let c2 = e2[n2];
-    "@" == n2[0] ? "i" == n2[1] ? r = n2 + " " + c2 + ";" : a2 += "f" == n2[1] ? o(c2, n2) : n2 + "{" + o(c2, "k" == n2[1] ? "" : t2) + "}" : "object" == typeof c2 ? a2 += o(c2, t2 ? t2.replace(/([^,])+/g, (e3) => n2.replace(/([^,]*:\S+\([^)]*\))|([^,])+/g, (t3) => /&/.test(t3) ? t3.replace(/&/g, e3) : e3 ? e3 + " " + t3 : t3)) : n2) : null != c2 && (n2 = "-" == n2[1] ? n2 : n2.replace(/[A-Z]/g, "-$&").toLowerCase(), l2 += o.p ? o.p(n2, c2) : n2 + ":" + c2 + ";");
-  }
-  return r + (t2 && l2 ? t2 + "{" + l2 + "}" : l2) + a2;
-}, c = {}, i = (e2) => {
-  if ("object" == typeof e2) {
-    let t2 = "";
-    for (let r in e2) t2 += r + i(e2[r]);
-    return t2;
-  }
-  return e2;
-}, s = (e2, t2, r, s2, p2) => {
-  let u2 = i(e2), d2 = c[u2] || (c[u2] = ((e3) => {
-    let t3 = 0, r2 = 11;
-    for (; t3 < e3.length; ) r2 = 101 * r2 + e3.charCodeAt(t3++) >>> 0;
-    return "go" + r2;
-  })(u2));
-  if (!c[d2]) {
-    let t3 = u2 !== e2 ? e2 : ((e3) => {
-      let t4, r2, o2 = [{}];
-      for (; t4 = a.exec(e3.replace(l, "")); ) t4[4] ? o2.shift() : t4[3] ? (r2 = t4[3].replace(n$1, " ").trim(), o2.unshift(o2[0][r2] = o2[0][r2] || {})) : o2[0][t4[1]] = t4[2].replace(n$1, " ").trim();
-      return o2[0];
-    })(e2);
-    c[d2] = o(p2 ? { ["@keyframes " + d2]: t3 } : t3, r ? "" : "." + d2);
-  }
-  let f2 = r && c.g;
-  return r && (c.g = c[d2]), ((e3, t3, r2, a2) => {
-    a2 ? t3.data = t3.data.replace(a2, e3) : -1 === t3.data.indexOf(e3) && (t3.data = r2 ? e3 + t3.data : t3.data + e3);
-  })(c[d2], t2, s2, f2), d2;
-}, p = (e2, t2, r) => e2.reduce((e3, a2, l2) => {
-  let n2 = t2[l2];
-  if (n2 && n2.call) {
-    let e4 = n2(r), t3 = e4 && e4.props && e4.props.className || /^go/.test(e4) && e4;
-    n2 = t3 ? "." + t3 : e4 && "object" == typeof e4 ? e4.props ? "" : o(e4, "") : false === e4 ? "" : e4;
-  }
-  return e3 + a2 + (null == n2 ? "" : n2);
-}, "");
-function u(e2) {
-  let r = this || {}, a2 = e2.call ? e2(r.p) : e2;
-  return s(a2.unshift ? a2.raw ? p(a2, [].slice.call(arguments, 1), r.p) : a2.reduce((e3, t2) => Object.assign(e3, t2 && t2.call ? t2(r.p) : t2), {}) : a2, t(r.target), r.g, r.o, r.k);
-}
-let d, f$2, g;
-u.bind({ g: 1 });
-let h$1 = u.bind({ k: 1 });
-function m(e2, t2, r, a2) {
-  o.p = t2, d = e2, f$2 = r, g = a2;
-}
-function w$1(e2, t2) {
-  let r = this || {};
-  return function() {
-    let a2 = arguments;
-    function l2(n2, o2) {
-      let c2 = Object.assign({}, n2), i2 = c2.className || l2.className;
-      r.p = Object.assign({ theme: f$2 && f$2() }, c2), r.o = /go\d/.test(i2), c2.className = u.apply(r, a2) + (i2 ? " " + i2 : "");
-      let s2 = e2;
-      return e2[0] && (s2 = c2.as || e2, delete c2.as), g && s2[0] && g(c2), d(s2, c2);
-    }
-    return l2;
-  };
-}
-var Z$1 = (e2) => typeof e2 == "function", h = (e2, t2) => Z$1(e2) ? e2(t2) : e2;
-var W$1 = /* @__PURE__ */ (() => {
-  let e2 = 0;
-  return () => (++e2).toString();
-})(), E = /* @__PURE__ */ (() => {
-  let e2;
-  return () => {
-    if (e2 === void 0 && typeof window < "u") {
-      let t2 = matchMedia("(prefers-reduced-motion: reduce)");
-      e2 = !t2 || t2.matches;
-    }
-    return e2;
-  };
-})();
-var re = 20, k = "default";
-var H$1 = (e2, t2) => {
-  let { toastLimit: o2 } = e2.settings;
-  switch (t2.type) {
-    case 0:
-      return { ...e2, toasts: [t2.toast, ...e2.toasts].slice(0, o2) };
-    case 1:
-      return { ...e2, toasts: e2.toasts.map((r) => r.id === t2.toast.id ? { ...r, ...t2.toast } : r) };
-    case 2:
-      let { toast: s2 } = t2;
-      return H$1(e2, { type: e2.toasts.find((r) => r.id === s2.id) ? 1 : 0, toast: s2 });
-    case 3:
-      let { toastId: a2 } = t2;
-      return { ...e2, toasts: e2.toasts.map((r) => r.id === a2 || a2 === void 0 ? { ...r, dismissed: true, visible: false } : r) };
-    case 4:
-      return t2.toastId === void 0 ? { ...e2, toasts: [] } : { ...e2, toasts: e2.toasts.filter((r) => r.id !== t2.toastId) };
-    case 5:
-      return { ...e2, pausedAt: t2.time };
-    case 6:
-      let i2 = t2.time - (e2.pausedAt || 0);
-      return { ...e2, pausedAt: void 0, toasts: e2.toasts.map((r) => ({ ...r, pauseDuration: r.pauseDuration + i2 })) };
-  }
-}, v = [], j$1 = { toasts: [], pausedAt: void 0, settings: { toastLimit: re } }, f$1 = {}, Y = (e2, t2 = k) => {
-  f$1[t2] = H$1(f$1[t2] || j$1, e2), v.forEach(([o2, s2]) => {
-    o2 === t2 && s2(f$1[t2]);
-  });
-}, _ = (e2) => Object.keys(f$1).forEach((t2) => Y(e2, t2)), Q$1 = (e2) => Object.keys(f$1).find((t2) => f$1[t2].toasts.some((o2) => o2.id === e2)), S = (e2 = k) => (t2) => {
-  Y(t2, e2);
-}, se = { blank: 4e3, error: 4e3, success: 2e3, loading: 1 / 0, custom: 4e3 }, V$1 = (e2 = {}, t2 = k) => {
-  let [o2, s2] = reactExports.useState(f$1[t2] || j$1), a2 = reactExports.useRef(f$1[t2]);
-  reactExports.useEffect(() => (a2.current !== f$1[t2] && s2(f$1[t2]), v.push([t2, s2]), () => {
-    let r = v.findIndex(([l2]) => l2 === t2);
-    r > -1 && v.splice(r, 1);
-  }), [t2]);
-  let i2 = o2.toasts.map((r) => {
-    var l2, g2, T;
-    return { ...e2, ...e2[r.type], ...r, removeDelay: r.removeDelay || ((l2 = e2[r.type]) == null ? void 0 : l2.removeDelay) || (e2 == null ? void 0 : e2.removeDelay), duration: r.duration || ((g2 = e2[r.type]) == null ? void 0 : g2.duration) || (e2 == null ? void 0 : e2.duration) || se[r.type], style: { ...e2.style, ...(T = e2[r.type]) == null ? void 0 : T.style, ...r.style } };
-  });
-  return { ...o2, toasts: i2 };
-};
-var ie = (e2, t2 = "blank", o2) => ({ createdAt: Date.now(), visible: true, dismissed: false, type: t2, ariaProps: { role: "status", "aria-live": "polite" }, message: e2, pauseDuration: 0, ...o2, id: (o2 == null ? void 0 : o2.id) || W$1() }), P$1 = (e2) => (t2, o2) => {
-  let s2 = ie(t2, e2, o2);
-  return S(s2.toasterId || Q$1(s2.id))({ type: 2, toast: s2 }), s2.id;
-}, n = (e2, t2) => P$1("blank")(e2, t2);
-n.error = P$1("error");
-n.success = P$1("success");
-n.loading = P$1("loading");
-n.custom = P$1("custom");
-n.dismiss = (e2, t2) => {
-  let o2 = { type: 3, toastId: e2 };
-  t2 ? S(t2)(o2) : _(o2);
-};
-n.dismissAll = (e2) => n.dismiss(void 0, e2);
-n.remove = (e2, t2) => {
-  let o2 = { type: 4, toastId: e2 };
-  t2 ? S(t2)(o2) : _(o2);
-};
-n.removeAll = (e2) => n.remove(void 0, e2);
-n.promise = (e2, t2, o2) => {
-  let s2 = n.loading(t2.loading, { ...o2, ...o2 == null ? void 0 : o2.loading });
-  return typeof e2 == "function" && (e2 = e2()), e2.then((a2) => {
-    let i2 = t2.success ? h(t2.success, a2) : void 0;
-    return i2 ? n.success(i2, { id: s2, ...o2, ...o2 == null ? void 0 : o2.success }) : n.dismiss(s2), a2;
-  }).catch((a2) => {
-    let i2 = t2.error ? h(t2.error, a2) : void 0;
-    i2 ? n.error(i2, { id: s2, ...o2, ...o2 == null ? void 0 : o2.error }) : n.dismiss(s2);
-  }), e2;
-};
-var ce = 1e3, w = (e2, t2 = "default") => {
-  let { toasts: o2, pausedAt: s2 } = V$1(e2, t2), a2 = reactExports.useRef(/* @__PURE__ */ new Map()).current, i2 = reactExports.useCallback((c2, m2 = ce) => {
-    if (a2.has(c2)) return;
-    let p2 = setTimeout(() => {
-      a2.delete(c2), r({ type: 4, toastId: c2 });
-    }, m2);
-    a2.set(c2, p2);
-  }, []);
-  reactExports.useEffect(() => {
-    if (s2) return;
-    let c2 = Date.now(), m2 = o2.map((p2) => {
-      if (p2.duration === 1 / 0) return;
-      let R = (p2.duration || 0) + p2.pauseDuration - (c2 - p2.createdAt);
-      if (R < 0) {
-        p2.visible && n.dismiss(p2.id);
-        return;
-      }
-      return setTimeout(() => n.dismiss(p2.id, t2), R);
-    });
-    return () => {
-      m2.forEach((p2) => p2 && clearTimeout(p2));
-    };
-  }, [o2, s2, t2]);
-  let r = reactExports.useCallback(S(t2), [t2]), l2 = reactExports.useCallback(() => {
-    r({ type: 5, time: Date.now() });
-  }, [r]), g2 = reactExports.useCallback((c2, m2) => {
-    r({ type: 1, toast: { id: c2, height: m2 } });
-  }, [r]), T = reactExports.useCallback(() => {
-    s2 && r({ type: 6, time: Date.now() });
-  }, [s2, r]), d2 = reactExports.useCallback((c2, m2) => {
-    let { reverseOrder: p2 = false, gutter: R = 8, defaultPosition: z2 } = m2 || {}, O2 = o2.filter((u2) => (u2.position || z2) === (c2.position || z2) && u2.height), K2 = O2.findIndex((u2) => u2.id === c2.id), B = O2.filter((u2, I) => I < K2 && u2.visible).length;
-    return O2.filter((u2) => u2.visible).slice(...p2 ? [B + 1] : [0, B]).reduce((u2, I) => u2 + (I.height || 0) + R, 0);
-  }, [o2]);
-  return reactExports.useEffect(() => {
-    o2.forEach((c2) => {
-      if (c2.dismissed) i2(c2.id, c2.removeDelay);
-      else {
-        let m2 = a2.get(c2.id);
-        m2 && (clearTimeout(m2), a2.delete(c2.id));
-      }
-    });
-  }, [o2, i2]), { toasts: o2, handlers: { updateHeight: g2, startPause: l2, endPause: T, calculateOffset: d2 } };
-};
-var de = h$1` from { transform: scale(0) rotate(45deg); opacity: 0; } to { transform: scale(1) rotate(45deg); opacity: 1; }`, me = h$1` from { transform: scale(0); opacity: 0; } to { transform: scale(1); opacity: 1; }`, le = h$1` from { transform: scale(0) rotate(90deg); opacity: 0; } to { transform: scale(1) rotate(90deg); opacity: 1; }`, C = w$1("div")` width: 20px; opacity: 0; height: 20px; border-radius: 10px; background: ${(e2) => e2.primary || "#ff4b4b"}; position: relative; transform: rotate(45deg); animation: ${de} 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; animation-delay: 100ms; &:after, &:before { content: ''; animation: ${me} 0.15s ease-out forwards; animation-delay: 150ms; position: absolute; border-radius: 3px; opacity: 0; background: ${(e2) => e2.secondary || "#fff"}; bottom: 9px; left: 4px; height: 2px; width: 12px; } &:before { animation: ${le} 0.15s ease-out forwards; animation-delay: 180ms; transform: rotate(90deg); } `;
-var Te = h$1` from { transform: rotate(0deg); } to { transform: rotate(360deg); } `, F = w$1("div")` width: 12px; height: 12px; box-sizing: border-box; border: 2px solid; border-radius: 100%; border-color: ${(e2) => e2.secondary || "#e0e0e0"}; border-right-color: ${(e2) => e2.primary || "#616161"}; animation: ${Te} 1s linear infinite; `;
-var ge = h$1` from { transform: scale(0) rotate(45deg); opacity: 0; } to { transform: scale(1) rotate(45deg); opacity: 1; }`, he = h$1` 0% { height: 0; width: 0; opacity: 0; } 40% { height: 0; width: 6px; opacity: 1; } 100% { opacity: 1; height: 10px; }`, L$2 = w$1("div")` width: 20px; opacity: 0; height: 20px; border-radius: 10px; background: ${(e2) => e2.primary || "#61d345"}; position: relative; transform: rotate(45deg); animation: ${ge} 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; animation-delay: 100ms; &:after { content: ''; box-sizing: border-box; animation: ${he} 0.2s ease-out forwards; opacity: 0; animation-delay: 200ms; position: absolute; border-right: 2px solid; border-bottom: 2px solid; border-color: ${(e2) => e2.secondary || "#fff"}; bottom: 6px; left: 6px; height: 10px; width: 6px; } `;
-var be = w$1("div")` position: absolute; `, Se = w$1("div")` position: relative; display: flex; justify-content: center; align-items: center; min-width: 20px; min-height: 20px; `, Ae = h$1` from { transform: scale(0.6); opacity: 0.4; } to { transform: scale(1); opacity: 1; }`, Pe = w$1("div")` position: relative; transform: scale(0.6); opacity: 0.4; min-width: 20px; animation: ${Ae} 0.3s 0.12s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; `, $$1 = ({ toast: e2 }) => {
-  let { icon: t2, type: o2, iconTheme: s2 } = e2;
-  return t2 !== void 0 ? typeof t2 == "string" ? reactExports.createElement(Pe, null, t2) : t2 : o2 === "blank" ? null : reactExports.createElement(Se, null, reactExports.createElement(F, { ...s2 }), o2 !== "loading" && reactExports.createElement(be, null, o2 === "error" ? reactExports.createElement(C, { ...s2 }) : reactExports.createElement(L$2, { ...s2 })));
-};
-var Re = (e2) => ` 0% {transform: translate3d(0,${e2 * -200}%,0) scale(.6); opacity:.5;} 100% {transform: translate3d(0,0,0) scale(1); opacity:1;} `, Ee = (e2) => ` 0% {transform: translate3d(0,0,-1px) scale(1); opacity:1;} 100% {transform: translate3d(0,${e2 * -150}%,-1px) scale(.6); opacity:0;} `, ve = "0%{opacity:0;} 100%{opacity:1;}", De = "0%{opacity:1;} 100%{opacity:0;}", Oe = w$1("div")` :where(&) { display: flex; align-items: center; background: #fff; color: #363636; line-height: 1.3; will-change: transform; box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1), 0 3px 3px rgba(0, 0, 0, 0.05); max-width: 350px; pointer-events: auto; padding: 8px 10px; border-radius: 8px; } `, Ie = w$1("div")` display: flex; justify-content: center; margin: 4px 10px; color: inherit; flex: 1 1 auto; white-space: pre-line; `, ke = (e2, t2) => {
-  let s2 = e2.includes("top") ? 1 : -1, [a2, i2] = E() ? [ve, De] : [Re(s2), Ee(s2)];
-  return { animation: t2 ? `${h$1(a2)} 0.35s cubic-bezier(.21,1.02,.73,1) forwards` : `${h$1(i2)} 0.4s forwards cubic-bezier(.06,.71,.55,1)` };
-}, N = reactExports.memo(({ toast: e2, position: t2, style: o2, children: s2 }) => {
-  let a2 = e2.height ? ke(e2.position || t2 || "top-center", e2.visible) : { opacity: 0 }, i2 = reactExports.createElement($$1, { toast: e2 }), r = reactExports.createElement(Ie, { ...e2.ariaProps }, h(e2.message, e2));
-  return reactExports.createElement(Oe, { className: e2.className, style: { ...a2, ...o2, ...e2.style } }, typeof s2 == "function" ? s2({ icon: i2, message: r }) : reactExports.createElement(reactExports.Fragment, null, i2, r));
-});
-m(reactExports.createElement);
-var we = ({ id: e2, className: t2, style: o2, onHeightUpdate: s2, children: a2 }) => {
-  let i2 = reactExports.useCallback((r) => {
-    if (r) {
-      let l2 = () => {
-        let g2 = r.getBoundingClientRect().height;
-        s2(e2, g2);
-      };
-      l2(), new MutationObserver(l2).observe(r, { subtree: true, childList: true, characterData: true });
-    }
-  }, [e2, s2]);
-  return reactExports.createElement("div", { ref: i2, className: t2, style: o2 }, a2);
-}, Me = (e2, t2) => {
-  let o2 = e2.includes("top"), s2 = o2 ? { top: 0 } : { bottom: 0 }, a2 = e2.includes("center") ? { justifyContent: "center" } : e2.includes("right") ? { justifyContent: "flex-end" } : {};
-  return { left: 0, right: 0, display: "flex", position: "absolute", transition: E() ? void 0 : "all 230ms cubic-bezier(.21,1.02,.73,1)", transform: `translateY(${t2 * (o2 ? 1 : -1)}px)`, ...s2, ...a2 };
-}, Ce = u` z-index: 9999; > * { pointer-events: auto; } `, D = 16, Fe = ({ reverseOrder: e2, position: t2 = "top-center", toastOptions: o2, gutter: s2, children: a2, toasterId: i2, containerStyle: r, containerClassName: l2 }) => {
-  let { toasts: g2, handlers: T } = w(o2, i2);
-  return reactExports.createElement("div", { "data-rht-toaster": i2 || "", style: { position: "fixed", zIndex: 9999, top: D, left: D, right: D, bottom: D, pointerEvents: "none", ...r }, className: l2, onMouseEnter: T.startPause, onMouseLeave: T.endPause }, g2.map((d2) => {
-    let c2 = d2.position || t2, m2 = T.calculateOffset(d2, { reverseOrder: e2, gutter: s2, defaultPosition: t2 }), p2 = Me(c2, m2);
-    return reactExports.createElement(we, { id: d2.id, key: d2.id, onHeightUpdate: T.updateHeight, className: d2.visible ? Ce : "", style: p2 }, d2.type === "custom" ? h(d2.message, d2) : a2 ? a2(d2) : reactExports.createElement(N, { toast: d2, position: c2 }));
-  }));
-};
-var zt = n;
 const getToken$1 = () => localStorage.getItem("token") || localStorage.getItem("nstp_token");
 const setToken = (token) => {
   localStorage.setItem("token", token);
@@ -12713,7 +12482,8 @@ const handleResponse = async (response) => {
       removeToken();
       window.location.href = "/login";
     }
-    throw new Error(error.message || `HTTP ${response.status}`);
+    if (error.code === "PASSWORD_CHANGE_REQUIRED") window.location.assign("/change-temporary-password");
+    throw new Error(Object.values(error.errors ?? {}).flat().join(" ") || error.message || `HTTP ${response.status}`);
   }
   return response.json();
 };
@@ -13295,6 +13065,7 @@ const adminApi = {
   exportStudents: async (params) => {
     const query = new URLSearchParams();
     if (params?.component) query.append("component", params.component);
+    for (const key of ["course", "section", "status", "search"]) if (params?.[key]) query.append(key, params[key]);
     const response = await fetch(
       `${API_URL}/admin/students/export?${query.toString()}`,
       { headers: { Authorization: `Bearer ${getToken$1()}` } }
@@ -14225,6 +13996,508 @@ const facultyApi = {
     return result.data ?? result;
   }
 };
+async function secureRequest(path, method = "GET", body, signal) {
+  const multipart = body instanceof FormData;
+  const response = await fetch(`${API_URL}${path}`, { method, signal, headers: { Accept: "application/json", ...!multipart ? { "Content-Type": "application/json" } : {}, Authorization: `Bearer ${getToken$1()}` }, body: body === void 0 ? void 0 : multipart ? body : JSON.stringify(body) });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    if (data.code === "PASSWORD_CHANGE_REQUIRED") window.location.assign("/change-temporary-password");
+    throw new Error(Object.values(data.errors ?? {}).flat().join(" ") || data.message || `Request failed (${response.status})`);
+  }
+  return data;
+}
+function DirectoryFilters({ course, section, onCourse, onSection }) {
+  const query = useQuery({ queryKey: ["directory-options", getCurrentUserId()], queryFn: () => secureRequest("/directory/options"), staleTime: 0 });
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-wrap gap-3", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
+      "Course",
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("select", { className: "input", value: course, onChange: (e2) => onCourse(e2.target.value), children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "", children: "All courses" }),
+        query.data?.data.courses.map((v2) => /* @__PURE__ */ jsxRuntimeExports.jsx("option", { children: v2 }, v2))
+      ] })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
+      "Section",
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("select", { className: "input", value: section, onChange: (e2) => onSection(e2.target.value), children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "", children: "All sections" }),
+        query.data?.data.sections.map((v2) => /* @__PURE__ */ jsxRuntimeExports.jsx("option", { children: v2 }, v2))
+      ] })
+    ] }),
+    query.error && /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "btn btn-secondary", onClick: () => query.refetch(), children: "Retry filters" })
+  ] });
+}
+const localInput = (value) => {
+  if (!value) return "";
+  const d2 = new Date(value);
+  return new Date(d2.getTime() - d2.getTimezoneOffset() * 6e4).toISOString().slice(0, 16);
+};
+function ClassRecord({ classId }) {
+  const [sessionPage, setSessionPage] = reactExports.useState(1);
+  const params = useParams();
+  const id = classId ?? Number(params.id);
+  const [course, setCourse] = reactExports.useState(""), [section, setSection] = reactExports.useState(""), [session, setSession] = reactExports.useState(""), [student, setStudent] = reactExports.useState(""), [mark, setMark] = reactExports.useState("present"), [timeIn, setTimeIn] = reactExports.useState(""), [timeOut, setTimeOut] = reactExports.useState(""), [review, setReview] = reactExports.useState("approved"), [reason, setReason] = reactExports.useState(""), [busy, setBusy] = reactExports.useState(false), [message, setMessage] = reactExports.useState("");
+  const lock = reactExports.useRef(false);
+  const query = useQuery({ queryKey: ["class-record", getCurrentUserId(), id, course, section, sessionPage], enabled: !!id, queryFn: () => secureRequest(`/classes/${id}/record?course=${encodeURIComponent(course)}&section=${encodeURIComponent(section)}&session_page=${sessionPage}`), refetchInterval: 3e4 });
+  const data = query.data?.data;
+  const sessionId = Number(session || data?.sessions[0]?.id);
+  const current = data?.sessions.find((s2) => s2.id === sessionId);
+  const people = new Set(data?.students.map((s2) => s2.id));
+  const logs = current?.logs.filter((l2) => people.has(l2.student_id)) ?? [];
+  async function save(e2) {
+    e2.preventDefault();
+    if (lock.current) return;
+    lock.current = true;
+    setBusy(true);
+    try {
+      await secureRequest(`/attendance/sessions/${sessionId}/manual`, "POST", { student_id: Number(student), status: mark, check_in_at: timeIn ? new Date(timeIn).toISOString() : null, check_out_at: timeOut ? new Date(timeOut).toISOString() : null, review_status: review, reason });
+      setMessage("Attendance saved. Audit history and credited hours updated.");
+      setReason("");
+      await query.refetch();
+    } catch (e22) {
+      setMessage(e22.message);
+    } finally {
+      lock.current = false;
+      setBusy(false);
+    }
+  }
+  function csv() {
+    const rows = [["Student ID", "Name", "Course", "Section", "Time in", "Time out", "Status", "Review", "Hours"], ...logs.map((l2) => {
+      const s2 = data.students.find((s22) => s22.id === l2.student_id);
+      return [s2.student_id, `${s2.user?.first_name ?? ""} ${s2.user?.last_name ?? ""}`, s2.course, s2.section, l2.check_in_at, l2.check_out_at, l2.attendance_mark || l2.status, l2.review_status, l2.credited_hours];
+    })];
+    const content = rows.map((r) => r.map((v2) => '"' + String(v2 ?? "").replace(/^[=+@-]/, "'").replaceAll('"', '""') + '"').join(",")).join("\r\n");
+    const url = URL.createObjectURL(new Blob([content], { type: "text/csv" }));
+    const a2 = document.createElement("a");
+    a2.href = url;
+    a2.download = `class-${id}-attendance.csv`;
+    a2.click();
+    URL.revokeObjectURL(url);
+  }
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "space-y-4 bg-white p-5 rounded-xl border", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("h2", { className: "text-xl font-bold", children: [
+      "Class record · ",
+      data?.class.name ?? "Loading…"
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-slate-600", children: "Assigned faculty, Admin and Super Admin · Paginated session history · Corrections require a reason" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(DirectoryFilters, { course, section, onCourse: setCourse, onSection: setSection }),
+    query.error && /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { role: "alert", children: [
+      query.error.message,
+      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn", onClick: () => query.refetch(), children: "Retry" })
+    ] }),
+    data && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "block", children: [
+        "Session",
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("select", { className: "input", value: sessionId || "", onChange: (e2) => setSession(e2.target.value), children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "", children: "Choose session" }),
+          data.sessions.map((s2) => /* @__PURE__ */ jsxRuntimeExports.jsxs("option", { value: s2.id, children: [
+            "#",
+            s2.id,
+            " · ",
+            s2.description || s2.component,
+            " · ",
+            s2.scheduled_start || s2.start_time,
+            " · ",
+            s2.status
+          ] }, s2.id))
+        ] })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-2", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-secondary", disabled: sessionPage <= 1, onClick: () => {
+          setSession("");
+          setSessionPage((p2) => p2 - 1);
+        }, children: "Newer sessions" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-secondary", disabled: sessionPage >= (data.session_meta?.last_page ?? 1), onClick: () => {
+          setSession("");
+          setSessionPage((p2) => p2 + 1);
+        }, children: "Older sessions" })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-2", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-secondary", onClick: () => query.refetch(), children: "Refresh" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-secondary", onClick: csv, disabled: !current, children: "Export filtered CSV" })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "overflow-x-auto", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("table", { className: "w-full text-sm", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("thead", { children: /* @__PURE__ */ jsxRuntimeExports.jsxs("tr", { children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Student" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Course / section" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Time-in" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Time-out" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Status / review" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Hours" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Action" })
+        ] }) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("tbody", { children: logs.map((l2) => {
+          const s2 = data.students.find((s22) => s22.id === l2.student_id);
+          return /* @__PURE__ */ jsxRuntimeExports.jsxs("tr", { className: "border-b", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("td", { className: "p-2", children: [
+              s2?.user?.first_name,
+              " ",
+              s2?.user?.last_name,
+              /* @__PURE__ */ jsxRuntimeExports.jsx("br", {}),
+              s2?.student_id
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("td", { children: [
+              s2?.course,
+              " / ",
+              s2?.section
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: l2.check_in_at ? new Date(l2.check_in_at).toLocaleString() : "—" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: l2.check_out_at ? new Date(l2.check_out_at).toLocaleString() : "—" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("td", { children: [
+              l2.attendance_mark || l2.status,
+              " · ",
+              l2.review_status === "pending" ? "After session—pending approval" : l2.review_status
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: l2.credited_hours }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "btn btn-sm", onClick: () => {
+              setStudent(String(l2.student_id));
+              setMark(l2.attendance_mark || l2.status);
+              setTimeIn(localInput(l2.check_in_at));
+              setTimeOut(localInput(l2.check_out_at));
+              setReview("approved");
+              setReason("");
+            }, children: "Review / correct" }) })
+          ] }, l2.id);
+        }) })
+      ] }) }),
+      logs.length === 0 && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "No attendance recorded for this selection." }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("form", { onSubmit: save, className: "space-y-3 border-t pt-4", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("h3", { className: "font-semibold", children: "Manual attendance / correction" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid sm:grid-cols-2 gap-3", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
+            "Student",
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("select", { className: "input", required: true, value: student, onChange: (e2) => setStudent(e2.target.value), children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "", children: "Select student" }),
+              data.students.map((s2) => /* @__PURE__ */ jsxRuntimeExports.jsxs("option", { value: s2.id, children: [
+                s2.student_id,
+                " · ",
+                s2.user?.first_name,
+                " ",
+                s2.user?.last_name,
+                " · ",
+                s2.course,
+                " / ",
+                s2.section
+              ] }, s2.id))
+            ] })
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
+            "Status",
+            /* @__PURE__ */ jsxRuntimeExports.jsx("select", { className: "input", value: mark, onChange: (e2) => {
+              setMark(e2.target.value);
+              if (["absent", "excused"].includes(e2.target.value)) {
+                setTimeIn("");
+                setTimeOut("");
+              }
+            }, children: ["present", "late", "absent", "excused"].map((v2) => /* @__PURE__ */ jsxRuntimeExports.jsx("option", { children: v2 }, v2)) })
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
+            "Time-in",
+            /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "datetime-local", className: "input", value: timeIn, required: ["present", "late"].includes(mark), onChange: (e2) => setTimeIn(e2.target.value) })
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
+            "Time-out",
+            /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "datetime-local", className: "input", value: timeOut, onChange: (e2) => setTimeOut(e2.target.value) })
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
+            "Review decision",
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("select", { className: "input", value: review, onChange: (e2) => setReview(e2.target.value), children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "approved", children: "Approve" }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "rejected", children: "Reject / no credit" })
+            ] })
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
+            "Reason",
+            /* @__PURE__ */ jsxRuntimeExports.jsx("input", { className: "input", minLength: 3, maxLength: 500, required: true, value: reason, onChange: (e2) => setReason(e2.target.value) })
+          ] })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-slate-600", children: "Credit uses approved elapsed time within the scheduled session. No time-out or pending/rejected record means no new credit." }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-primary", disabled: busy || !current, children: busy ? "Saving…" : "Save attendance" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { role: "status", children: message })
+      ] })
+    ] })
+  ] });
+}
+function ChangeTemporaryPassword() {
+  const [current, setCurrent] = reactExports.useState(""), [password, setPassword] = reactExports.useState(""), [confirm, setConfirm] = reactExports.useState(""), [show, setShow] = reactExports.useState(false), [busy, setBusy] = reactExports.useState(false), [message, setMessage] = reactExports.useState("");
+  const lock = reactExports.useRef(false);
+  async function submit(e2) {
+    e2.preventDefault();
+    if (lock.current) return;
+    if (password !== confirm) {
+      setMessage("Passwords must match.");
+      return;
+    }
+    lock.current = true;
+    setBusy(true);
+    try {
+      await secureRequest("/change-password-first-login", "POST", { current_password: current, new_password: password, new_password_confirmation: confirm });
+      removeToken();
+      window.location.assign("/login");
+    } catch (e22) {
+      setMessage(e22.message);
+    } finally {
+      lock.current = false;
+      setBusy(false);
+    }
+  }
+  return /* @__PURE__ */ jsxRuntimeExports.jsx("main", { className: "min-h-screen bg-slate-50 flex items-center justify-center p-4", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("form", { onSubmit: submit, className: "bg-white rounded-xl p-6 max-w-md w-full space-y-4", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("h1", { className: "text-xl font-bold", children: "Change temporary password" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "Set a private password before continuing. You will sign in again afterward." }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "block", children: [
+      "Current temporary password",
+      /* @__PURE__ */ jsxRuntimeExports.jsx("input", { className: "input", type: show ? "text" : "password", value: current, onChange: (e2) => setCurrent(e2.target.value), autoComplete: "current-password", required: true, disabled: busy })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "block", children: [
+      "New password",
+      /* @__PURE__ */ jsxRuntimeExports.jsx("input", { className: "input", type: show ? "text" : "password", minLength: 8, required: true, value: password, onChange: (e2) => setPassword(e2.target.value), autoComplete: "new-password", disabled: busy })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "block", children: [
+      "Confirm new password",
+      /* @__PURE__ */ jsxRuntimeExports.jsx("input", { className: "input", type: show ? "text" : "password", minLength: 8, required: true, value: confirm, onChange: (e2) => setConfirm(e2.target.value), autoComplete: "new-password", disabled: busy })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "flex gap-2", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "checkbox", checked: show, onChange: (e2) => setShow(e2.target.checked) }),
+      "Show passwords"
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("p", { role: "alert", children: message }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-primary", disabled: busy, children: busy ? "Saving…" : "Change password" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "btn btn-secondary", disabled: busy, onClick: () => {
+      removeToken();
+      window.location.assign("/login");
+    }, children: "Sign out" })
+  ] }) });
+}
+let e = { data: "" }, t = (t2) => {
+  if ("object" == typeof window) {
+    let e2 = (t2 ? t2.querySelector("#_goober") : window._goober) || Object.assign(document.createElement("style"), { innerHTML: " ", id: "_goober" });
+    return e2.nonce = window.__nonce__, e2.parentNode || (t2 || document.head).appendChild(e2), e2.firstChild;
+  }
+  return t2 || e;
+}, a = /(?:([\u0080-\uFFFF\w-%@]+) *:? *([^{;]+?);|([^;}{]*?) *{)|(}\s*)/g, l = /\/\*[^]*?\*\/|  +/g, n$1 = /\n+/g, o = (e2, t2) => {
+  let r = "", a2 = "", l2 = "";
+  for (let n2 in e2) {
+    let c2 = e2[n2];
+    "@" == n2[0] ? "i" == n2[1] ? r = n2 + " " + c2 + ";" : a2 += "f" == n2[1] ? o(c2, n2) : n2 + "{" + o(c2, "k" == n2[1] ? "" : t2) + "}" : "object" == typeof c2 ? a2 += o(c2, t2 ? t2.replace(/([^,])+/g, (e3) => n2.replace(/([^,]*:\S+\([^)]*\))|([^,])+/g, (t3) => /&/.test(t3) ? t3.replace(/&/g, e3) : e3 ? e3 + " " + t3 : t3)) : n2) : null != c2 && (n2 = "-" == n2[1] ? n2 : n2.replace(/[A-Z]/g, "-$&").toLowerCase(), l2 += o.p ? o.p(n2, c2) : n2 + ":" + c2 + ";");
+  }
+  return r + (t2 && l2 ? t2 + "{" + l2 + "}" : l2) + a2;
+}, c = {}, i = (e2) => {
+  if ("object" == typeof e2) {
+    let t2 = "";
+    for (let r in e2) t2 += r + i(e2[r]);
+    return t2;
+  }
+  return e2;
+}, s = (e2, t2, r, s2, p2) => {
+  let u2 = i(e2), d2 = c[u2] || (c[u2] = ((e3) => {
+    let t3 = 0, r2 = 11;
+    for (; t3 < e3.length; ) r2 = 101 * r2 + e3.charCodeAt(t3++) >>> 0;
+    return "go" + r2;
+  })(u2));
+  if (!c[d2]) {
+    let t3 = u2 !== e2 ? e2 : ((e3) => {
+      let t4, r2, o2 = [{}];
+      for (; t4 = a.exec(e3.replace(l, "")); ) t4[4] ? o2.shift() : t4[3] ? (r2 = t4[3].replace(n$1, " ").trim(), o2.unshift(o2[0][r2] = o2[0][r2] || {})) : o2[0][t4[1]] = t4[2].replace(n$1, " ").trim();
+      return o2[0];
+    })(e2);
+    c[d2] = o(p2 ? { ["@keyframes " + d2]: t3 } : t3, r ? "" : "." + d2);
+  }
+  let f2 = r && c.g;
+  return r && (c.g = c[d2]), ((e3, t3, r2, a2) => {
+    a2 ? t3.data = t3.data.replace(a2, e3) : -1 === t3.data.indexOf(e3) && (t3.data = r2 ? e3 + t3.data : t3.data + e3);
+  })(c[d2], t2, s2, f2), d2;
+}, p = (e2, t2, r) => e2.reduce((e3, a2, l2) => {
+  let n2 = t2[l2];
+  if (n2 && n2.call) {
+    let e4 = n2(r), t3 = e4 && e4.props && e4.props.className || /^go/.test(e4) && e4;
+    n2 = t3 ? "." + t3 : e4 && "object" == typeof e4 ? e4.props ? "" : o(e4, "") : false === e4 ? "" : e4;
+  }
+  return e3 + a2 + (null == n2 ? "" : n2);
+}, "");
+function u(e2) {
+  let r = this || {}, a2 = e2.call ? e2(r.p) : e2;
+  return s(a2.unshift ? a2.raw ? p(a2, [].slice.call(arguments, 1), r.p) : a2.reduce((e3, t2) => Object.assign(e3, t2 && t2.call ? t2(r.p) : t2), {}) : a2, t(r.target), r.g, r.o, r.k);
+}
+let d, f$2, g;
+u.bind({ g: 1 });
+let h$1 = u.bind({ k: 1 });
+function m(e2, t2, r, a2) {
+  o.p = t2, d = e2, f$2 = r, g = a2;
+}
+function w$1(e2, t2) {
+  let r = this || {};
+  return function() {
+    let a2 = arguments;
+    function l2(n2, o2) {
+      let c2 = Object.assign({}, n2), i2 = c2.className || l2.className;
+      r.p = Object.assign({ theme: f$2 && f$2() }, c2), r.o = /go\d/.test(i2), c2.className = u.apply(r, a2) + (i2 ? " " + i2 : "");
+      let s2 = e2;
+      return e2[0] && (s2 = c2.as || e2, delete c2.as), g && s2[0] && g(c2), d(s2, c2);
+    }
+    return l2;
+  };
+}
+var Z$1 = (e2) => typeof e2 == "function", h = (e2, t2) => Z$1(e2) ? e2(t2) : e2;
+var W$1 = /* @__PURE__ */ (() => {
+  let e2 = 0;
+  return () => (++e2).toString();
+})(), E = /* @__PURE__ */ (() => {
+  let e2;
+  return () => {
+    if (e2 === void 0 && typeof window < "u") {
+      let t2 = matchMedia("(prefers-reduced-motion: reduce)");
+      e2 = !t2 || t2.matches;
+    }
+    return e2;
+  };
+})();
+var re = 20, k = "default";
+var H$1 = (e2, t2) => {
+  let { toastLimit: o2 } = e2.settings;
+  switch (t2.type) {
+    case 0:
+      return { ...e2, toasts: [t2.toast, ...e2.toasts].slice(0, o2) };
+    case 1:
+      return { ...e2, toasts: e2.toasts.map((r) => r.id === t2.toast.id ? { ...r, ...t2.toast } : r) };
+    case 2:
+      let { toast: s2 } = t2;
+      return H$1(e2, { type: e2.toasts.find((r) => r.id === s2.id) ? 1 : 0, toast: s2 });
+    case 3:
+      let { toastId: a2 } = t2;
+      return { ...e2, toasts: e2.toasts.map((r) => r.id === a2 || a2 === void 0 ? { ...r, dismissed: true, visible: false } : r) };
+    case 4:
+      return t2.toastId === void 0 ? { ...e2, toasts: [] } : { ...e2, toasts: e2.toasts.filter((r) => r.id !== t2.toastId) };
+    case 5:
+      return { ...e2, pausedAt: t2.time };
+    case 6:
+      let i2 = t2.time - (e2.pausedAt || 0);
+      return { ...e2, pausedAt: void 0, toasts: e2.toasts.map((r) => ({ ...r, pauseDuration: r.pauseDuration + i2 })) };
+  }
+}, v = [], j$1 = { toasts: [], pausedAt: void 0, settings: { toastLimit: re } }, f$1 = {}, Y = (e2, t2 = k) => {
+  f$1[t2] = H$1(f$1[t2] || j$1, e2), v.forEach(([o2, s2]) => {
+    o2 === t2 && s2(f$1[t2]);
+  });
+}, _ = (e2) => Object.keys(f$1).forEach((t2) => Y(e2, t2)), Q$1 = (e2) => Object.keys(f$1).find((t2) => f$1[t2].toasts.some((o2) => o2.id === e2)), S = (e2 = k) => (t2) => {
+  Y(t2, e2);
+}, se = { blank: 4e3, error: 4e3, success: 2e3, loading: 1 / 0, custom: 4e3 }, V$1 = (e2 = {}, t2 = k) => {
+  let [o2, s2] = reactExports.useState(f$1[t2] || j$1), a2 = reactExports.useRef(f$1[t2]);
+  reactExports.useEffect(() => (a2.current !== f$1[t2] && s2(f$1[t2]), v.push([t2, s2]), () => {
+    let r = v.findIndex(([l2]) => l2 === t2);
+    r > -1 && v.splice(r, 1);
+  }), [t2]);
+  let i2 = o2.toasts.map((r) => {
+    var l2, g2, T;
+    return { ...e2, ...e2[r.type], ...r, removeDelay: r.removeDelay || ((l2 = e2[r.type]) == null ? void 0 : l2.removeDelay) || (e2 == null ? void 0 : e2.removeDelay), duration: r.duration || ((g2 = e2[r.type]) == null ? void 0 : g2.duration) || (e2 == null ? void 0 : e2.duration) || se[r.type], style: { ...e2.style, ...(T = e2[r.type]) == null ? void 0 : T.style, ...r.style } };
+  });
+  return { ...o2, toasts: i2 };
+};
+var ie = (e2, t2 = "blank", o2) => ({ createdAt: Date.now(), visible: true, dismissed: false, type: t2, ariaProps: { role: "status", "aria-live": "polite" }, message: e2, pauseDuration: 0, ...o2, id: (o2 == null ? void 0 : o2.id) || W$1() }), P$1 = (e2) => (t2, o2) => {
+  let s2 = ie(t2, e2, o2);
+  return S(s2.toasterId || Q$1(s2.id))({ type: 2, toast: s2 }), s2.id;
+}, n = (e2, t2) => P$1("blank")(e2, t2);
+n.error = P$1("error");
+n.success = P$1("success");
+n.loading = P$1("loading");
+n.custom = P$1("custom");
+n.dismiss = (e2, t2) => {
+  let o2 = { type: 3, toastId: e2 };
+  t2 ? S(t2)(o2) : _(o2);
+};
+n.dismissAll = (e2) => n.dismiss(void 0, e2);
+n.remove = (e2, t2) => {
+  let o2 = { type: 4, toastId: e2 };
+  t2 ? S(t2)(o2) : _(o2);
+};
+n.removeAll = (e2) => n.remove(void 0, e2);
+n.promise = (e2, t2, o2) => {
+  let s2 = n.loading(t2.loading, { ...o2, ...o2 == null ? void 0 : o2.loading });
+  return typeof e2 == "function" && (e2 = e2()), e2.then((a2) => {
+    let i2 = t2.success ? h(t2.success, a2) : void 0;
+    return i2 ? n.success(i2, { id: s2, ...o2, ...o2 == null ? void 0 : o2.success }) : n.dismiss(s2), a2;
+  }).catch((a2) => {
+    let i2 = t2.error ? h(t2.error, a2) : void 0;
+    i2 ? n.error(i2, { id: s2, ...o2, ...o2 == null ? void 0 : o2.error }) : n.dismiss(s2);
+  }), e2;
+};
+var ce = 1e3, w = (e2, t2 = "default") => {
+  let { toasts: o2, pausedAt: s2 } = V$1(e2, t2), a2 = reactExports.useRef(/* @__PURE__ */ new Map()).current, i2 = reactExports.useCallback((c2, m2 = ce) => {
+    if (a2.has(c2)) return;
+    let p2 = setTimeout(() => {
+      a2.delete(c2), r({ type: 4, toastId: c2 });
+    }, m2);
+    a2.set(c2, p2);
+  }, []);
+  reactExports.useEffect(() => {
+    if (s2) return;
+    let c2 = Date.now(), m2 = o2.map((p2) => {
+      if (p2.duration === 1 / 0) return;
+      let R = (p2.duration || 0) + p2.pauseDuration - (c2 - p2.createdAt);
+      if (R < 0) {
+        p2.visible && n.dismiss(p2.id);
+        return;
+      }
+      return setTimeout(() => n.dismiss(p2.id, t2), R);
+    });
+    return () => {
+      m2.forEach((p2) => p2 && clearTimeout(p2));
+    };
+  }, [o2, s2, t2]);
+  let r = reactExports.useCallback(S(t2), [t2]), l2 = reactExports.useCallback(() => {
+    r({ type: 5, time: Date.now() });
+  }, [r]), g2 = reactExports.useCallback((c2, m2) => {
+    r({ type: 1, toast: { id: c2, height: m2 } });
+  }, [r]), T = reactExports.useCallback(() => {
+    s2 && r({ type: 6, time: Date.now() });
+  }, [s2, r]), d2 = reactExports.useCallback((c2, m2) => {
+    let { reverseOrder: p2 = false, gutter: R = 8, defaultPosition: z2 } = m2 || {}, O2 = o2.filter((u2) => (u2.position || z2) === (c2.position || z2) && u2.height), K2 = O2.findIndex((u2) => u2.id === c2.id), B = O2.filter((u2, I) => I < K2 && u2.visible).length;
+    return O2.filter((u2) => u2.visible).slice(...p2 ? [B + 1] : [0, B]).reduce((u2, I) => u2 + (I.height || 0) + R, 0);
+  }, [o2]);
+  return reactExports.useEffect(() => {
+    o2.forEach((c2) => {
+      if (c2.dismissed) i2(c2.id, c2.removeDelay);
+      else {
+        let m2 = a2.get(c2.id);
+        m2 && (clearTimeout(m2), a2.delete(c2.id));
+      }
+    });
+  }, [o2, i2]), { toasts: o2, handlers: { updateHeight: g2, startPause: l2, endPause: T, calculateOffset: d2 } };
+};
+var de = h$1` from { transform: scale(0) rotate(45deg); opacity: 0; } to { transform: scale(1) rotate(45deg); opacity: 1; }`, me = h$1` from { transform: scale(0); opacity: 0; } to { transform: scale(1); opacity: 1; }`, le = h$1` from { transform: scale(0) rotate(90deg); opacity: 0; } to { transform: scale(1) rotate(90deg); opacity: 1; }`, C = w$1("div")` width: 20px; opacity: 0; height: 20px; border-radius: 10px; background: ${(e2) => e2.primary || "#ff4b4b"}; position: relative; transform: rotate(45deg); animation: ${de} 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; animation-delay: 100ms; &:after, &:before { content: ''; animation: ${me} 0.15s ease-out forwards; animation-delay: 150ms; position: absolute; border-radius: 3px; opacity: 0; background: ${(e2) => e2.secondary || "#fff"}; bottom: 9px; left: 4px; height: 2px; width: 12px; } &:before { animation: ${le} 0.15s ease-out forwards; animation-delay: 180ms; transform: rotate(90deg); } `;
+var Te = h$1` from { transform: rotate(0deg); } to { transform: rotate(360deg); } `, F = w$1("div")` width: 12px; height: 12px; box-sizing: border-box; border: 2px solid; border-radius: 100%; border-color: ${(e2) => e2.secondary || "#e0e0e0"}; border-right-color: ${(e2) => e2.primary || "#616161"}; animation: ${Te} 1s linear infinite; `;
+var ge = h$1` from { transform: scale(0) rotate(45deg); opacity: 0; } to { transform: scale(1) rotate(45deg); opacity: 1; }`, he = h$1` 0% { height: 0; width: 0; opacity: 0; } 40% { height: 0; width: 6px; opacity: 1; } 100% { opacity: 1; height: 10px; }`, L$2 = w$1("div")` width: 20px; opacity: 0; height: 20px; border-radius: 10px; background: ${(e2) => e2.primary || "#61d345"}; position: relative; transform: rotate(45deg); animation: ${ge} 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; animation-delay: 100ms; &:after { content: ''; box-sizing: border-box; animation: ${he} 0.2s ease-out forwards; opacity: 0; animation-delay: 200ms; position: absolute; border-right: 2px solid; border-bottom: 2px solid; border-color: ${(e2) => e2.secondary || "#fff"}; bottom: 6px; left: 6px; height: 10px; width: 6px; } `;
+var be = w$1("div")` position: absolute; `, Se = w$1("div")` position: relative; display: flex; justify-content: center; align-items: center; min-width: 20px; min-height: 20px; `, Ae = h$1` from { transform: scale(0.6); opacity: 0.4; } to { transform: scale(1); opacity: 1; }`, Pe = w$1("div")` position: relative; transform: scale(0.6); opacity: 0.4; min-width: 20px; animation: ${Ae} 0.3s 0.12s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; `, $$1 = ({ toast: e2 }) => {
+  let { icon: t2, type: o2, iconTheme: s2 } = e2;
+  return t2 !== void 0 ? typeof t2 == "string" ? reactExports.createElement(Pe, null, t2) : t2 : o2 === "blank" ? null : reactExports.createElement(Se, null, reactExports.createElement(F, { ...s2 }), o2 !== "loading" && reactExports.createElement(be, null, o2 === "error" ? reactExports.createElement(C, { ...s2 }) : reactExports.createElement(L$2, { ...s2 })));
+};
+var Re = (e2) => ` 0% {transform: translate3d(0,${e2 * -200}%,0) scale(.6); opacity:.5;} 100% {transform: translate3d(0,0,0) scale(1); opacity:1;} `, Ee = (e2) => ` 0% {transform: translate3d(0,0,-1px) scale(1); opacity:1;} 100% {transform: translate3d(0,${e2 * -150}%,-1px) scale(.6); opacity:0;} `, ve = "0%{opacity:0;} 100%{opacity:1;}", De = "0%{opacity:1;} 100%{opacity:0;}", Oe = w$1("div")` :where(&) { display: flex; align-items: center; background: #fff; color: #363636; line-height: 1.3; will-change: transform; box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1), 0 3px 3px rgba(0, 0, 0, 0.05); max-width: 350px; pointer-events: auto; padding: 8px 10px; border-radius: 8px; } `, Ie = w$1("div")` display: flex; justify-content: center; margin: 4px 10px; color: inherit; flex: 1 1 auto; white-space: pre-line; `, ke = (e2, t2) => {
+  let s2 = e2.includes("top") ? 1 : -1, [a2, i2] = E() ? [ve, De] : [Re(s2), Ee(s2)];
+  return { animation: t2 ? `${h$1(a2)} 0.35s cubic-bezier(.21,1.02,.73,1) forwards` : `${h$1(i2)} 0.4s forwards cubic-bezier(.06,.71,.55,1)` };
+}, N = reactExports.memo(({ toast: e2, position: t2, style: o2, children: s2 }) => {
+  let a2 = e2.height ? ke(e2.position || t2 || "top-center", e2.visible) : { opacity: 0 }, i2 = reactExports.createElement($$1, { toast: e2 }), r = reactExports.createElement(Ie, { ...e2.ariaProps }, h(e2.message, e2));
+  return reactExports.createElement(Oe, { className: e2.className, style: { ...a2, ...o2, ...e2.style } }, typeof s2 == "function" ? s2({ icon: i2, message: r }) : reactExports.createElement(reactExports.Fragment, null, i2, r));
+});
+m(reactExports.createElement);
+var we = ({ id: e2, className: t2, style: o2, onHeightUpdate: s2, children: a2 }) => {
+  let i2 = reactExports.useCallback((r) => {
+    if (r) {
+      let l2 = () => {
+        let g2 = r.getBoundingClientRect().height;
+        s2(e2, g2);
+      };
+      l2(), new MutationObserver(l2).observe(r, { subtree: true, childList: true, characterData: true });
+    }
+  }, [e2, s2]);
+  return reactExports.createElement("div", { ref: i2, className: t2, style: o2 }, a2);
+}, Me = (e2, t2) => {
+  let o2 = e2.includes("top"), s2 = o2 ? { top: 0 } : { bottom: 0 }, a2 = e2.includes("center") ? { justifyContent: "center" } : e2.includes("right") ? { justifyContent: "flex-end" } : {};
+  return { left: 0, right: 0, display: "flex", position: "absolute", transition: E() ? void 0 : "all 230ms cubic-bezier(.21,1.02,.73,1)", transform: `translateY(${t2 * (o2 ? 1 : -1)}px)`, ...s2, ...a2 };
+}, Ce = u` z-index: 9999; > * { pointer-events: auto; } `, D = 16, Fe = ({ reverseOrder: e2, position: t2 = "top-center", toastOptions: o2, gutter: s2, children: a2, toasterId: i2, containerStyle: r, containerClassName: l2 }) => {
+  let { toasts: g2, handlers: T } = w(o2, i2);
+  return reactExports.createElement("div", { "data-rht-toaster": i2 || "", style: { position: "fixed", zIndex: 9999, top: D, left: D, right: D, bottom: D, pointerEvents: "none", ...r }, className: l2, onMouseEnter: T.startPause, onMouseLeave: T.endPause }, g2.map((d2) => {
+    let c2 = d2.position || t2, m2 = T.calculateOffset(d2, { reverseOrder: e2, gutter: s2, defaultPosition: t2 }), p2 = Me(c2, m2);
+    return reactExports.createElement(we, { id: d2.id, key: d2.id, onHeightUpdate: T.updateHeight, className: d2.visible ? Ce : "", style: p2 }, d2.type === "custom" ? h(d2.message, d2) : a2 ? a2(d2) : reactExports.createElement(N, { toast: d2, position: c2 }));
+  }));
+};
+var zt = n;
 const RefreshButton = ({
   onRefresh,
   isLoading = false,
@@ -14688,6 +14961,7 @@ const Classes = () => {
               ] }) }),
               /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `badge ${getStatusBadge2(cls.status)}`, children: cls.status.toUpperCase() }) }),
               /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-end gap-2 flex-wrap", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(Link, { className: "btn btn-secondary btn-sm", to: `/admin/classes/${cls.id}/record`, children: "Class record" }),
                 /* @__PURE__ */ jsxRuntimeExports.jsxs(
                   "button",
                   {
@@ -14759,6 +15033,7 @@ const Classes = () => {
               cls.class_code
             ] }),
             /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-wrap gap-2 pt-3 border-t border-slate-100", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(Link, { className: "btn btn-secondary btn-sm", to: `/admin/classes/${cls.id}/record`, children: "Class record" }),
               /* @__PURE__ */ jsxRuntimeExports.jsxs(
                 "button",
                 {
@@ -17019,34 +17294,37 @@ const ForgotPassword = () => {
   const [loading, setLoading] = reactExports.useState(false);
   const [timer, setTimer] = reactExports.useState(0);
   const [showPassword, setShowPassword] = reactExports.useState(false);
-  const startTimer = () => {
-    setTimer(60);
-    const interval = setInterval(() => {
-      setTimer((prev) => {
-        if (prev <= 1) {
-          clearInterval(interval);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1e3);
-  };
+  const lock = reactExports.useRef(false);
+  reactExports.useEffect(() => {
+    if (timer <= 0) return;
+    const interval = setInterval(() => setTimer((v2) => Math.max(0, v2 - 1)), 1e3);
+    return () => clearInterval(interval);
+  }, [timer > 0]);
+  const startTimer = () => setTimer(60);
   const handleSendOtp = async (e2) => {
     e2.preventDefault();
+    if (lock.current) return;
+    lock.current = true;
     setLoading(true);
     try {
-      await authApi.sendOtp(email);
-      zt.success("OTP sent to your email!");
+      const sent = await authApi.sendOtp(email.trim().toLowerCase());
+      zt.success(sent.message || "If the email matches your account, an OTP will be sent.");
+      setEmail(email.trim().toLowerCase());
+      setOtp("");
+      setResetToken("");
       setStep("otp");
       startTimer();
     } catch (err) {
       zt.error(err.message || "Failed to send OTP");
     } finally {
+      lock.current = false;
       setLoading(false);
     }
   };
   const handleVerifyOtp = async (e2) => {
     e2.preventDefault();
+    if (lock.current) return;
+    lock.current = true;
     setLoading(true);
     try {
       const response = await authApi.verifyOtp(email, otp);
@@ -17056,6 +17334,7 @@ const ForgotPassword = () => {
     } catch (err) {
       zt.error(err.message || "Invalid OTP");
     } finally {
+      lock.current = false;
       setLoading(false);
     }
   };
@@ -17065,10 +17344,12 @@ const ForgotPassword = () => {
       zt.error("Passwords do not match");
       return;
     }
-    if (newPassword.length < 6) {
-      zt.error("Password must be at least 6 characters");
+    if (newPassword.length < 8) {
+      zt.error("Password must be at least 8 characters");
       return;
     }
+    if (lock.current) return;
+    lock.current = true;
     setLoading(true);
     try {
       await authApi.resetPassword(email, resetToken, newPassword, confirmPassword);
@@ -17077,10 +17358,13 @@ const ForgotPassword = () => {
     } catch (err) {
       zt.error(err.message || "Failed to reset password");
     } finally {
+      lock.current = false;
       setLoading(false);
     }
   };
   const handleResendOtp = async () => {
+    if (lock.current) return;
+    lock.current = true;
     setLoading(true);
     try {
       await authApi.resendOtp(email);
@@ -17089,10 +17373,12 @@ const ForgotPassword = () => {
     } catch (err) {
       zt.error(err.message || "Failed to resend OTP");
     } finally {
+      lock.current = false;
       setLoading(false);
     }
   };
   return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "min-h-screen flex items-center justify-center bg-slate-50 p-4", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-white rounded-2xl shadow-xl p-8 max-w-md w-full", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-slate-600 mb-4", children: "Wrong email or cannot access Gmail? Contact Super Admin to verify your identity and reset the account password." }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-center mb-8", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "w-16 h-16 bg-gold-100 rounded-full flex items-center justify-center mx-auto mb-4", children: /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-key text-2xl text-gold-600" }) }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "text-2xl font-bold text-navy-900", children: "Reset Password" }),
@@ -17172,7 +17458,14 @@ const ForgotPassword = () => {
           {
             type: "button",
             className: "text-gold-600 hover:text-gold-700",
-            onClick: () => setStep("email"),
+            disabled: loading,
+            onClick: () => {
+              setStep("email");
+              setOtp("");
+              setResetToken("");
+              setNewPassword("");
+              setConfirmPassword("");
+            },
             children: [
               /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-arrow-left mr-1" }),
               " Change Email"
@@ -17203,7 +17496,7 @@ const ForgotPassword = () => {
               value: newPassword,
               onChange: (e2) => setNewPassword(e2.target.value),
               placeholder: "Enter new password",
-              minLength: 6,
+              minLength: 8,
               required: true
             }
           ),
@@ -17238,7 +17531,7 @@ const ForgotPassword = () => {
         {
           type: "submit",
           className: "btn btn-primary w-full",
-          disabled: loading || newPassword.length < 6 || newPassword !== confirmPassword,
+          disabled: loading || newPassword.length < 8 || newPassword !== confirmPassword,
           children: loading ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-spinner fa-spin" }),
             " Resetting..."
@@ -18606,7 +18899,8 @@ const FacultyClassDetail = () => {
       return result;
     },
     enabled: !!id,
-    staleTime: 3e4
+    staleTime: 3e4,
+    refetchInterval: 3e4
   });
   const { data: studentsData, refetch: refetchStudents } = useQuery({
     queryKey: ["faculty", "class", id, "students"],
@@ -18615,7 +18909,8 @@ const FacultyClassDetail = () => {
       return result;
     },
     enabled: !!id,
-    staleTime: 3e4
+    staleTime: 3e4,
+    refetchInterval: 3e4
   });
   const { data: attendanceSessions = [], refetch: refetchSessions } = useQuery({
     queryKey: ["faculty", "class", id, "attendance-sessions"],
@@ -18624,7 +18919,8 @@ const FacultyClassDetail = () => {
       return result.filter((s2) => s2.class_id === parseInt(id));
     },
     enabled: !!id,
-    staleTime: 3e4
+    staleTime: 3e4,
+    refetchInterval: 3e4
   });
   const createMut = useCreateAttendanceSession();
   const [isSubmitting, setIsSubmitting] = reactExports.useState(false);
@@ -19736,6 +20032,7 @@ const FacultyClassDetail = () => {
         ] })
       ] })
     ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(ClassRecord, { classId: Number(id) }),
     showSessionLogsModal && selectedSession && /* @__PURE__ */ jsxRuntimeExports.jsx(
       "div",
       {
@@ -29958,16 +30255,17 @@ async function exportAccomplishmentCSV(params) {
   a2.remove();
   URL.revokeObjectURL(url);
 }
-function useEnrollmentReport() {
+function useEnrollmentReport(params = {}) {
   const queryClient2 = useQueryClient();
   const query = useQuery({
-    queryKey: ["reports", "enrollment"],
-    queryFn: () => adminApi.getEnrollmentReport(),
-    staleTime: 12e4,
+    queryKey: ["reports", "enrollment", params],
+    queryFn: async () => (await secureRequest(`/admin/reports/compliance?${new URLSearchParams(params)}`)).data,
+    staleTime: 0,
+    refetchInterval: 3e4,
     retry: 1
   });
   const refresh = () => {
-    queryClient2.invalidateQueries({ queryKey: ["reports", "enrollment"] });
+    queryClient2.invalidateQueries({ queryKey: ["reports", "enrollment", params] });
   };
   return { ...query, refresh, isRefreshing: query.isFetching };
 }
@@ -31240,8 +31538,8 @@ function useDeleteStudent() {
     }
   });
 }
-async function downloadStudentCsv(component) {
-  const blob = await adminApi.exportStudents({ component });
+async function downloadStudentCsv(filters = {}) {
+  const blob = await adminApi.exportStudents(filters);
   const url = URL.createObjectURL(blob);
   const a2 = document.createElement("a");
   a2.href = url;
@@ -31591,9 +31889,12 @@ const ImportStudentsModal = ({
   const [file, setFile] = reactExports.useState(null);
   const [mode, setMode] = reactExports.useState("upsert");
   const [schoolYear, setSchoolYear] = reactExports.useState("");
+  const [preview, setPreview] = reactExports.useState(null);
+  const [previewBusy, setPreviewBusy] = reactExports.useState(false);
   const [uploading, setUploading] = reactExports.useState(false);
   const handleFileChange = (e2) => {
     setFile(e2.target.files?.[0] || null);
+    setPreview(null);
   };
   const handleDownloadTemplate = async () => {
     try {
@@ -31611,9 +31912,29 @@ const ImportStudentsModal = ({
       zt.error(err.message || "Failed to download template");
     }
   };
+  const handlePreview = async () => {
+    if (!file || previewBusy) return;
+    setPreviewBusy(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("mode", mode);
+      if (schoolYear) fd.append("school_year", schoolYear);
+      const r = await secureRequest("/admin/students/import/preview", "POST", fd);
+      setPreview(r.data);
+    } catch (e2) {
+      zt.error(e2.message);
+    } finally {
+      setPreviewBusy(false);
+    }
+  };
   const handleStart = async () => {
+    if (!preview || uploading) {
+      zt.error("Preview this import first.");
+      return;
+    }
     if (!file) {
-      zt.error("Please select a CSV file");
+      zt.error("Please select a CSV / Excel file");
       return;
     }
     setUploading(true);
@@ -31652,6 +31973,23 @@ const ImportStudentsModal = ({
       )
     ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "modal-body space-y-4", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "btn btn-secondary", disabled: !file || previewBusy || uploading, onClick: handlePreview, children: previewBusy ? "Checking…" : "Preview CSV / Excel" }),
+      preview && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "p-3 bg-slate-50 border rounded", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { children: [
+          "Preview: ",
+          preview.created,
+          " new · ",
+          preview.updated,
+          " updates · ",
+          preview.skipped,
+          " skipped · ",
+          preview.enrolled,
+          " class enrollments"
+        ] }),
+        preview.errors?.map((e2, i2) => /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-red-700", children: e2 }, i2)),
+        preview.warnings?.map((e2, i2) => /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: e2 }, i2)),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "Only validated rows will be applied. Existing students are matched by student ID." })
+      ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "p-3 bg-emerald-50 rounded-lg border border-emerald-200 text-xs", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-start gap-2", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-info-circle text-emerald-600 mt-0.5" }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
@@ -31690,7 +32028,7 @@ const ImportStudentsModal = ({
           {
             ref: fileInputRef,
             type: "file",
-            accept: ".csv",
+            accept: ".csv,.xlsx,.xls",
             className: "input p-2",
             onChange: handleFileChange,
             disabled: uploading
@@ -31712,7 +32050,10 @@ const ImportStudentsModal = ({
             {
               className: "input",
               value: mode,
-              onChange: (e2) => setMode(e2.target.value),
+              onChange: (e2) => {
+                setMode(e2.target.value);
+                setPreview(null);
+              },
               disabled: uploading,
               children: [
                 /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "upsert", children: "Upsert — create + update" }),
@@ -31735,7 +32076,10 @@ const ImportStudentsModal = ({
               className: "input",
               placeholder: "2025-2026",
               value: schoolYear,
-              onChange: (e2) => setSchoolYear(e2.target.value),
+              onChange: (e2) => {
+                setSchoolYear(e2.target.value);
+                setPreview(null);
+              },
               disabled: uploading
             }
           )
@@ -31757,7 +32101,7 @@ const ImportStudentsModal = ({
         {
           className: "btn btn-primary",
           onClick: handleStart,
-          disabled: !file || uploading,
+          disabled: !file || !preview || previewBusy || uploading,
           children: uploading ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-spinner fa-spin mr-1" }),
             " Uploading..."
@@ -31807,7 +32151,12 @@ const Students = () => {
     }, 400);
     return () => clearTimeout(t2);
   }, [searchInput]);
+  const [course, setCourse] = reactExports.useState("");
+  const [section, setSection] = reactExports.useState("");
+  const cache = useQueryClient();
   const filters = {
+    course,
+    section,
     search,
     component,
     status,
@@ -31851,6 +32200,10 @@ const Students = () => {
       } finally {
         loopActiveRef.current = false;
         refresh();
+        cache.invalidateQueries({ queryKey: ["reports", "enrollment"] });
+        cache.invalidateQueries({ queryKey: ["directory-options"] });
+        cache.invalidateQueries({ queryKey: ["class-record"] });
+        cache.invalidateQueries({ queryKey: ["faculty"] });
       }
     },
     [refresh]
@@ -31961,7 +32314,7 @@ const Students = () => {
   const handleExport = async () => {
     setExporting(true);
     try {
-      await downloadStudentCsv(component || void 0);
+      await downloadStudentCsv(filters);
       zt.success("Export started");
     } finally {
       setExporting(false);
@@ -32148,7 +32501,7 @@ const Students = () => {
             disabled: !!batch && batch.is_running,
             children: [
               /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-file-import" }),
-              " Import CSV"
+              " Import CSV / Excel"
             ]
           }
         ),
@@ -32158,6 +32511,13 @@ const Students = () => {
         ] })
       ] })
     ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(DirectoryFilters, { course, section, onCourse: (v2) => {
+      setCourse(v2);
+      setPage(1);
+    }, onSection: (v2) => {
+      setSection(v2);
+      setPage(1);
+    } }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-wrap gap-3 bg-white p-4 rounded-xl shadow-sm border border-slate-200", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "search-box flex-1 min-w-[200px]", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-search" }),
@@ -32449,7 +32809,7 @@ const Students = () => {
               }
             )
           ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "form-group", children: [
+          !editing && /* @__PURE__ */ jsxRuntimeExports.jsx(jsxRuntimeExports.Fragment, { children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "form-group", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "label", children: [
               "Password",
               " ",
@@ -32466,7 +32826,8 @@ const Students = () => {
                 ...!editing ? { required: true } : {}
               }
             )
-          ] }),
+          ] }) }),
+          editing && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm", children: "Password recovery is available through Super Admin → Reset password → Student ID." }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "form-group", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "label", children: [
               "Course ",
@@ -38021,7 +38382,9 @@ const IssuedCertificates = () => {
   ] });
 };
 const EnrollmentReport = () => {
-  const { data, isLoading, error, refresh, isRefreshing } = useEnrollmentReport();
+  const [course, setCourse] = reactExports.useState(""), [section, setSection] = reactExports.useState(""), [year, setYear] = reactExports.useState("");
+  const years = useQuery({ queryKey: ["academic-years"], queryFn: () => secureRequest("/admin/academic-years") });
+  const { data, isLoading, error, refresh, isRefreshing } = useEnrollmentReport({ course, section, ...year ? { academic_year_id: year } : {} });
   if (isLoading) {
     return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-center py-16", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "spinner" }),
@@ -38057,6 +38420,23 @@ const EnrollmentReport = () => {
           " Print"
         ] })
       ] })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-slate-600", children: "Distinct actively enrolled students. Counts refresh after import and every 30 seconds." }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx(DirectoryFilters, { course, section, onCourse: setCourse, onSection: setSection }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
+      "Enrollment period",
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("select", { className: "input", value: year, onChange: (e2) => setYear(e2.target.value), children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "", children: "All enrollment periods" }),
+        (years.data?.data ?? []).map((y) => /* @__PURE__ */ jsxRuntimeExports.jsxs("option", { value: y.id, children: [
+          y.academic_year,
+          " · ",
+          y.semester
+        ] }, y.id))
+      ] })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-sm", children: [
+      "Missing component: ",
+      data?.unassigned_component ?? 0
     ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "grid grid-cols-2 md:grid-cols-4 gap-4", children: [
       { label: "Total Students", value: d2?.total || 0, color: "border-navy-600" },
@@ -38321,6 +38701,8 @@ const AttendanceReport = () => {
             /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Present" }),
             /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Late" }),
             /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Absent" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Excused" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Pending review" }),
             /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Rate" })
           ] }) }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("tbody", { children: reportData.details.map((day, index) => /* @__PURE__ */ jsxRuntimeExports.jsxs("tr", { children: [
@@ -38329,6 +38711,8 @@ const AttendanceReport = () => {
             /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: day.present || 0 }),
             /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: day.late || 0 }),
             /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: day.absent || 0 }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: day.excused || 0 }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: day.pending || 0 }),
             /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
               "span",
               {
@@ -38661,6 +39045,168 @@ const DeficiencyReport = () => {
     ] }) })
   ] });
 };
+function AuditHistory({ onClose }) {
+  const [page, setPage] = reactExports.useState(1);
+  const q2 = useQuery({ queryKey: ["security-audit", page], queryFn: ({ signal }) => secureRequest(`/superadmin/audit-events?page=${page}`, "GET", void 0, signal) });
+  return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "fixed inset-0 z-50 bg-black/50 p-4 flex items-center justify-center", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { role: "dialog", "aria-modal": "true", "aria-labelledby": "audit-title", className: "bg-white rounded-xl p-6 max-w-3xl w-full max-h-[90vh] overflow-auto", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { id: "audit-title", className: "text-xl font-bold", children: "Security & attendance audit history" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-secondary", onClick: onClose, children: "Close" })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm my-3", children: "Who changed a record, when, and why. Passwords and OTP values are excluded." }),
+    q2.isLoading && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "Loading history…" }),
+    q2.error && /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn", onClick: () => q2.refetch(), children: "Could not load history. Retry" }),
+    q2.data?.data.map((e2) => /* @__PURE__ */ jsxRuntimeExports.jsxs("article", { className: "border-b py-3", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("strong", { children: e2.event }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { children: [
+        e2.first_name || "System / deleted user",
+        " ",
+        e2.last_name,
+        " · ",
+        new Date(e2.created_at).toLocaleString()
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { children: [
+        e2.subject_type,
+        " #",
+        e2.subject_id ?? "—",
+        " · ",
+        e2.reason || "No additional reason"
+      ] }),
+      e2.details && /* @__PURE__ */ jsxRuntimeExports.jsxs("details", { children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("summary", { children: "Change details" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("pre", { className: "whitespace-pre-wrap text-xs", children: JSON.stringify(typeof e2.details === "string" ? JSON.parse(e2.details) : e2.details, null, 2) })
+      ] })
+    ] }, e2.id)),
+    q2.data?.data.length === 0 && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "No recorded changes yet." }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-3 mt-4", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn", disabled: page <= 1, onClick: () => setPage((p2) => p2 - 1), children: "Previous" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
+        "Page ",
+        page,
+        " / ",
+        q2.data?.last_page ?? 1
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn", disabled: page >= (q2.data?.last_page ?? 1), onClick: () => setPage((p2) => p2 + 1), children: "Next" })
+    ] })
+  ] }) });
+}
+function PasswordResetModal({ onClose }) {
+  const [role, setRole] = reactExports.useState("admin"), [search, setSearch] = reactExports.useState(""), [term, setTerm] = reactExports.useState("");
+  const [selected, setSelected] = reactExports.useState(null), [password, setPassword] = reactExports.useState(""), [confirm, setConfirm] = reactExports.useState(""), [reason, setReason] = reactExports.useState(""), [show, setShow] = reactExports.useState(false), [busy, setBusy] = reactExports.useState(false), [message, setMessage] = reactExports.useState("");
+  const lock = reactExports.useRef(false);
+  const results = useQuery({ queryKey: ["password-reset-users", role, term], enabled: term.length >= 2, queryFn: ({ signal }) => secureRequest(`/superadmin/password-reset-users?role=${role}&search=${encodeURIComponent(term)}`, "GET", void 0, signal) });
+  const clear = () => {
+    setSelected(null);
+    setTerm("");
+    setPassword("");
+    setConfirm("");
+    setMessage("");
+  };
+  async function submit(e2) {
+    e2.preventDefault();
+    if (lock.current || !selected) return;
+    if (password !== confirm) {
+      setMessage("Passwords must match.");
+      return;
+    }
+    lock.current = true;
+    setBusy(true);
+    setMessage("");
+    try {
+      const data = await secureRequest(`/superadmin/users/${selected.id}/reset-password`, "POST", { new_password: password, new_password_confirmation: confirm, reason });
+      setMessage(data.message);
+      setPassword("");
+      setConfirm("");
+      setSelected(null);
+    } catch (e22) {
+      setMessage(e22.message);
+    } finally {
+      lock.current = false;
+      setBusy(false);
+    }
+  }
+  return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { role: "dialog", "aria-modal": "true", "aria-labelledby": "password-reset-title", className: "bg-white rounded-xl p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex justify-between gap-4", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("h3", { id: "password-reset-title", className: "text-xl font-bold", children: "Reset user password" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", onClick: onClose, disabled: busy, className: "btn btn-secondary", children: "Close" })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-slate-600 my-3", children: "Verify identity first. Use this if the registered email is wrong or inaccessible. Old passwords are never displayed." }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-3", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "block", children: [
+        "Account type",
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("select", { disabled: busy, className: "input", value: role, onChange: (e2) => {
+          setRole(e2.target.value);
+          setSearch("");
+          clear();
+        }, children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "admin", children: "Admin" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "faculty", children: "Faculty" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "student", children: "Student" })
+        ] })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("form", { className: "flex gap-2", onSubmit: (e2) => {
+        e2.preventDefault();
+        setSelected(null);
+        setTerm(search.trim());
+      }, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("input", { "aria-label": role === "student" ? "Exact student ID" : "Name or email", className: "input", value: search, onChange: (e2) => {
+          setSearch(e2.target.value);
+          setSelected(null);
+        }, placeholder: role === "student" ? "Exact student ID" : "Name or email", minLength: 2, required: true, disabled: busy }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-secondary", disabled: busy || results.isFetching, children: "Find" })
+      ] }),
+      results.isFetching && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "Searching…" }),
+      results.error && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { role: "alert", children: results.error.message }),
+      results.data?.data.length === 0 && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "No matching account." }),
+      !selected && results.data?.data.map((user) => /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { disabled: busy, type: "button", className: "block w-full text-left border rounded p-3", onClick: () => {
+        setSelected(user);
+        setPassword("");
+        setConfirm("");
+        setReason("");
+        setShow(false);
+        setMessage("");
+      }, children: [
+        user.first_name,
+        " ",
+        user.last_name,
+        " · ",
+        user.student_id || user.email,
+        " · ",
+        user.role,
+        !user.is_active ? " · Inactive" : ""
+      ] }, user.id)),
+      selected && /* @__PURE__ */ jsxRuntimeExports.jsxs("form", { onSubmit: submit, className: "space-y-3", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "bg-gold-50 p-3", children: [
+          "Selected: ",
+          selected.first_name,
+          " ",
+          selected.last_name,
+          " · ",
+          selected.student_id || selected.email
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "block", children: [
+          "New password",
+          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { className: "input", type: show ? "text" : "password", autoComplete: "new-password", minLength: 8, maxLength: 128, required: true, value: password, disabled: busy, onChange: (e2) => setPassword(e2.target.value) })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "block", children: [
+          "Confirm new password",
+          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { className: "input", type: show ? "text" : "password", autoComplete: "new-password", minLength: 8, maxLength: 128, required: true, value: confirm, disabled: busy, onChange: (e2) => setConfirm(e2.target.value) })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "flex gap-2", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "checkbox", checked: show, onChange: (e2) => setShow(e2.target.checked) }),
+          "Show entered passwords"
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "block", children: [
+          "Reason",
+          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { className: "input", minLength: 3, maxLength: 500, required: true, value: reason, disabled: busy, onChange: (e2) => setReason(e2.target.value) })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-slate-600", children: "Existing sessions will be revoked. Password change is required at the next login. This action is audited." }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-primary", disabled: busy, children: busy ? "Resetting…" : "Reset password" })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { role: "status", "aria-live": "polite", children: message })
+    ] })
+  ] }) });
+}
 const EMPTY_FORM$1 = {
   first_name: "",
   last_name: "",
@@ -38677,6 +39223,8 @@ const SuperAdminDashboard = () => {
   const queryClient2 = useQueryClient();
   const [tab, setTab] = reactExports.useState("users");
   const [showFaceReset, setShowFaceReset] = reactExports.useState(false);
+  const [showPasswordReset, setShowPasswordReset] = reactExports.useState(false);
+  const [showAudit, setShowAudit] = reactExports.useState(false);
   const [showModal, setShowModal] = reactExports.useState(false);
   const [editingId, setEditingId] = reactExports.useState(null);
   const [formData, setFormData] = reactExports.useState(EMPTY_FORM$1);
@@ -38730,7 +39278,6 @@ const SuperAdminDashboard = () => {
       if (data.first_name) fd.append("first_name", data.first_name);
       if (data.last_name) fd.append("last_name", data.last_name);
       if (data.email) fd.append("email", data.email);
-      if (data.password) fd.append("password", data.password);
       if (data.role) fd.append("role", data.role);
       if (data.nstp_component !== void 0)
         fd.append("nstp_component", data.nstp_component || "");
@@ -39032,6 +39579,8 @@ const SuperAdminDashboard = () => {
             ]
           }
         ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "btn btn-secondary btn-sm", onClick: () => setShowAudit(true), children: "Audit history" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "btn btn-secondary btn-sm", onClick: () => setShowPasswordReset(true), children: "Reset password" }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { className: "btn btn-primary btn-sm", onClick: openCreate, children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-plus" }),
           " Add User"
@@ -39426,7 +39975,7 @@ const SuperAdminDashboard = () => {
               }
             )
           ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "form-group", children: [
+          !editingId && /* @__PURE__ */ jsxRuntimeExports.jsx(jsxRuntimeExports.Fragment, { children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "form-group", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "label", children: [
               "Password",
               " ",
@@ -39443,7 +39992,8 @@ const SuperAdminDashboard = () => {
                 minLength: 6
               }
             )
-          ] }),
+          ] }) }),
+          editingId && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-slate-600", children: "Use Reset password to change a password with identity confirmation and an audit reason." }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "form-group", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "label", children: "Profile Photo" }),
             /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-4", children: [
@@ -39553,6 +40103,8 @@ const SuperAdminDashboard = () => {
         ] })
       ] })
     ] }) }),
+    showAudit && /* @__PURE__ */ jsxRuntimeExports.jsx(AuditHistory, { onClose: () => setShowAudit(false) }),
+    showPasswordReset && /* @__PURE__ */ jsxRuntimeExports.jsx(PasswordResetModal, { onClose: () => setShowPasswordReset(false) }),
     showFaceReset && /* @__PURE__ */ jsxRuntimeExports.jsx(FaceResetModal, { onClose: () => setShowFaceReset(false) })
   ] });
 };
@@ -40549,6 +41101,8 @@ const CreateAttendanceSession = () => {
   ] });
 };
 const FacultyStudents = () => {
+  const [course, setCourse] = reactExports.useState("");
+  const [section, setSection] = reactExports.useState("");
   const [searchTerm, setSearchTerm] = reactExports.useState("");
   const [search, setSearch] = reactExports.useState("");
   const [selectedStudent, setSelectedStudent] = reactExports.useState(null);
@@ -40577,12 +41131,13 @@ const FacultyStudents = () => {
     staleTime: 3e4
   });
   const pagination = reactExports.useMemo(() => {
-    const total = students.length;
+    const filtered = students.filter((s2) => (!course || s2.course === course) && (!section || s2.section === section));
+    const total = filtered.length;
     const lastPage = Math.max(1, Math.ceil(total / perPage));
     const safePage = Math.min(page, lastPage);
     const start = (safePage - 1) * perPage;
     const end = start + perPage;
-    const slice = students.slice(start, end);
+    const slice = filtered.slice(start, end);
     return {
       total,
       lastPage,
@@ -40592,7 +41147,7 @@ const FacultyStudents = () => {
       to: total === 0 ? 0 : Math.min(end, total),
       data: slice
     };
-  }, [students, page, perPage]);
+  }, [students, page, perPage, course, section]);
   reactExports.useEffect(() => {
     if (pagination.currentPage !== page) {
       setPage(pagination.currentPage);
@@ -40642,6 +41197,13 @@ const FacultyStudents = () => {
     ] });
   }
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-5", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx(DirectoryFilters, { course, section, onCourse: (v2) => {
+      setCourse(v2);
+      setPage(1);
+    }, onSection: (v2) => {
+      setSection(v2);
+      setPage(1);
+    } }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "text-2xl font-bold text-navy-900", children: "My Students" }),
@@ -41768,6 +42330,7 @@ const BackupSchedules = () => {
     ] });
   }
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-5", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-slate-600", children: "Schedule times use Asia/Manila. The server scheduler must run every minute." }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("h2", { className: "text-2xl font-bold text-navy-900", children: [
@@ -46074,6 +46637,14 @@ const BackupPage = () => {
         /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "text-sm text-slate-500", children: b.created_at ? new Date(b.created_at).toLocaleString() : "—" }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-end gap-1.5", children: [
           b.status === "completed" && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "btn btn-secondary btn-sm", onClick: async () => {
+              try {
+                const r = await secureRequest(`/superadmin/backups/${b.id}/verify`, "POST");
+                zt.success(r.message);
+              } catch (e2) {
+                zt.error(e2.message);
+              }
+            }, children: "Verify archive" }),
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               "button",
               {
@@ -49404,7 +49975,9 @@ const Login = () => {
     if (token && userStr) {
       try {
         const user = JSON.parse(userStr);
-        if (user?.role === "faculty") {
+        if (user?.must_change_password) {
+          navigate("/change-temporary-password", { replace: true });
+        } else if (user?.role === "faculty") {
           navigate("/faculty", { replace: true });
         } else if (user?.role === "super_admin" || user?.role === "admin") {
           navigate("/admin", { replace: true });
@@ -49435,6 +50008,10 @@ const Login = () => {
         localStorage.setItem("user", JSON.stringify(response.user));
         zt.success("Login successful!");
         const user = response.user;
+        if (user?.must_change_password) {
+          window.location.href = "/change-temporary-password";
+          return;
+        }
         if (user?.role === "faculty") {
           window.location.href = "/faculty";
         } else if (user?.role === "super_admin" || user?.role === "admin") {
@@ -49616,10 +50193,12 @@ const App = () => {
   const token = getToken();
   const userStr = localStorage.getItem("user");
   let userRole = null;
+  let passwordChangeRequired = false;
   try {
     if (userStr) {
       const user = JSON.parse(userStr);
       userRole = user?.role;
+      passwordChangeRequired = !!user?.must_change_password;
     }
   } catch (e2) {
   }
@@ -49630,6 +50209,7 @@ const App = () => {
     /* @__PURE__ */ jsxRuntimeExports.jsx(Fe, { position: "top-right" }),
     /* @__PURE__ */ jsxRuntimeExports.jsx(OfflineBanner, {}),
     /* @__PURE__ */ jsxRuntimeExports.jsxs(Routes, { children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { path: "/change-temporary-password", element: isAuthenticated ? /* @__PURE__ */ jsxRuntimeExports.jsx(ChangeTemporaryPassword, {}) : /* @__PURE__ */ jsxRuntimeExports.jsx(Navigate, { to: "/login", replace: true }) }),
       /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { path: "/login", element: /* @__PURE__ */ jsxRuntimeExports.jsx(Login, {}) }),
       /* @__PURE__ */ jsxRuntimeExports.jsx(
         Route,
@@ -49642,27 +50222,28 @@ const App = () => {
         Route,
         {
           path: "/admin/*",
-          element: isAuthenticated && isAdmin ? /* @__PURE__ */ jsxRuntimeExports.jsx(AdminLayout, { children: /* @__PURE__ */ jsxRuntimeExports.jsxs(Routes, { children: [
+          element: isAuthenticated && passwordChangeRequired ? /* @__PURE__ */ jsxRuntimeExports.jsx(Navigate, { to: "/change-temporary-password", replace: true }) : isAuthenticated && isAdmin ? /* @__PURE__ */ jsxRuntimeExports.jsx(AdminLayout, { children: /* @__PURE__ */ jsxRuntimeExports.jsxs(Routes, { children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { index: true, element: /* @__PURE__ */ jsxRuntimeExports.jsx(Dashboard, {}) }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { path: "classes/:id/record", element: /* @__PURE__ */ jsxRuntimeExports.jsx(ClassRecord, {}) }),
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               Route,
               {
                 path: "superadmin",
-                element: /* @__PURE__ */ jsxRuntimeExports.jsx(SuperAdminDashboard, {})
+                element: userRole === "super_admin" ? /* @__PURE__ */ jsxRuntimeExports.jsx(SuperAdminDashboard, {}) : /* @__PURE__ */ jsxRuntimeExports.jsx(Navigate, { to: "/admin", replace: true })
               }
             ),
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               Route,
               {
                 path: "superadmin/backups",
-                element: /* @__PURE__ */ jsxRuntimeExports.jsx(BackupPage, {})
+                element: userRole === "super_admin" ? /* @__PURE__ */ jsxRuntimeExports.jsx(BackupPage, {}) : /* @__PURE__ */ jsxRuntimeExports.jsx(Navigate, { to: "/admin", replace: true })
               }
             ),
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               Route,
               {
                 path: "superadmin/backup-schedules",
-                element: /* @__PURE__ */ jsxRuntimeExports.jsx(BackupSchedules, {})
+                element: userRole === "super_admin" ? /* @__PURE__ */ jsxRuntimeExports.jsx(BackupSchedules, {}) : /* @__PURE__ */ jsxRuntimeExports.jsx(Navigate, { to: "/admin", replace: true })
               }
             ),
             /* @__PURE__ */ jsxRuntimeExports.jsx(
@@ -49835,7 +50416,7 @@ const App = () => {
         Route,
         {
           path: "/faculty/*",
-          element: isAuthenticated && isFaculty ? /* @__PURE__ */ jsxRuntimeExports.jsx(AdminLayout, { children: /* @__PURE__ */ jsxRuntimeExports.jsxs(Routes, { children: [
+          element: isAuthenticated && passwordChangeRequired ? /* @__PURE__ */ jsxRuntimeExports.jsx(Navigate, { to: "/change-temporary-password", replace: true }) : isAuthenticated && isFaculty ? /* @__PURE__ */ jsxRuntimeExports.jsx(AdminLayout, { children: /* @__PURE__ */ jsxRuntimeExports.jsxs(Routes, { children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { index: true, element: /* @__PURE__ */ jsxRuntimeExports.jsx(FacultyDashboard, {}) }),
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               Route,
@@ -49858,6 +50439,7 @@ const App = () => {
                 element: /* @__PURE__ */ jsxRuntimeExports.jsx(FacultyStudents, {})
               }
             ),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(Route, { path: "classes/:id/record", element: /* @__PURE__ */ jsxRuntimeExports.jsx(ClassRecord, {}) }),
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               Route,
               {
@@ -50048,4 +50630,4 @@ startSyncEngine();
 ReactDOM.createRoot(document.getElementById("root")).render(
   /* @__PURE__ */ jsxRuntimeExports.jsx(React.StrictMode, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(App, {}) })
 );
-//# sourceMappingURL=main-Ck_49GYc.js.map
+//# sourceMappingURL=main-DUIzzfGJ.js.map

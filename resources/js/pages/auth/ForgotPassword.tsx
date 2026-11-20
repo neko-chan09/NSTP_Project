@@ -1,5 +1,5 @@
 // src/pages/auth/ForgotPassword.tsx
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { authApi } from '../../services/api';
 import toast from 'react-hot-toast';
@@ -16,37 +16,31 @@ const ForgotPassword: React.FC = () => {
     const [timer, setTimer] = useState(0);
     const [showPassword, setShowPassword] = useState(false);
 
-    const startTimer = () => {
-        setTimer(60);
-        const interval = setInterval(() => {
-            setTimer((prev) => {
-                if (prev <= 1) {
-                    clearInterval(interval);
-                    return 0;
-                }
-                return prev - 1;
-            });
-        }, 1000);
-    };
+    const lock=useRef(false);
+    useEffect(()=>{if(timer<=0)return;const interval=setInterval(()=>setTimer(v=>Math.max(0,v-1)),1000);return()=>clearInterval(interval)},[timer>0]);
+    const startTimer=()=>setTimer(60);
 
     const handleSendOtp = async (e: React.FormEvent) => {
         e.preventDefault();
+        if(lock.current)return;lock.current=true;
         setLoading(true);
 
         try {
-            await authApi.sendOtp(email);
-            toast.success('OTP sent to your email!');
+            const sent=await authApi.sendOtp(email.trim().toLowerCase());
+            toast.success(sent.message||'If the email matches your account, an OTP will be sent.');
+            setEmail(email.trim().toLowerCase());setOtp('');setResetToken('');
             setStep('otp');
             startTimer();
         } catch (err: any) {
             toast.error(err.message || 'Failed to send OTP');
         } finally {
-            setLoading(false);
+            lock.current=false;setLoading(false);
         }
     };
 
     const handleVerifyOtp = async (e: React.FormEvent) => {
         e.preventDefault();
+        if(lock.current)return;lock.current=true;
         setLoading(true);
 
         try {
@@ -57,7 +51,7 @@ const ForgotPassword: React.FC = () => {
         } catch (err: any) {
             toast.error(err.message || 'Invalid OTP');
         } finally {
-            setLoading(false);
+            lock.current=false;setLoading(false);
         }
     };
 
@@ -69,11 +63,12 @@ const ForgotPassword: React.FC = () => {
             return;
         }
 
-        if (newPassword.length < 6) {
-            toast.error('Password must be at least 6 characters');
+        if (newPassword.length < 8) {
+            toast.error('Password must be at least 8 characters');
             return;
         }
 
+        if(lock.current)return;lock.current=true;
         setLoading(true);
 
         try {
@@ -83,11 +78,12 @@ const ForgotPassword: React.FC = () => {
         } catch (err: any) {
             toast.error(err.message || 'Failed to reset password');
         } finally {
-            setLoading(false);
+            lock.current=false;setLoading(false);
         }
     };
 
     const handleResendOtp = async () => {
+        if(lock.current)return;lock.current=true;
         setLoading(true);
 
         try {
@@ -97,13 +93,14 @@ const ForgotPassword: React.FC = () => {
         } catch (err: any) {
             toast.error(err.message || 'Failed to resend OTP');
         } finally {
-            setLoading(false);
+            lock.current=false;setLoading(false);
         }
     };
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-slate-50 p-4">
             <div className="bg-white rounded-2xl shadow-xl p-8 max-w-md w-full">
+                <p className="text-sm text-slate-600 mb-4">Wrong email or cannot access Gmail? Contact Super Admin to verify your identity and reset the account password.</p>
                 <div className="text-center mb-8">
                     <div className="w-16 h-16 bg-gold-100 rounded-full flex items-center justify-center mx-auto mb-4">
                         <i className="fas fa-key text-2xl text-gold-600" />
@@ -186,7 +183,7 @@ const ForgotPassword: React.FC = () => {
                             <button
                                 type="button"
                                 className="text-gold-600 hover:text-gold-700"
-                                onClick={() => setStep('email')}
+                                disabled={loading} onClick={() => {setStep('email');setOtp('');setResetToken('');setNewPassword('');setConfirmPassword('')}}
                             >
                                 <i className="fas fa-arrow-left mr-1" /> Change Email
                             </button>
@@ -214,7 +211,7 @@ const ForgotPassword: React.FC = () => {
                                     value={newPassword}
                                     onChange={(e) => setNewPassword(e.target.value)}
                                     placeholder="Enter new password"
-                                    minLength={6}
+                                    minLength={8}
                                     required
                                 />
                                 <button
@@ -243,7 +240,7 @@ const ForgotPassword: React.FC = () => {
                         <button
                             type="submit"
                             className="btn btn-primary w-full"
-                            disabled={loading || newPassword.length < 6 || newPassword !== confirmPassword}
+                            disabled={loading || newPassword.length < 8 || newPassword !== confirmPassword}
                         >
                             {loading ? (
                                 <><i className="fas fa-spinner fa-spin" /> Resetting...</>

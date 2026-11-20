@@ -222,7 +222,7 @@ class SuperAdminController extends Controller
             'first_name'     => 'sometimes|string|max:255',
             'last_name'      => 'sometimes|string|max:255',
             'email'          => 'sometimes|email|unique:users,email,' . $id,
-            'password'       => 'nullable|string|min:6',
+            'password'       => 'prohibited',
             'role'           => 'sometimes|in:admin,faculty',
             'profile_photo'  => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
             'contact_number' => 'nullable|string|max:20|unique:users,contact_number,' . $id,
@@ -262,9 +262,7 @@ class SuperAdminController extends Controller
             if ($request->has('is_active')) {
                 $data['is_active'] = (bool) $request->is_active;
             }
-            if ($request->filled('password')) {
-                $data['password'] = Hash::make($request->password);
-            }
+
 
             // ✅ class_code logic: only for faculty
             if ($request->has('class_code') || $request->has('role')) {

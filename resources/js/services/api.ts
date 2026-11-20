@@ -69,7 +69,8 @@ const handleResponse = async (response: Response) => {
       removeToken();
       window.location.href = "/login";
     }
-    throw new Error(error.message || `HTTP ${response.status}`);
+    if(error.code==="PASSWORD_CHANGE_REQUIRED") window.location.assign("/change-temporary-password");
+    throw new Error(Object.values(error.errors??{}).flat().join(" ")||error.message || `HTTP ${response.status}`);
   }
   return response.json();
 };
@@ -776,9 +777,10 @@ export const adminApi = {
     });
   },
 
-  exportStudents: async (params?: { component?: string }): Promise<Blob> => {
+  exportStudents: async (params?: { component?: string;course?:string;section?:string;status?:string;search?:string }): Promise<Blob> => {
     const query = new URLSearchParams();
     if (params?.component) query.append("component", params.component);
+    for(const key of ['course','section','status','search'] as const) if(params?.[key])query.append(key,params[key]!);
     const response = await fetch(
       `${API_URL}/admin/students/export?${query.toString()}`,
       { headers: { Authorization: `Bearer ${getToken()}` } },

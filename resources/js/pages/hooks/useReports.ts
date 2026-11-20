@@ -1,3 +1,4 @@
+import {secureRequest} from "../../services/secureRequest";
 // src/hooks/useReports.ts
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { adminApi } from "../../services/api";
@@ -59,18 +60,19 @@ export async function exportAccomplishmentCSV(params?: {
     URL.revokeObjectURL(url);
 }
 
-export function useEnrollmentReport() {
+export function useEnrollmentReport(params:Record<string,string>={}) {
   const queryClient = useQueryClient();
 
   const query = useQuery({
-    queryKey: ["reports", "enrollment"],
-    queryFn: () => adminApi.getEnrollmentReport(),
-    staleTime: 120000,
+    queryKey: ["reports", "enrollment",params],
+    queryFn: async () => (await secureRequest(`/admin/reports/compliance?${new URLSearchParams(params)}`)).data,
+    staleTime: 0,
+    refetchInterval:30000,
     retry: 1,
   });
 
   const refresh = () => {
-    queryClient.invalidateQueries({ queryKey: ["reports", "enrollment"] });
+    queryClient.invalidateQueries({ queryKey: ["reports", "enrollment",params] });
   };
 
   return { ...query, refresh, isRefreshing: query.isFetching };

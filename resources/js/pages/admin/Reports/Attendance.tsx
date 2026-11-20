@@ -246,6 +246,8 @@ const AttendanceReport: React.FC = () => {
                       <th>Present</th>
                       <th>Late</th>
                       <th>Absent</th>
+                      <th>Excused</th>
+                      <th>Pending review</th>
                       <th>Rate</th>
                     </tr>
                   </thead>
@@ -257,6 +259,8 @@ const AttendanceReport: React.FC = () => {
                         <td>{day.present || 0}</td>
                         <td>{day.late || 0}</td>
                         <td>{day.absent || 0}</td>
+                        <td>{day.excused || 0}</td>
+                        <td>{day.pending || 0}</td>
                         <td>
                           <span
                             className={`badge ${(day.rate || 0) >= 80 ? "badge-success" : (day.rate || 0) >= 50 ? "badge-warning" : "badge-danger"}`}

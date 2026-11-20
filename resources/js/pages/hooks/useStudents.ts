@@ -115,8 +115,8 @@ export function useBulkDeleteStudents() {
   });
 }
 
-export async function downloadStudentCsv(component?: string) {
-  const blob = await adminApi.exportStudents({ component });
+export async function downloadStudentCsv(filters:StudentFilters={}) {
+  const blob = await adminApi.exportStudents(filters);
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;

@@ -1,3 +1,4 @@
+import ClassRecord from "../shared/ClassRecord";
 // resources/js/pages/faculty/ClassDetail.tsx
 
 import React, { useState, useRef, useEffect, useMemo } from "react";
@@ -97,6 +98,7 @@ const FacultyClassDetail: React.FC = () => {
         },
         enabled: !!id,
         staleTime: 30000,
+        refetchInterval:30000,
     });
 
     const { data: studentsData, refetch: refetchStudents } = useQuery({
@@ -107,6 +109,7 @@ const FacultyClassDetail: React.FC = () => {
         },
         enabled: !!id,
         staleTime: 30000,
+        refetchInterval:30000,
     });
 
     const { data: attendanceSessions = [], refetch: refetchSessions } =
@@ -118,6 +121,7 @@ const FacultyClassDetail: React.FC = () => {
             },
             enabled: !!id,
             staleTime: 30000,
+        refetchInterval:30000,
         });
 
     const createMut = useCreateAttendanceSession();
@@ -1479,6 +1483,7 @@ const FacultyClassDetail: React.FC = () => {
             </div>
 
             {/* SESSION LOGS MODAL */}
+            <ClassRecord classId={Number(id)}/>
             {showSessionLogsModal && selectedSession && (
                 <div
                     className="modal-overlay"

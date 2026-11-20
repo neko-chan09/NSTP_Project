@@ -55,7 +55,7 @@ class BackupSchedule extends Model
      */
     public function computeNextRun(?Carbon $from = null): Carbon
     {
-        $from = $from ?: Carbon::now();
+        $from = ($from ?: Carbon::now())->copy()->setTimezone('Asia/Manila');
 
         // Custom cron → best effort: schedule 1 hour from now
         // (true cron parsing would require dragonmantank/cron-expression
@@ -63,7 +63,7 @@ class BackupSchedule extends Model
         if (!empty($this->cron_expression)) {
             try {
                 $cron = new \Cron\CronExpression($this->cron_expression);
-                return Carbon::instance($cron->getNextRunDate($from));
+                return Carbon::instance($cron->getNextRunDate($from))->utc();
             } catch (\Throwable $e) {
                 // fall through to frequency-based
             }
@@ -76,11 +76,11 @@ class BackupSchedule extends Model
         switch ($this->frequency) {
             case 'weekly':
                 $dow = $this->day_of_week ?? Carbon::SUNDAY;
-                $next = $from->copy()->next($dow)->setTime($hh, $mm, 0);
+                $next = $from->copy()->startOfDay()->addDays(($dow-$from->dayOfWeek+7)%7)->setTime($hh,$mm,0);
                 if ($next->lte($from)) {
                     $next->addWeek();
                 }
-                return $next;
+                return $next->utc();
 
             case 'monthly':
                 $dom = min(max((int) ($this->day_of_month ?? 1), 1), 28);
@@ -88,7 +88,7 @@ class BackupSchedule extends Model
                 if ($next->lte($from)) {
                     $next->addMonth();
                 }
-                return $next;
+                return $next->utc();
 
             case 'daily':
             default:
@@ -96,7 +96,7 @@ class BackupSchedule extends Model
                 if ($next->lte($from)) {
                     $next->addDay();
                 }
-                return $next;
+                return $next->utc();
         }
     }
 

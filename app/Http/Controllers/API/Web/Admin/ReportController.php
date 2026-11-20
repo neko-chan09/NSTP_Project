@@ -51,36 +51,44 @@ class ReportController extends Controller
     /**
      * Enrollment Summary Report
      */
-    public function enrollmentSummary()
+    public function enrollmentSummary(Request $request)
     {
+$request->validate(['academic_year_id'=>'nullable|integer|exists:academic_years,id','course'=>'nullable|string|max:255','section'=>'nullable|string|max:255']);
         try {
-            $total = Student::count();
+
+            $base=Student::whereHas('classes',fn($q)=>$q->where('class_students.status','active'));
+            if($request->filled('academic_year_id')) $base->whereHas('classes',fn($q)=>$q->where('class_students.academic_year_id',$request->academic_year_id)->where('class_students.status','active'));
+            if($request->filled('course')) $base->where('course',$request->course);
+            if($request->filled('section')) $base->where('section',$request->section);
+
+            $total = (clone $base)->count();
             
-            $totalMale = Student::whereHas('user', fn($q) => $q->where('gender', 'male'))->count();
-            $totalFemale = Student::whereHas('user', fn($q) => $q->where('gender', 'female'))->count();
+            $totalMale = (clone $base)->where('gender','male')->count();
+            $totalFemale = (clone $base)->where('gender','female')->count();
 
-            $cwts = Student::where('nstp_component_selected', 'cwts')->count();
-            $rotc = Student::where('nstp_component_selected', 'rotc')->count();
-            $lts = Student::where('nstp_component_selected', 'lts')->count();
+            $cwts = (clone $base)->where('nstp_component_selected', 'cwts')->count();
+            $rotc = (clone $base)->where('nstp_component_selected', 'rotc')->count();
+            $lts = (clone $base)->where('nstp_component_selected', 'lts')->count();
 
-            $cwtsMale = Student::where('nstp_component_selected', 'cwts')
-                ->whereHas('user', fn($q) => $q->where('gender', 'male'))->count();
-            $cwtsFemale = Student::where('nstp_component_selected', 'cwts')
-                ->whereHas('user', fn($q) => $q->where('gender', 'female'))->count();
+            $cwtsMale = (clone $base)->where('nstp_component_selected', 'cwts')
+                ->where('gender','male')->count();
+            $cwtsFemale = (clone $base)->where('nstp_component_selected', 'cwts')
+                ->where('gender','female')->count();
 
-            $rotcMale = Student::where('nstp_component_selected', 'rotc')
-                ->whereHas('user', fn($q) => $q->where('gender', 'male'))->count();
-            $rotcFemale = Student::where('nstp_component_selected', 'rotc')
-                ->whereHas('user', fn($q) => $q->where('gender', 'female'))->count();
+            $rotcMale = (clone $base)->where('nstp_component_selected', 'rotc')
+                ->where('gender','male')->count();
+            $rotcFemale = (clone $base)->where('nstp_component_selected', 'rotc')
+                ->where('gender','female')->count();
 
-            $ltsMale = Student::where('nstp_component_selected', 'lts')
-                ->whereHas('user', fn($q) => $q->where('gender', 'male'))->count();
-            $ltsFemale = Student::where('nstp_component_selected', 'lts')
-                ->whereHas('user', fn($q) => $q->where('gender', 'female'))->count();
+            $ltsMale = (clone $base)->where('nstp_component_selected', 'lts')
+                ->where('gender','male')->count();
+            $ltsFemale = (clone $base)->where('nstp_component_selected', 'lts')
+                ->where('gender','female')->count();
 
             return response()->json([
                 'success' => true,
                 'data' => [
+                    'unassigned_component' => $total-($cwts+$rotc+$lts),
                     'total' => $total,
                     'total_male' => $totalMale,
                     'total_female' => $totalFemale,
@@ -223,7 +231,7 @@ class ReportController extends Controller
             $query = DB::table('attendance_logs')
                 ->join('students', 'attendance_logs.student_id', '=', 'students.id')
                 ->join('attendance_sessions', 'attendance_logs.session_id', '=', 'attendance_sessions.id')
-                ->whereBetween('attendance_logs.check_in_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59']);
+                ->whereBetween(DB::raw('COALESCE(attendance_logs.check_in_at, COALESCE(attendance_sessions.scheduled_start, attendance_sessions.start_time))'), [$startDate . ' 00:00:00', $endDate . ' 23:59:59']);
 
             if ($component) {
                 $query->where('students.nstp_component_selected', $component);
@@ -231,24 +239,28 @@ class ReportController extends Controller
 
             $dailyBreakdown = $query
                 ->select(
-                    DB::raw('DATE(attendance_logs.check_in_at) as date'),
+                    DB::raw('DATE(COALESCE(attendance_logs.check_in_at, COALESCE(attendance_sessions.scheduled_start, attendance_sessions.start_time))) as date'),
                     DB::raw('COUNT(*) as total'),
-                    DB::raw('SUM(CASE WHEN attendance_logs.status = "present" THEN 1 ELSE 0 END) as present'),
-                    DB::raw('SUM(CASE WHEN attendance_logs.status = "late" THEN 1 ELSE 0 END) as late'),
-                    DB::raw('SUM(CASE WHEN attendance_logs.status = "absent" THEN 1 ELSE 0 END) as absent')
+                    DB::raw('SUM(CASE WHEN attendance_logs.review_status = "approved" AND attendance_logs.status = "present" THEN 1 ELSE 0 END) as present'),
+                    DB::raw('SUM(CASE WHEN attendance_logs.review_status = "approved" AND attendance_logs.status = "late" THEN 1 ELSE 0 END) as late'),
+                    DB::raw('SUM(CASE WHEN attendance_logs.review_status = "approved" AND attendance_logs.status = "absent" AND COALESCE(attendance_logs.attendance_mark, "absent") != "excused" THEN 1 ELSE 0 END) as absent'),
+                    DB::raw('SUM(CASE WHEN attendance_logs.review_status = "approved" AND attendance_logs.attendance_mark = "excused" THEN 1 ELSE 0 END) as excused'),
+                    DB::raw('SUM(CASE WHEN attendance_logs.review_status = "pending" THEN 1 ELSE 0 END) as pending')
                 )
-                ->groupBy(DB::raw('DATE(attendance_logs.check_in_at)'))
-                ->orderBy(DB::raw('DATE(attendance_logs.check_in_at)'), 'asc')
+                ->groupBy(DB::raw('DATE(COALESCE(attendance_logs.check_in_at, COALESCE(attendance_sessions.scheduled_start, attendance_sessions.start_time)))'))
+                ->orderBy(DB::raw('DATE(COALESCE(attendance_logs.check_in_at, COALESCE(attendance_sessions.scheduled_start, attendance_sessions.start_time)))'), 'asc')
                 ->get()
                 ->map(function ($row) {
                     $total = $row->total;
-                    $rate = $total > 0 ? round(($row->present / $total) * 100, 2) : 0;
+                    $rate = $total > 0 ? round((($row->present + $row->late) / max(1, $total - $row->excused - $row->pending)) * 100, 2) : 0;
                     return [
                         'date' => $row->date,
                         'total' => $total,
                         'present' => $row->present,
                         'late' => $row->late,
                         'absent' => $row->absent,
+                        'excused' => $row->excused,
+                        'pending' => $row->pending,
                         'rate' => $rate,
                     ];
                 });
@@ -256,15 +268,15 @@ class ReportController extends Controller
             $summary = DB::table('attendance_logs')
                 ->join('students', 'attendance_logs.student_id', '=', 'students.id')
                 ->join('attendance_sessions', 'attendance_logs.session_id', '=', 'attendance_sessions.id')
-                ->whereBetween('attendance_logs.check_in_at', [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
+                ->whereBetween(DB::raw('COALESCE(attendance_logs.check_in_at, COALESCE(attendance_sessions.scheduled_start, attendance_sessions.start_time))'), [$startDate . ' 00:00:00', $endDate . ' 23:59:59'])
                 ->when($component, function ($query, $component) {
                     return $query->where('students.nstp_component_selected', $component);
                 })
                 ->select(
                     DB::raw('COUNT(DISTINCT attendance_logs.session_id) as total_sessions'),
                     DB::raw('COUNT(*) as total_checkins'),
-                    DB::raw('SUM(CASE WHEN attendance_logs.status = "present" THEN 1 ELSE 0 END) as present'),
-                    DB::raw('SUM(CASE WHEN attendance_logs.status = "late" THEN 1 ELSE 0 END) as late')
+                    DB::raw('SUM(CASE WHEN attendance_logs.review_status = "approved" AND attendance_logs.status = "present" THEN 1 ELSE 0 END) as present'),
+                    DB::raw('SUM(CASE WHEN attendance_logs.review_status = "approved" AND attendance_logs.status = "late" THEN 1 ELSE 0 END) as late')
                 )
                 ->first();
 

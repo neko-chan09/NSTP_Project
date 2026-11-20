@@ -1,3 +1,4 @@
+import {secureRequest} from "../../../services/secureRequest";
 // resources/js/components/common/ImportStudentsModal.tsx
 import React, { useRef, useState } from "react";
 import { adminApi } from "../../../services/api";
@@ -23,10 +24,12 @@ const ImportStudentsModal: React.FC<ImportStudentsModalProps> = ({
   const [file, setFile] = useState<File | null>(null);
   const [mode, setMode] = useState<Mode>("upsert");
   const [schoolYear, setSchoolYear] = useState<string>("");
+  const [preview,setPreview]=useState<any>(null);
+  const [previewBusy,setPreviewBusy]=useState(false);
   const [uploading, setUploading] = useState(false);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFile(e.target.files?.[0] || null);
+    setFile(e.target.files?.[0] || null);setPreview(null);
   };
 
   const handleDownloadTemplate = async () => {
@@ -46,9 +49,11 @@ const ImportStudentsModal: React.FC<ImportStudentsModalProps> = ({
     }
   };
 
+  const handlePreview=async()=>{if(!file||previewBusy)return;setPreviewBusy(true);try{const fd=new FormData();fd.append('file',file);fd.append('mode',mode);if(schoolYear)fd.append('school_year',schoolYear);const r=await secureRequest('/admin/students/import/preview','POST',fd);setPreview(r.data)}catch(e:any){toast.error(e.message)}finally{setPreviewBusy(false)}};
   const handleStart = async () => {
+    if(!preview||uploading){toast.error('Preview this import first.');return;}
     if (!file) {
-      toast.error("Please select a CSV file");
+      toast.error("Please select a CSV / Excel file");
       return;
     }
 
@@ -100,6 +105,9 @@ const ImportStudentsModal: React.FC<ImportStudentsModalProps> = ({
         </div>
 
         <div className="modal-body space-y-4">
+          <button type="button" className="btn btn-secondary" disabled={!file||previewBusy||uploading} onClick={handlePreview}>{previewBusy?'Checking…':'Preview CSV / Excel'}</button>
+          {preview&&<div className="p-3 bg-slate-50 border rounded"><p>Preview: {preview.created} new · {preview.updated} updates · {preview.skipped} skipped · {preview.enrolled} class enrollments</p>{preview.errors?.map((e:string,i:number)=><p className="text-red-700" key={i}>{e}</p>)}{preview.warnings?.map((e:string,i:number)=><p key={i}>{e}</p>)}<p>Only validated rows will be applied. Existing students are matched by student ID.</p></div>}
+
           {/* Info banner */}
           <div className="p-3 bg-emerald-50 rounded-lg border border-emerald-200 text-xs">
             <div className="flex items-start gap-2">
@@ -143,7 +151,7 @@ const ImportStudentsModal: React.FC<ImportStudentsModalProps> = ({
             <input
               ref={fileInputRef}
               type="file"
-              accept=".csv"
+              accept=".csv,.xlsx,.xls"
               className="input p-2"
               onChange={handleFileChange}
               disabled={uploading}
@@ -162,7 +170,7 @@ const ImportStudentsModal: React.FC<ImportStudentsModalProps> = ({
               <select
                 className="input"
                 value={mode}
-                onChange={(e) => setMode(e.target.value as Mode)}
+                onChange={(e) => {setMode(e.target.value as Mode);setPreview(null)}}
                 disabled={uploading}
               >
                 <option value="upsert">Upsert — create + update</option>
@@ -181,7 +189,7 @@ const ImportStudentsModal: React.FC<ImportStudentsModalProps> = ({
                 className="input"
                 placeholder="2025-2026"
                 value={schoolYear}
-                onChange={(e) => setSchoolYear(e.target.value)}
+                onChange={(e) => {setSchoolYear(e.target.value);setPreview(null)}}
                 disabled={uploading}
               />
             </div>
@@ -199,7 +207,7 @@ const ImportStudentsModal: React.FC<ImportStudentsModalProps> = ({
           <button
             className="btn btn-primary"
             onClick={handleStart}
-            disabled={!file || uploading}
+            disabled={!file || !preview || previewBusy || uploading}
           >
             {uploading ? (
               <>

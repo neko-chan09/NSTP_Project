@@ -21,8 +21,9 @@ class PasswordResetController extends Controller
      */
     public function sendOtp(Request $request)
     {
+        $request->merge(['email'=>mb_strtolower(trim((string)$request->email))]);
         $validator = Validator::make($request->all(), [
-            'email' => 'required|email|exists:users,email',
+            'email' => 'required|email|max:255',
         ]);
 
         if ($validator->fails()) {
@@ -34,18 +35,20 @@ class PasswordResetController extends Controller
 
         try {
             $email = $request->email;
-            $user = User::where('email', $email)->first();
+            $user = User::whereRaw('LOWER(email) = ?',[$email])->first();
 
             if (!$user) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'User not found'
-                ], 404);
+                return response()->json(['success'=>true,'message'=>'If the email matches an account, an OTP will be sent. If you cannot access it, contact Super Admin.','data'=>['email'=>$email,'expires_in'=>10]]);
             }
 
+            $key='password-otp:'.hash('sha256',$email);
+            if (\Illuminate\Support\Facades\RateLimiter::tooManyAttempts($key,1)) {
+                return response()->json(['message'=>'Please wait before requesting another OTP.','retry_after'=>\Illuminate\Support\Facades\RateLimiter::availableIn($key)],429);
+            }
+            \Illuminate\Support\Facades\RateLimiter::hit($key,60);
             // Create OTP
-            $otpRecord = PasswordResetOtp::createOtp($email);
-            $otp = $otpRecord->otp;
+            $otp=PasswordResetOtp::generateOtp();
+            $otpRecord = PasswordResetOtp::createOtp($email,$otp);
 
             // Send email
             Mail::to($email)->send(new PasswordResetOtpMail($otp, $user->first_name ?? 'User'));
@@ -66,7 +69,7 @@ class PasswordResetController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to send OTP. Please try again later.',
+                'message' => 'Email delivery is unavailable. Retry later or ask Super Admin to verify your identity and reset your password.',
             ], 500);
         }
     }
@@ -76,8 +79,9 @@ class PasswordResetController extends Controller
      */
     public function verifyOtp(Request $request)
     {
+        $request->merge(['email'=>mb_strtolower(trim((string)$request->email))]);
         $validator = Validator::make($request->all(), [
-            'email' => 'required|email|exists:users,email',
+            'email' => 'required|email|max:255',
             'otp' => ['required', 'string', 'regex:/^[0-9]{6}$/'],
         ]);
 
@@ -116,9 +120,10 @@ class PasswordResetController extends Controller
      */
     public function resetPassword(Request $request)
     {
+        $request->merge(['email'=>mb_strtolower(trim((string)$request->email))]);
         $request->validate([
             'email' => 'required|email', 'reset_token' => 'required|string|max:200',
-            'new_password' => 'required|string|min:6|confirmed',
+            'new_password' => 'required|string|min:8|max:128|confirmed',
         ]);
         $parts = explode('|', $request->reset_token);
         if (count($parts) !== 2 || !ctype_digit($parts[0]) || !preg_match('/^[a-f0-9]{64}$/D', $parts[1])) {
@@ -129,13 +134,9 @@ class PasswordResetController extends Controller
             if (!$otp || $otp->email !== $request->email || !$otp->is_used || !$otp->reset_token_hash ||
                 !$otp->reset_expires_at || !$otp->reset_expires_at->isFuture() ||
                 !hash_equals($otp->reset_token_hash, hash('sha256', $parts[1]))) return false;
-            $user = User::where('email', $request->email)->lockForUpdate()->first();
+            $user = User::whereRaw('LOWER(email) = ?',[$request->email])->lockForUpdate()->first();
             if (!$user) return false;
-            $user->password = Hash::make($request->new_password);
-            $user->must_change_password = false;
-            $user->save();
-            $user->tokens()->delete();
-            $otp->delete();
+            app(\App\Services\PasswordRecoveryService::class)->replace($user,$request->new_password,false,$user->id,'Email OTP recovery');
             return true;
         });
         return $reset
@@ -167,7 +168,7 @@ class PasswordResetController extends Controller
 
         $validator = Validator::make($request->all(), [
             'current_password' => 'required|string',
-            'new_password' => 'required|string|min:6|confirmed',
+            'new_password' => 'required|string|min:8|max:128|confirmed',
         ]);
 
         if ($validator->fails()) {

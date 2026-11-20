@@ -32,6 +32,20 @@ return [
 
     'connections' => [
 
+        // Use a separate, disposable database for backup restore testing.
+        'backup_restore_test' => [
+            'driver' => 'mysql',
+            'host' => env('BACKUP_TEST_DB_HOST', '127.0.0.1'),
+            'port' => env('BACKUP_TEST_DB_PORT', '3306'),
+            'database' => env('BACKUP_TEST_DB_DATABASE'),
+            'username' => env('BACKUP_TEST_DB_USERNAME'),
+            'password' => env('BACKUP_TEST_DB_PASSWORD'),
+            'charset' => 'utf8mb4',
+            'collation' => 'utf8mb4_unicode_ci',
+            'prefix' => '',
+            'strict' => true,
+        ],
+
         'sqlite' => [
             'driver' => 'sqlite',
             'url' => env('DB_URL'),

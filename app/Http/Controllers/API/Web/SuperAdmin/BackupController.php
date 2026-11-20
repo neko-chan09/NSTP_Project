@@ -128,17 +128,13 @@ class BackupController extends Controller
             ], 404);
         }
 
-        if (!Storage::disk($backup->disk ?? 'local')->exists($backup->file_path)) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Backup file not found on disk',
-            ], 404);
-        }
-
-        return Storage::disk($backup->disk ?? 'local')->download(
-            $backup->file_path,
-            $backup->backup_name . '.zip'
-        );
+        try{$path=$this->service->backupPath($backup);}catch(\Throwable $e){return response()->json(['message'=>'Backup file unavailable'],404);}
+        return response()->download($path,$backup->backup_name.'.zip',['Cache-Control'=>'private, no-store']);
+    }
+    public function verify(Request $request,$id) {
+        $backup=SystemBackup::findOrFail($id);
+        try{$result=$this->service->verifyBackup($backup);\App\Services\AuditTrail::record($request->user()->id,'backup.verified','backup',$backup->id);return response()->json(['data'=>$result,'message'=>'Archive paths and file checksums verified.']);}
+        catch(\Throwable $e){return response()->json(['message'=>$e->getMessage()],422);}
     }
 
     public function destroy($id)
@@ -187,7 +183,12 @@ class BackupController extends Controller
                 ], 422);
             }
 
+            // Verify before creating a safety backup or touching live data.
+            $this->service->verifyBackup($backup);
+            $safety=$this->service->createBackup('manual',$request->user()->id);
+            $safety->update(['notes'=>'Automatic safety backup before restoring backup #'.$backup->id]);
             $this->service->restoreBackup($backup);
+            \App\Services\AuditTrail::record($request->user()->id,'backup.restored','backup',$backup->id,'Explicit restore confirmation',['safety_backup_id'=>$safety->id]);
 
             return response()->json([
                 'success' => true,
@@ -280,10 +281,10 @@ class BackupController extends Controller
                 'name' => 'required|string|max:255',
                 'notes' => 'nullable|string|max:500',
                 'frequency' => 'required|in:daily,weekly,monthly,custom',
-                'time' => 'nullable|string|regex:/^\d{2}:\d{2}$/',
-                'day_of_week' => 'nullable|integer|min:0|max:6',
-                'day_of_month' => 'nullable|integer|min:1|max:28',
-                'cron_expression' => 'nullable|string|max:120',
+                'time' => 'nullable|required_unless:frequency,custom|date_format:H:i',
+                'day_of_week' => 'nullable|required_if:frequency,weekly|integer|min:0|max:6',
+                'day_of_month' => 'nullable|required_if:frequency,monthly|integer|min:1|max:28',
+                'cron_expression' => ['nullable','required_if:frequency,custom','string','max:120',function($attribute,$value,$fail){if(!\Cron\CronExpression::isValidExpression($value))$fail('Enter a valid cron expression.');}],
                 'retention_days' => 'nullable|integer|min:1|max:3650',
                 'is_active' => 'nullable|boolean',
             ]);
@@ -340,10 +341,10 @@ class BackupController extends Controller
                 'name' => 'sometimes|string|max:255',
                 'notes' => 'nullable|string|max:500',
                 'frequency' => 'sometimes|in:daily,weekly,monthly,custom',
-                'time' => 'nullable|string|regex:/^\d{2}:\d{2}$/',
-                'day_of_week' => 'nullable|integer|min:0|max:6',
-                'day_of_month' => 'nullable|integer|min:1|max:28',
-                'cron_expression' => 'nullable|string|max:120',
+                'time' => 'nullable|required_unless:frequency,custom|date_format:H:i',
+                'day_of_week' => 'nullable|required_if:frequency,weekly|integer|min:0|max:6',
+                'day_of_month' => 'nullable|required_if:frequency,monthly|integer|min:1|max:28',
+                'cron_expression' => ['nullable','required_if:frequency,custom','string','max:120',function($attribute,$value,$fail){if(!\Cron\CronExpression::isValidExpression($value))$fail('Enter a valid cron expression.');}],
                 'retention_days' => 'nullable|integer|min:1|max:3650',
                 'is_active' => 'nullable|boolean',
             ]);

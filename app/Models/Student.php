@@ -38,7 +38,7 @@ class Student extends Model
     protected $casts = [
         'is_eligible_for_completion' => 'boolean',
         'total_training_hours' => 'integer',
-        'completed_training_hours' => 'integer',
+        'completed_training_hours' => 'float',
         'birth_date' => 'date',
         'completed_at' => 'datetime',
         'training_grade' => 'float',

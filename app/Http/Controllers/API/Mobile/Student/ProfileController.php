@@ -129,7 +129,7 @@ class ProfileController extends Controller
 
         $validator = Validator::make($request->all(), [
             'otp' => 'required|string|size:6',
-            'new_password' => 'required|string|min:6|confirmed',
+            'new_password' => 'required|string|min:8|max:128|confirmed',
         ]);
 
         if ($validator->fails()) {

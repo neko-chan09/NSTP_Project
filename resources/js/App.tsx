@@ -1,3 +1,5 @@
+import ClassRecord from "./pages/shared/ClassRecord";
+import ChangeTemporaryPassword from "./pages/auth/ChangeTemporaryPassword";
 // src/App.tsx
 import React from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
@@ -71,11 +73,13 @@ const App: React.FC = () => {
     const token = getToken();
     const userStr = localStorage.getItem("user");
     let userRole = null;
+    let passwordChangeRequired=false;
 
     try {
         if (userStr) {
             const user = JSON.parse(userStr);
             userRole = user?.role;
+            passwordChangeRequired=!!user?.must_change_password;
         }
     } catch (e) {
         // Invalid user data
@@ -91,6 +95,7 @@ const App: React.FC = () => {
                 <Toaster position="top-right" />
                 <OfflineBanner />
                 <Routes>
+                    <Route path="/change-temporary-password" element={isAuthenticated?<ChangeTemporaryPassword/>:<Navigate to="/login" replace/>}/>
                     {/* Public Routes */}
                     <Route path="/login" element={<Login />} />
                     <Route
@@ -104,21 +109,22 @@ const App: React.FC = () => {
                     <Route
                         path="/admin/*"
                         element={
-                            isAuthenticated && isAdmin ? (
+                            isAuthenticated && passwordChangeRequired ? <Navigate to="/change-temporary-password" replace/> : isAuthenticated && isAdmin ? (
                                 <AdminLayout>
                                     <Routes>
                                         <Route index element={<Dashboard />} />
+                                        <Route path="classes/:id/record" element={<ClassRecord/>}/>
                                         <Route
                                             path="superadmin"
-                                            element={<SuperAdminDashboard />}
+                                            element={userRole === "super_admin" ? <SuperAdminDashboard /> : <Navigate to="/admin" replace/>}
                                         />
                                         <Route
                                             path="superadmin/backups"
-                                            element={<BackupPage />}
+                                            element={userRole === "super_admin" ? <BackupPage /> : <Navigate to="/admin" replace/>}
                                         />
                                         <Route
                                             path="superadmin/backup-schedules"
-                                            element={<BackupSchedules />}
+                                            element={userRole === "super_admin" ? <BackupSchedules /> : <Navigate to="/admin" replace/>}
                                         />
                                         <Route
                                             path="students"
@@ -231,7 +237,7 @@ const App: React.FC = () => {
                     <Route
                         path="/faculty/*"
                         element={
-                            isAuthenticated && isFaculty ? (
+                            isAuthenticated && passwordChangeRequired ? <Navigate to="/change-temporary-password" replace/> : isAuthenticated && isFaculty ? (
                                 <AdminLayout>
                                     <Routes>
                                         {/* Dashboard */}
@@ -250,6 +256,7 @@ const App: React.FC = () => {
                                             path="students"
                                             element={<FacultyStudents />}
                                         />
+                                        <Route path="classes/:id/record" element={<ClassRecord/>}/>
                                         {/* ===== CLASSES ===== */}
                                         <Route
                                             path="classes"

@@ -11,12 +11,13 @@ class PasswordResetOtp extends Model
     use HasFactory;
 
     protected $fillable = [
-        'email',
+        'otp_hash','email',
         'otp',
         'expires_at',
         'is_used', 'reset_token_hash', 'reset_expires_at', 'otp_attempts',
     ];
 
+    protected $hidden=['otp','otp_hash','reset_token_hash'];
     protected $casts = [
         'expires_at' => 'datetime',
         'is_used' => 'boolean', 'reset_expires_at' => 'datetime', 'otp_attempts' => 'integer',
@@ -49,14 +50,15 @@ class PasswordResetOtp extends Model
     /**
      * Create a new OTP record
      */
-    public static function createOtp(string $email): self
+    public static function createOtp(string $email, string $otp): self
     {
         // Delete existing OTPs for this email
         self::where('email', $email)->delete();
 
         return self::create([
             'email' => $email,
-            'otp' => self::generateOtp(),
+            'otp' => '000000',
+            'otp_hash'=>\Illuminate\Support\Facades\Hash::make($otp),
             'expires_at' => now()->addMinutes(10),
             'is_used' => false,
         ]);
@@ -70,7 +72,7 @@ class PasswordResetOtp extends Model
         return \Illuminate\Support\Facades\DB::transaction(function () use ($email, $otp) {
             $record = self::where('email', $email)->where('is_used', false)->latest('id')->lockForUpdate()->first();
             if (!$record || $record->isExpired() || $record->otp_attempts >= 5) return null;
-            if (!hash_equals($record->otp, $otp)) {
+            if (!($record->otp_hash ? \Illuminate\Support\Facades\Hash::check($otp,$record->otp_hash) : hash_equals($record->otp,$otp))) {
                 $record->increment('otp_attempts');
                 return null;
             }

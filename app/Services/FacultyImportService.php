@@ -237,7 +237,7 @@ class FacultyImportService
 
         $normalized = [];
         foreach ($rows as $r) {
-            $normalized[] = $this->normalizeRow($r);
+            $norm=$this->normalizeRow($r);if(!empty($norm['password']))$norm['_password_hash']=Hash::make($norm['password']);unset($norm['password']);$normalized[]=$norm;
         }
 
         return ImportBatch::create([
@@ -373,7 +373,7 @@ class FacultyImportService
                             'first_name'     => $firstName,
                             'last_name'      => $lastName,
                             'email'          => $email,
-                            'password'       => Hash::make($password),
+                            'password'       => $norm['_password_hash'] ?? Hash::make($password),
                             'role'           => 'faculty',
                             'nstp_component' => $component,
                             'is_active'      => true,
@@ -435,6 +435,7 @@ class FacultyImportService
             'warnings_json'  => json_encode(array_slice($warnings, -500)),
             'status'         => $isDone ? 'completed' : 'processing',
             'finished_at'    => $isDone ? now() : null,
+            'rows_json' => $isDone ? null : $batch->rows_json,
         ]);
 
         return $this->batchStatusPayload($batch->fresh());

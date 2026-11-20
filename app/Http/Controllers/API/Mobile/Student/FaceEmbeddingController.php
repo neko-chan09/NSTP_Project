@@ -60,6 +60,13 @@ class FaceEmbeddingController extends Controller
             ], 404);
         }
 
+        $front = $this->matching->l2Normalize(array_map('floatval', $request->input('embeddings.front')));
+        foreach (['left', 'right'] as $pose) {
+            $side = $this->matching->l2Normalize(array_map('floatval', $request->input("embeddings.{$pose}")));
+            if ($this->matching->cosineSimilarity($front, $side) < (float) config('face.match_threshold', 0.5)) {
+                return response()->json(['message' => 'The face poses do not match consistently. The same student must capture all three poses again in good lighting.'], 422);
+            }
+        }
         $alreadyRegistered = false;
 
         try {
@@ -163,7 +170,7 @@ class FaceEmbeddingController extends Controller
         $data = [];
         foreach (['front', 'left', 'right'] as $pose) {
             $vector = $stored->get($pose)?->embedding;
-            if (!is_array($vector) || count($vector) !== (int) config('face.embedding_size', 192)) {
+            if (!is_array($vector) || !FaceMatchingService::validVector($vector)) {
                 return response()->json(['message' => 'A complete face template is not registered.'], 404)->header('Cache-Control', 'no-store');
             }
             $data[$pose] = array_map('floatval', $vector);

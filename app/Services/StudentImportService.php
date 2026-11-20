@@ -17,7 +17,11 @@ class StudentImportService
 {
     private array $warnings = [];
 
-    public function import(
+    public function import(UploadedFile $file,string $mode='upsert',bool $dryRun=false,?string $defaultSchoolYear=null): array {
+        if(!$dryRun)return $this->importRows($file,$mode,false,$defaultSchoolYear);
+        DB::beginTransaction();try{return $this->importRows($file,$mode,true,$defaultSchoolYear);}finally{DB::rollBack();}
+    }
+    private function importRows(
         UploadedFile $file,
         string $mode = 'upsert',
         bool $dryRun = false,
@@ -101,11 +105,13 @@ class StudentImportService
             if (!empty($norm['class_code'])) {
                 $class = ClassGroup::where('class_code', $norm['class_code'])->first();
                 if (!$class) {
-                    $this->warnings[] = "Row {$lineNo}: class_code '{$norm['class_code']}' not found — skipping enrollment";
+                    $errors[] = "Row {$lineNo}: class code not found; row skipped."; $skipped++; continue;
                 }
             }
 
             $rowSchoolYear = !empty($norm['school_year']) ? $norm['school_year'] : $schoolYear;
+            $academicYear=$class?->academicYear ?? AcademicYear::findOrCreateByLabel($rowSchoolYear);
+            $rowSchoolYear=$academicYear->academic_year;
 
             $rowReport[] = [
                 'line'        => $lineNo,
@@ -122,6 +128,7 @@ class StudentImportService
                 continue;
             }
 
+            $beforeCounts=[$created,$updated,$enrolled];
             try {
                 DB::transaction(function () use (
                     $existing,
@@ -184,6 +191,9 @@ class StudentImportService
                             ->where('student_id', $student->id)
                             ->exists();
 
+                        if ($already) {
+                            DB::table('class_students')->where('class_id',$class->id)->where('student_id',$student->id)->update(['status'=>'active','school_year'=>$rowSchoolYear,'academic_year_id'=>$academicYear->id,'updated_at'=>now()]);
+                        }
                         if (!$already) {
                             DB::table('class_students')->insert([
                                 'class_id'         => $class->id,
@@ -200,6 +210,7 @@ class StudentImportService
                     }
                 });
             } catch (\Throwable $e) {
+                [$created,$updated,$enrolled]=$beforeCounts;
                 Log::error("Student import row {$lineNo} failed", [
                     'student_id' => $norm['student_id'] ?? null,
                     'class_code' => $norm['class_code'] ?? null,
@@ -237,7 +248,7 @@ class StudentImportService
             'first_name'           => $norm['first_name'],
             'last_name'            => $norm['last_name'],
             'email'                => $email,
-            'password'             => Hash::make($password),
+            'password'             => $norm['_password_hash'] ?? Hash::make($password),
             'role'                 => 'student',
             'student_id'           => $norm['student_id'],
             'course'               => !empty($norm['course']) ? $norm['course'] : null,
@@ -263,7 +274,7 @@ class StudentImportService
         if (!empty($norm['course']))     $data['course']     = $norm['course'];
         if (!empty($norm['year_level'])) $data['year_level'] = (int) $norm['year_level'];
         if (!empty($norm['section']))    $data['section']    = $norm['section'];
-        if (!empty($norm['password']))   $data['password']   = Hash::make($norm['password']);
+        // Existing passwords are never changed through an enrollment import.
 
         if (!empty($data)) $user->update($data);
     }
@@ -334,6 +345,7 @@ class StudentImportService
             $out[$key] = is_string($v) ? trim($v) : $v;
         }
 
+        foreach(['student_id','course','section'] as $key)if(!empty($out[$key]))$out[$key]=strtoupper(trim($out[$key]));
         if (!empty($out['component'])) {
             $out['component'] = strtolower($out['component']);
             if (!in_array($out['component'], ['cwts', 'rotc', 'lts'], true)) {
@@ -362,7 +374,16 @@ class StudentImportService
             ];
         }
 
-        $contents = file_get_contents($path);
+        if(in_array(strtolower($file->getClientOriginalExtension()),['xlsx','xls'])) {
+            try {
+                $reader=\PhpOffice\PhpSpreadsheet\IOFactory::createReaderForFile($path);$reader->setReadDataOnly(true);
+                $book=$reader->load($path);$sheet=$book->getSheet(0);
+                if($sheet->getHighestDataRow()>20000) return ['errors'=>['Spreadsheet exceeds 20,000 rows.'],'header'=>[],'rows'=>[]];
+                $rows=$sheet->toArray(null,false,false,false);$stream=fopen('php://temp','r+');
+                foreach($rows as $row){foreach($row as $cell)if(is_string($cell)&&str_starts_with(ltrim($cell),'=')) return ['errors'=>['Replace spreadsheet formulas with literal values before importing.'],'header'=>[],'rows'=>[]]; fputcsv($stream,$row);}
+                rewind($stream);$contents=stream_get_contents($stream);fclose($stream);$book->disconnectWorksheets();
+            } catch(\Throwable $e) {return ['errors'=>['Spreadsheet could not be read. Save a valid XLSX or CSV file.'],'header'=>[],'rows'=>[]];}
+        } else $contents = file_get_contents($path);
         if ($contents === false || trim($contents) === '') {
             return [
                 'errors' => ['Uploaded file is empty'],
@@ -396,6 +417,9 @@ class StudentImportService
             return strtolower($h);
         }, $header);
 
+        $namedHeaders=array_values(array_filter($header,fn($h)=>$h!==''));
+        if(count($namedHeaders)!==count(array_unique($namedHeaders))){fclose($stream);return ['errors'=>['Duplicate column names in import file.'],'header'=>$header,'rows'=>[]];}
+        $seenIds=[];
         $rows = [];
         while (($row = fgetcsv($stream)) !== false) {
             if (empty(array_filter($row, fn($v) => $v !== null && $v !== ''))) {
@@ -406,6 +430,9 @@ class StudentImportService
                 if ($key === '') continue;
                 $assoc[$key] = $row[$idx] ?? null;
             }
+            $id=$this->normalizeRow($assoc)['student_id']??null;
+            if($id&&isset($seenIds[$id])){fclose($stream);return ['errors'=>['Duplicate student ID in this file: '.$id],'header'=>$header,'rows'=>[]];}
+            if($id)$seenIds[$id]=true;
             $rows[] = $assoc;
         }
 
@@ -475,7 +502,7 @@ class StudentImportService
         }
 
         // Normalize rows once
-        $normalized = array_map(fn($r) => $this->normalizeRow($r), $rows);
+        $normalized = array_map(function($r){$norm=$this->normalizeRow($r);if(!empty($norm['password']))$norm['_password_hash']=Hash::make($norm['password']);unset($norm['password']);return $norm;}, $rows);
 
         return \App\Models\ImportBatch::create([
             'batch_code'        => 'IMP-' . date('Ymd-His') . '-' . \Illuminate\Support\Str::random(4),
@@ -501,7 +528,10 @@ class StudentImportService
      * Process the next chunk of rows for a batch.
      * Returns a status array with current progress.
      */
-    public function processChunk(\App\Models\ImportBatch $batch, int $chunkSize = 50): array
+    public function processChunk(\App\Models\ImportBatch $batch, int $chunkSize = 50): array {
+        return DB::transaction(fn()=> $this->processChunkRows(\App\Models\ImportBatch::whereKey($batch->id)->lockForUpdate()->firstOrFail(),$chunkSize));
+    }
+    private function processChunkRows(\App\Models\ImportBatch $batch, int $chunkSize): array
     {
         if ($batch->status === 'cancelled') {
             return $this->batchStatusPayload($batch);
@@ -571,12 +601,15 @@ class StudentImportService
             if (!empty($norm['class_code'])) {
                 $class = \App\Models\ClassGroup::where('class_code', $norm['class_code'])->first();
                 if (!$class) {
-                    $warnings[] = "Row {$lineNo}: class '{$norm['class_code']}' not found";
+                    $errors[] = "Row {$lineNo}: class code not found; row skipped."; $skipped++; continue;
                 }
             }
 
             $rowSchoolYear = !empty($norm['school_year']) ? $norm['school_year'] : $schoolYear;
+            $academicYear=$class?->academicYear ?? AcademicYear::findOrCreateByLabel($rowSchoolYear);
+            $rowSchoolYear=$academicYear->academic_year;
 
+            $beforeCounts=[$created,$updated,$enrolled];
             try {
                 \Illuminate\Support\Facades\DB::transaction(function () use (
                     $existing,
@@ -638,6 +671,9 @@ class StudentImportService
                             ->where('class_id', $class->id)
                             ->where('student_id', $student->id)
                             ->exists();
+                        if ($already) {
+                            DB::table('class_students')->where('class_id',$class->id)->where('student_id',$student->id)->update(['status'=>'active','school_year'=>$rowSchoolYear,'academic_year_id'=>$academicYear->id,'updated_at'=>now()]);
+                        }
                         if (!$already) {
                             \Illuminate\Support\Facades\DB::table('class_students')->insert([
                                 'class_id'         => $class->id,
@@ -654,6 +690,7 @@ class StudentImportService
                     }
                 });
             } catch (\Throwable $e) {
+                [$created,$updated,$enrolled]=$beforeCounts;
                 \Illuminate\Support\Facades\Log::error("Student import row {$lineNo} failed", [
                     'student_id' => $norm['student_id'] ?? null,
                     'class_code' => $norm['class_code'] ?? null,
@@ -678,6 +715,7 @@ class StudentImportService
             'warnings_json'  => json_encode(array_slice($warnings, -500)),
             'status'         => $isDone ? 'completed' : 'processing',
             'finished_at'    => $isDone ? now() : null,
+            'rows_json' => $isDone ? null : $batch->rows_json,
         ]);
 
         return $this->batchStatusPayload($batch->fresh());

@@ -258,6 +258,7 @@ class LocationTrackingController extends Controller
                 'accuracy' => 'nullable|numeric|min:0',
                 'activity_id' => 'required|exists:activities,id',
                 'location_source' => 'nullable|string|in:gps,wifi,network',
+                'captured_at' => 'nullable|date',
             ]);
 
             if ($validator->fails()) {
@@ -267,6 +268,10 @@ class LocationTrackingController extends Controller
                 ], 422);
             }
 
+            $capturedAt = $request->filled('captured_at') ? \Carbon\Carbon::parse($request->captured_at) : now();
+            if ($capturedAt->lt(now()->subMinutes(2)) || $capturedAt->gt(now()->addSeconds(30))) {
+                return response()->json(['success'=>false, 'message'=>'GPS reading expired. Get a fresh location and retry.'],422);
+            }
             $activityId = $request->activity_id;
             $latitude = $request->latitude;
             $longitude = $request->longitude;
@@ -310,7 +315,7 @@ class LocationTrackingController extends Controller
                 'distance_from_venue' => $distanceFromVenue,
                 'is_within_geofence' => $isWithinGeofence,
                 'location_source' => $source,
-                'tracked_at' => now(),
+                'tracked_at' => $capturedAt,
             ]);
 
             // ===== FIX 3: Update BOTH coordinate column pairs in activity_participations =====

@@ -1,3 +1,5 @@
+import AuditHistory from "../../components/common/AuditHistory";
+import PasswordResetModal from "../../components/common/PasswordResetModal";
 // resources/js/pages/admin/SuperAdmin/Dashboard.tsx
 import React, { useState, useRef, useEffect, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -79,6 +81,8 @@ const SuperAdminDashboard: React.FC = () => {
   // ------- Tab -------
   const [tab, setTab] = useState<Tab>("users");
   const [showFaceReset, setShowFaceReset] = useState(false);
+  const [showPasswordReset,setShowPasswordReset]=useState(false);
+  const [showAudit,setShowAudit]=useState(false);
 
   // ============================================================
   // TAB 1: USERS
@@ -140,7 +144,7 @@ const SuperAdminDashboard: React.FC = () => {
       if (data.first_name) fd.append("first_name", data.first_name);
       if (data.last_name) fd.append("last_name", data.last_name);
       if (data.email) fd.append("email", data.email);
-      if (data.password) fd.append("password", data.password);
+
       if (data.role) fd.append("role", data.role);
       if (data.nstp_component !== undefined)
         fd.append("nstp_component", data.nstp_component || "");
@@ -488,6 +492,8 @@ const SuperAdminDashboard: React.FC = () => {
             >
               <i className="fas fa-user-lock" /> Face Reset
             </button>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={()=>setShowAudit(true)}>Audit history</button>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={()=>setShowPasswordReset(true)}>Reset password</button>
             <button className="btn btn-primary btn-sm" onClick={openCreate}>
               <i className="fas fa-plus" /> Add User
             </button>
@@ -929,6 +935,7 @@ const SuperAdminDashboard: React.FC = () => {
                   />
                 </div>
 
+                {!editingId && <>
                 <div className="form-group">
                   <label className="label">
                     Password{" "}
@@ -948,6 +955,8 @@ const SuperAdminDashboard: React.FC = () => {
                   />
                 </div>
 
+                </>}
+                {editingId && <p className="text-sm text-slate-600">Use Reset password to change a password with identity confirmation and an audit reason.</p>}
                 <div className="form-group">
                   <label className="label">Profile Photo</label>
                   <div className="flex items-center gap-4">
@@ -1061,6 +1070,8 @@ const SuperAdminDashboard: React.FC = () => {
       )}
 
       {/* FACE RESET MODAL */}
+      {showAudit && <AuditHistory onClose={()=>setShowAudit(false)}/>}
+      {showPasswordReset && <PasswordResetModal onClose={()=>setShowPasswordReset(false)} />}
       {showFaceReset && <FaceResetModal onClose={() => setShowFaceReset(false)} />}
     </div>
   );

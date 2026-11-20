@@ -22,7 +22,7 @@ class BackupService
     public function createBackup(string $type = 'manual', ?int $userId = null): SystemBackup
     {
         $timestamp = now()->format('Y-m-d_His');
-        $name = "backup_{$timestamp}";
+        $name = "backup_{$timestamp}_".Str::random(8);
         $fileName = "{$name}.zip";
         $relativePath = "backups/{$fileName}";
 
@@ -53,13 +53,20 @@ class BackupService
             $storageCopyDir = $tmpDir . '/storage';
             $this->copyStorage($storageCopyDir);
 
+            $manifest=['created_at'=>now()->toIso8601String(),'driver'=>DB::connection()->getDriverName(),'files'=>[]];
+            foreach(new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($tmpDir,\FilesystemIterator::SKIP_DOTS)) as $file) {
+                if($file->isLink())throw new \RuntimeException('Backup sources cannot contain symbolic links.');
+                if($file->isFile())$manifest['files'][str_replace('\\','/',substr($file->getPathname(),strlen($tmpDir)+1))]=hash_file('sha256',$file->getPathname());
+            }
+            file_put_contents($tmpDir.'/manifest.json',json_encode($manifest,JSON_PRETTY_PRINT));
             // 5. Zip everything
-            $zipPath = storage_path('app/' . $relativePath);
+            $zipPath = Storage::disk('local')->path($relativePath);
             if (!file_exists(dirname($zipPath))) {
                 mkdir(dirname($zipPath), 0755, true);
             }
             $this->zipDirectory($tmpDir, $zipPath);
 
+            app(BackupIntegrity::class)->verify($zipPath);
             // 6. Count files
             $storageFiles = $this->countFiles($storageCopyDir);
             $tablesCount = count($this->getTableNames());
@@ -83,6 +90,7 @@ class BackupService
                 'file_size' => $fileSize,
             ]);
 
+            AuditTrail::record($userId,'backup.created','backup',$backup->id,null,['type'=>$type,'files'=>$storageFiles]);
             return $backup->fresh();
         } catch (\Throwable $e) {
             Log::error('Backup failed: ' . $e->getMessage(), [
@@ -109,19 +117,11 @@ class BackupService
         $config = config("database.connections.{$connection}");
 
         // Try mysqldump first
-        if ($this->isMysqldumpAvailable() && $config['driver'] === 'mysql') {
-            $cmd = sprintf(
-                'mysqldump --user=%s --password=%s --host=%s --port=%s %s > %s 2>&1',
-                escapeshellarg($config['username']),
-                escapeshellarg($config['password']),
-                escapeshellarg($config['host']),
-                escapeshellarg($config['port'] ?? '3306'),
-                escapeshellarg($config['database']),
-                escapeshellarg($path)
-            );
-
-            exec($cmd, $output, $return);
-
+        if ($config['driver'] === 'mysql' && $this->isMysqldumpAvailable()) {
+            $process=new \Symfony\Component\Process\Process(['mysqldump','--single-transaction','--user='.$config['username'],'--host='.$config['host'],'--port='.($config['port']??3306),$config['database']],null,['MYSQL_PWD'=>(string)$config['password']]);
+            $process->setTimeout(300);$stream=fopen($path,'w');
+            try{$return=$process->run(function($type,$buffer)use($stream){if($type===\Symfony\Component\Process\Process::OUT)fwrite($stream,$buffer);});}finally{fclose($stream);}
+            $output=[];
             if ($return === 0 && file_exists($path) && filesize($path) > 0) {
                 return;
             }
@@ -141,6 +141,7 @@ class BackupService
      */
     protected function isMysqldumpAvailable(): bool
     {
+        if(!function_exists('exec'))return false;
         exec('which mysqldump 2>nul', $out, $code);
         if ($code === 0) return true;
 
@@ -154,6 +155,14 @@ class BackupService
      */
     protected function phpDumpDatabase(string $path): void
     {
+        if(DB::connection()->getDriverName()==='sqlite') {
+            $handle=fopen($path,'w');fwrite($handle,"PRAGMA foreign_keys=OFF;\n");
+            foreach(DB::select("SELECT name,sql FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'") as $table) {
+                $identifier='"'.str_replace('"','""',$table->name).'"';fwrite($handle,"DROP TABLE IF EXISTS $identifier;\n".$table->sql.";\n");
+                foreach(DB::table($table->name)->cursor() as $row){$values=array_map(fn($v)=>$v===null?'NULL':DB::connection()->getPdo()->quote((string)$v),(array)$row);fwrite($handle,"INSERT INTO $identifier VALUES (".implode(',',$values).");\n");}
+            }
+            fwrite($handle,"PRAGMA foreign_keys=ON;\n");fclose($handle);return;
+        }
         $tables = $this->getTableNames();
         $handle = fopen($path, 'w');
 
@@ -173,8 +182,7 @@ class BackupService
             fwrite($handle, $createSql['Create Table'] . ";\n\n");
 
             // INSERT statements
-            $rows = DB::table($table)->get();
-            if ($rows->count() > 0) {
+            $rows = DB::table($table)->cursor();
                 fwrite($handle, "\n-- Dumping data for `{$table}`\n");
                 foreach ($rows->chunk(100) as $chunk) {
                     $inserts = [];
@@ -184,14 +192,14 @@ class BackupService
                             if (is_null($value)) {
                                 $values[] = 'NULL';
                             } else {
-                                $values[] = "'" . addslashes($value) . "'";
+                                $values[] = DB::connection()->getPdo()->quote((string)$value);
                             }
                         }
                         $inserts[] = '(' . implode(',', $values) . ')';
                     }
                     fwrite($handle, "INSERT INTO `{$table}` VALUES\n" . implode(",\n", $inserts) . ";\n");
                 }
-            }
+            
             fwrite($handle, "\n");
         }
 
@@ -225,6 +233,7 @@ class BackupService
             if ($file === '.' || $file === '..') continue;
             $srcPath = $source . DIRECTORY_SEPARATOR . $file;
             $dstPath = $dest . DIRECTORY_SEPARATOR . $file;
+            if(is_link($srcPath)) throw new \RuntimeException('Backup sources cannot contain symbolic links.');
             if (is_dir($srcPath)) {
                 $this->recurseCopy($srcPath, $dstPath);
             } else {
@@ -268,7 +277,7 @@ class BackupService
 
         foreach ($iterator as $file) {
             $filePath = $file->getRealPath();
-            $relativePath = substr($filePath, strlen($source));
+            $relativePath = str_replace('\\','/',substr($filePath, strlen($source)));
             if ($file->isDir()) {
                 $zip->addEmptyDir($relativePath);
             } else {
@@ -300,20 +309,39 @@ class BackupService
      */
     protected function getTableNames(): array
     {
+        if(DB::connection()->getDriverName()==='sqlite')return array_column(DB::select("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'"),'name');
         $tables = DB::select('SHOW TABLES');
         $key = 'Tables_in_' . config('database.connections.' . config('database.default') . '.database');
         return array_map(fn ($t) => $t->$key ?? array_values((array) $t)[0], $tables);
     }
 
+    public function backupPath(SystemBackup $backup): string {
+        if(!preg_match('#^backups/[A-Za-z0-9_.-]+\.zip$#D',$backup->file_path))throw new \RuntimeException('Invalid backup path.');
+        $path=Storage::disk('local')->path($backup->file_path);
+        if(!is_file($path))$path=storage_path('app/'.$backup->file_path);
+        if(!is_file($path))throw new \RuntimeException('Backup file not found.');
+        return $path;
+    }
+    public function verifyBackup(SystemBackup $backup): array {
+        return app(BackupIntegrity::class)->verify($this->backupPath($backup));
+    }
+    /** Restores SQL only to an explicitly separate, configured testing connection. */
+    public function testRestore(SystemBackup $backup,string $connection): array {
+        $config=config('database.connections.'.$connection);
+        $production=config('database.connections.'.config('database.default'));
+        if(!$config||$connection===config('database.default')||empty($config['database'])||(mb_strtolower((string)($config['database']??''))===mb_strtolower((string)($production['database']??''))))throw new \RuntimeException('Configure a separate restore-testing database first.');
+        $info=$this->verifyBackup($backup);
+        if(($config['driver']??null)!==$info['driver'])throw new \RuntimeException('Restore-test database driver must match the backup.');
+        $zip=new ZipArchive();$zip->open($this->backupPath($backup));
+        try{$sql=$zip->getFromName('database.sql');if(!$sql)throw new \RuntimeException('Database dump is empty.');DB::connection($connection)->unprepared($sql);}finally{$zip->close();}
+        return ['restored'=>true,'connection'=>$connection]+$info;
+    }
+
     /**
      * Delete a backup file and record.
      */
-    public function deleteBackup(SystemBackup $backup): void
-    {
-        if ($backup->file_path && Storage::disk($backup->disk ?? 'local')->exists($backup->file_path)) {
-            Storage::disk($backup->disk ?? 'local')->delete($backup->file_path);
-        }
-        $backup->delete();
+    public function deleteBackup(SystemBackup $backup): void {
+        $path=$this->backupPath($backup);if(!unlink($path))throw new \RuntimeException('Could not delete backup file.');AuditTrail::record(request()->user()?->id,'backup.deleted','backup',$backup->id);$backup->delete();
     }
 
     /**
@@ -321,7 +349,8 @@ class BackupService
      */
     public function restoreBackup(SystemBackup $backup): void
     {
-        $filePath = storage_path('app/' . $backup->file_path);
+        $filePath = $this->backupPath($backup);
+        app(BackupIntegrity::class)->verify($filePath);
         if (!file_exists($filePath)) {
             throw new \RuntimeException('Backup file not found on disk');
         }

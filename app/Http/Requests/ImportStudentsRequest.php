@@ -15,7 +15,7 @@ class ImportStudentsRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'file'        => 'required|file|mimes:csv,txt|max:20480',
+            'file'        => 'required|file|mimes:csv,txt,xlsx,xls|max:20480',
             'mode'        => 'nullable|in:create,update,upsert',
             'school_year' => 'nullable|string|max:20',
             'dry_run'     => 'nullable|boolean',

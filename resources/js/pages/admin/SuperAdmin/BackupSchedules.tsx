@@ -168,6 +168,7 @@ const BackupSchedules: React.FC = () => {
 
   return (
     <div className="space-y-5">
+      <p className="text-sm text-slate-600">Schedule times use Asia/Manila. The server scheduler must run every minute.</p>
       {/* HEADER */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <div>

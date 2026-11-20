@@ -13,6 +13,7 @@ class AttendanceLog extends Model
     protected $table = 'attendance_logs';
 
     protected $fillable = [
+        'check_out_at','review_status','attendance_mark','credited_hours','recorded_by','reviewed_by',
         'session_id',
         'student_id',
         'check_in_at',
@@ -26,6 +27,7 @@ class AttendanceLog extends Model
 
     protected $casts = [
         'check_in_at' => 'datetime',
+        'check_out_at'=>'datetime','credited_hours'=>'float',
         'face_confidence' => 'float',
         'location_lat' => 'float',
         'location_lng' => 'float',

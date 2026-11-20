@@ -1,3 +1,4 @@
+import DirectoryFilters from "../components/common/DirectoryFilters";
 // resources/js/pages/faculty/Students.tsx
 import React, { useState, useEffect, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
@@ -7,6 +8,8 @@ import StudentDetailsModal from "../components/common/StudentDetailsModal";
 import type { Student } from "../../types/api";
 
 const FacultyStudents: React.FC = () => {
+  const [course,setCourse]=useState("");
+  const [section,setSection]=useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [search, setSearch] = useState("");
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
@@ -47,12 +50,13 @@ const FacultyStudents: React.FC = () => {
   // Client-side pagination
   // ============================================================
   const pagination = useMemo(() => {
-    const total = students.length;
+    const filtered=students.filter((s:any)=>(!course||s.course===course)&&(!section||s.section===section));
+    const total = filtered.length;
     const lastPage = Math.max(1, Math.ceil(total / perPage));
     const safePage = Math.min(page, lastPage);
     const start = (safePage - 1) * perPage;
     const end = start + perPage;
-    const slice = students.slice(start, end);
+    const slice = filtered.slice(start, end);
 
     return {
       total,
@@ -63,7 +67,7 @@ const FacultyStudents: React.FC = () => {
       to: total === 0 ? 0 : Math.min(end, total),
       data: slice,
     };
-  }, [students, page, perPage]);
+  }, [students, page, perPage,course,section]);
 
   // Sync internal page if it drifted past lastPage (e.g. after search filter)
   useEffect(() => {
@@ -128,6 +132,7 @@ const FacultyStudents: React.FC = () => {
 
   return (
     <div className="space-y-5">
+      <DirectoryFilters course={course} section={section} onCourse={v=>{setCourse(v);setPage(1)}} onSection={v=>{setSection(v);setPage(1)}}/>
       {/* ============================================================ */}
       {/* HEADER */}
       {/* ============================================================ */}

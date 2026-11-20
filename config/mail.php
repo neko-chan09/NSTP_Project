@@ -44,15 +44,10 @@ return [
             'encryption' => env('MAIL_ENCRYPTION', 'tls'),
             'username' => env('MAIL_USERNAME'),
             'password' => env('MAIL_PASSWORD'),
-            'timeout' => null,
+            'timeout' => 15,
             'auth_mode' => null,
         ],
         
-        'from' => [
-        'address' => env('MAIL_FROM_ADDRESS', 'klbucad07@gmail.com'),
-        'name' => env('MAIL_FROM_NAME', 'The Executor'),
-    ],
-
         'ses' => [
             'transport' => 'ses',
         ],

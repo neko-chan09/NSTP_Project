@@ -47,8 +47,8 @@ class FaceMatchingService
      */
     public function cosineSimilarity(array $a, array $b): float
     {
-        $len = min(count($a), count($b));
-        if ($len === 0) return 0.0;
+        $len = count($a);
+        if ($len === 0 || $len !== count($b)) return -1.0;
 
         $sum = 0.0;
         for ($i = 0; $i < $len; $i++) {
@@ -70,6 +70,7 @@ class FaceMatchingService
      */
     public function matchForStudent(Student $student, array $liveEmbedding): array
     {
+        if (!self::validVector($liveEmbedding)) throw new \InvalidArgumentException('Invalid live face embedding.');
         $threshold = (float) config('face.match_threshold', 0.5);
 
         $stored = FaceEmbedding::where('student_id', $student->id)->get();

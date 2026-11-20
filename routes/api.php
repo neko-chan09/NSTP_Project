@@ -72,9 +72,9 @@ use App\Http\Controllers\API\Mobile\Faculty\LearningMaterialController as Facult
 |--------------------------------------------------------------------------
 */
 
-Route::post('/register', [AuthController::class, 'register']);
-Route::post('/login', [AuthController::class, 'login']);
-Route::post('/admin/login', [AuthController::class, 'adminLogin']);
+Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:5,1');
+Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:10,1');
+Route::post('/admin/login', [AuthController::class, 'adminLogin'])->middleware('throttle:10,1');
 Route::get('/verify-certificate/{number}', [StudentCertificateController::class, 'verify']);
 Route::post('/check-email', [AuthController::class, 'checkEmail']);
 Route::post('/check-contact-number', [AuthController::class, 'checkContactNumber']);
@@ -90,12 +90,14 @@ Route::post('/check-contact-number', [AuthController::class, 'checkContactNumber
 | PASSWORD RESET (public)
 |--------------------------------------------------------------------------
 */
-Route::middleware('throttle:10,1')->prefix('api')->group(function () {
+foreach (['password', 'api'] as $recoveryPrefix) {
+Route::middleware('throttle:10,1')->prefix($recoveryPrefix)->group(function () {
     Route::post('/send-otp', [PasswordResetController::class, 'sendOtp']);
     Route::post('/verify-otp', [PasswordResetController::class, 'verifyOtp']);
     Route::post('/reset', [PasswordResetController::class, 'resetPassword']);
     Route::post('/resend-otp', [PasswordResetController::class, 'resendOtp']);
 });
+}
 
 /*
 |--------------------------------------------------------------------------
@@ -104,7 +106,7 @@ Route::middleware('throttle:10,1')->prefix('api')->group(function () {
 */
 Route::get('/profile-photos/{userId}', [\App\Http\Controllers\API\Shared\ProfilePhotoController::class, 'show'])->whereNumber('userId');
 
-Route::middleware(['auth:sanctum', \App\Http\Middleware\RequireActiveUser::class])->group(function () {
+Route::middleware(['auth:sanctum', \App\Http\Middleware\RequireActiveUser::class, \App\Http\Middleware\RequirePasswordChange::class, \App\Http\Middleware\AuditAccountChanges::class])->group(function () {
 
     // ============================================================
     // SHARED AUTH
@@ -135,6 +137,11 @@ Route::middleware(['auth:sanctum', \App\Http\Middleware\RequireActiveUser::class
     Route::post('/student/location', [LocationTrackingController::class, 'updateLocation']);
     Route::post('/student/location/update', [LocationTrackingController::class, 'updateLocation']);
 
+    Route::get('/student/attendance/records', [\App\Http\Controllers\API\Shared\ClassRecordController::class,'mine'])->middleware('student');
+    Route::get('/directory/options', [\App\Http\Controllers\API\Shared\StudentDirectoryController::class,'options'])->middleware(RequireRoles::class . ':admin,super_admin,faculty');
+    Route::get('/classes/{id}/record', [\App\Http\Controllers\API\Shared\ClassRecordController::class,'show'])->middleware(RequireRoles::class . ':admin,super_admin,faculty');
+    Route::post('/attendance/sessions/{id}/manual', [\App\Http\Controllers\API\Shared\ClassRecordController::class,'manual'])->middleware(RequireRoles::class . ':admin,super_admin,faculty');
+    Route::post('/attendance/sessions/{id}/checkout', [\App\Http\Controllers\API\Shared\ClassRecordController::class,'checkout'])->middleware('student');
     Route::get('/attendance/my-status/{sessionId}', [AttendanceController::class, 'myStatus']);
 
     Route::post('/student/activity/{activityId}/start-tracking', [LocationTrackingController::class, 'startTracking']);
@@ -197,6 +204,7 @@ Route::middleware(['auth:sanctum', \App\Http\Middleware\RequireActiveUser::class
     Route::get('/attendance/session/{id}/logs', [AttendanceController::class, 'logs']);
 
     Route::post('/attendance/my-history', [AttendanceController::class, 'history']);
+    Route::get('/attendance/my-history', [AttendanceController::class, 'history']);
 
     // ============================================================
     // ACTIVITIES (shared admin + faculty)
@@ -241,6 +249,7 @@ Route::middleware(['auth:sanctum', \App\Http\Middleware\RequireActiveUser::class
 
         // ---------- STUDENT IMPORT (chunked sync) ----------
         Route::get('/students/import/history', [\App\Http\Controllers\API\Web\Admin\StudentImportController::class, 'history']);
+        Route::post('/students/import/preview', [\App\Http\Controllers\API\Web\Admin\StudentImportController::class,'preview']);
         Route::post('/students/import/start', [\App\Http\Controllers\API\Web\Admin\StudentImportController::class, 'start']);
         Route::post('/students/import/{id}/process-chunk', [\App\Http\Controllers\API\Web\Admin\StudentImportController::class, 'processChunk']);
         Route::get('/students/import/{id}/status', [\App\Http\Controllers\API\Web\Admin\StudentImportController::class, 'status']);
@@ -335,6 +344,10 @@ Route::middleware(['auth:sanctum', \App\Http\Middleware\RequireActiveUser::class
     // ============================================================
     // ============================================================
     Route::middleware('superadmin')->prefix('superadmin')->group(function () {
+        Route::get('/audit-events', [\App\Http\Controllers\API\Web\SuperAdmin\PasswordRecoveryController::class,'audit']);
+        Route::get('/password-reset-users', [\App\Http\Controllers\API\Web\SuperAdmin\PasswordRecoveryController::class,'search'])->middleware('throttle:30,1');
+        Route::post('/users/{id}/reset-password', [\App\Http\Controllers\API\Web\SuperAdmin\PasswordRecoveryController::class,'reset'])->middleware('throttle:10,1');
+
 
         // ---------- USERS (admin + faculty) ----------
         Route::get('/users', [SuperAdminController::class, 'index']);
@@ -343,6 +356,7 @@ Route::middleware(['auth:sanctum', \App\Http\Middleware\RequireActiveUser::class
         Route::put('/users/{id}', [SuperAdminController::class, 'update']);
         Route::delete('/users/{id}', [SuperAdminController::class, 'destroy']);
         Route::patch('/users/{id}/toggle', [SuperAdminController::class, 'toggleActive']);
+        Route::post('/backups/{id}/verify', [\App\Http\Controllers\API\Web\SuperAdmin\BackupController::class,'verify']);
         Route::get('/stats', [SuperAdminController::class, 'stats']);
 
         // ---------- FACE RESET (search student + reset face) ----------

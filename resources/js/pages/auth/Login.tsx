@@ -22,7 +22,7 @@ const Login: React.FC = () => {
     if (token && userStr) {
       try {
         const user = JSON.parse(userStr);
-        if (user?.role === "faculty") {
+        if (user?.must_change_password) { navigate("/change-temporary-password",{replace:true}); } else if (user?.role === "faculty") {
           navigate("/faculty", { replace: true });
         } else if (user?.role === "super_admin" || user?.role === "admin") {
           navigate("/admin", { replace: true });
@@ -61,6 +61,7 @@ const Login: React.FC = () => {
         toast.success("Login successful!");
 
         const user = response.user;
+        if (user?.must_change_password) { window.location.href="/change-temporary-password"; return; }
         if (user?.role === "faculty") {
           window.location.href = "/faculty";
         } else if (user?.role === "super_admin" || user?.role === "admin") {

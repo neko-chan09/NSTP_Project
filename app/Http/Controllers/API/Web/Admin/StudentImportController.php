@@ -13,13 +13,18 @@ class StudentImportController extends Controller
 {
     public function __construct(protected StudentImportService $service) {}
 
+    public function preview(Request $request) {
+        $request->validate(['file'=>'required|file|mimes:csv,txt,xlsx,xls|max:20480','mode'=>'nullable|in:create,update,upsert','school_year'=>'nullable|string|max:20']);
+$result=$this->service->import($request->file('file'),$request->input('mode','upsert'),true,$request->input('school_year'));
+        return response()->json(['data'=>$result]);
+    }
     // ------------------------------------------------------------
     // Start a new import — parse + create batch — returns batch_id
     // ------------------------------------------------------------
     public function start(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'file'        => 'required|file|mimes:csv,txt|max:51200', // 50 MB
+            'file'        => 'required|file|mimes:csv,txt,xlsx,xls|max:20480', // 50 MB
             'mode'        => 'nullable|in:create,update,upsert',
             'school_year' => 'nullable|string|max:20',
         ]);
@@ -51,7 +56,7 @@ class StudentImportController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Failed to start import: ' . $e->getMessage(),
-            ], 500);
+            ], $e instanceof \RuntimeException ? 422 : 500);
         }
     }
 
