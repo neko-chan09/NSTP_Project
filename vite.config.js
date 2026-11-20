@@ -54,6 +54,10 @@ export default defineConfig({
                 ],
                 runtimeCaching: [
                     {
+                        urlPattern: ({ url, request }) => request.method === 'GET' && /\/api\/activities\/\d+\/map$/.test(url.pathname),
+                        handler: 'NetworkOnly',
+                    },
+                    {
                         urlPattern: ({ url, request }) => {
                             if (request.method !== 'GET') return false;
                             return /\/api\/(dashboard|admin\/students|admin\/classes|bulletin|activities|options|attendance\/sessions|admin\/grades|admin\/certificates|student\/profile|student\/documents|student\/certificates|student\/announcements|student\/notifications)/i.test(

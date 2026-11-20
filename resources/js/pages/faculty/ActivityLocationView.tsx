@@ -7,7 +7,7 @@ import { useAuth } from "../hooks/useAuth";
 import { adminApi } from "../../services/api";
 import toast from "react-hot-toast";
 import L from "leaflet";
-import { drawGeofence, fitGeofence, validCoordinates, locationStatus } from "../../utils/activityGeofenceMap";
+import { drawGeofence, fitGeofence, validCoordinates, locationStatus, monitorFreshness } from "../../utils/activityGeofenceMap";
 import "leaflet/dist/leaflet.css";
 
 // Fix Leaflet default icon issues in Vite/React builds
@@ -46,6 +46,7 @@ interface ParticipantLocation {
   profile_photo: string | null;
   accuracy?: number | null;
   location_recorded_at?: string | null;
+  location_source?: string;
 }
 
 interface ActivityLocationData {
@@ -69,6 +70,9 @@ const FacultyActivityLocationView: React.FC = () => {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
+  const [monitorTick,setMonitorTick]=useState(0);
+  useEffect(()=>{const timer=window.setInterval(()=>setMonitorTick(t=>t+1),10000);return()=>window.clearInterval(timer)},[]);
+
   const [showAccuracy, setShowAccuracy] = useState(true);
   const fittedActivity = useRef<number | null>(null);
   const [filterType, setFilterType] = useState<FilterType>("all");
@@ -77,15 +81,16 @@ const FacultyActivityLocationView: React.FC = () => {
   const canAccess = isFaculty ? true : isAdmin || isSuperAdmin ? "viewer" : false;
 
   // Fetch activity location data
-  const { data: responseData, isLoading, refetch } = useQuery<ActivityLocationData>({
+  const { data: responseData, isLoading, refetch, dataUpdatedAt, isError } = useQuery<ActivityLocationData>({
     queryKey: ["activity", id, "location"],
     queryFn: async () => {
   const result = await adminApi.getActivityLocation(parseInt(id!));
   return result;
 },
     enabled: !!id && !isNaN(parseInt(id)),
-    staleTime: 30000,
-    refetchInterval: 30000,
+    staleTime: 5000,
+    refetchInterval: 5000,
+    refetchIntervalInBackground: false,
     retry: 1,
   });
 
@@ -127,7 +132,7 @@ const FacultyActivityLocationView: React.FC = () => {
     const resize = new ResizeObserver(() => map.invalidateSize());
     resize.observe(mapContainerRef.current);
     return () => resize.disconnect();
-  }, [activity, participants, showAccuracy]);
+  }, [activity, participants, showAccuracy, monitorTick]);
 
   const fitLocations = () => {
     if (mapInstanceRef.current && activity && validCoordinates(activity.latitude, activity.longitude)) {
@@ -280,6 +285,7 @@ const FacultyActivityLocationView: React.FC = () => {
         </div>
       </div>
 
+      <p className="text-sm text-slate-600" role="status">{isError ? 'Connection interrupted - showing last received positions.' : `Monitor refreshed: ${dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString() : 'waiting'}. Updates about every 5 seconds while visible.`}</p>
       {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-white p-4 rounded-xl shadow-sm border-l-4 border-slate-600">
@@ -415,10 +421,10 @@ const FacultyActivityLocationView: React.FC = () => {
                     <td className="p-3">
                       <span
                         className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
-                          locationStatus(participant.distance_from_venue, participant.accuracy, Number(activity.geofence_radius) || 100).startsWith("Near") ? "bg-amber-100 text-amber-900" : participant.is_within_geofence === true ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-700"
+                          monitorFreshness(participant.location_recorded_at, participant.location_source) !== "Recent GPS fix" ? "bg-slate-100 text-slate-700" : (monitorFreshness(participant.location_recorded_at, participant.location_source) !== "Recent GPS fix" ? monitorFreshness(participant.location_recorded_at, participant.location_source) : locationStatus(participant.distance_from_venue, participant.accuracy, Number(activity.geofence_radius) || 100)).startsWith("Near") ? "bg-amber-100 text-amber-900" : participant.is_within_geofence === true ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-700"
                         }`}
                       >
-                        {locationStatus(participant.distance_from_venue, participant.accuracy, Number(activity.geofence_radius) || 100)}
+                        {monitorFreshness(participant.location_recorded_at, participant.location_source) !== "Recent GPS fix" ? monitorFreshness(participant.location_recorded_at, participant.location_source) : locationStatus(participant.distance_from_venue, participant.accuracy, Number(activity.geofence_radius) || 100)}
                       </span>
                     </td>
                     <td className="p-3 text-sm text-slate-600 font-mono">
@@ -493,7 +499,7 @@ const FacultyActivityLocationView: React.FC = () => {
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={showAccuracy} onChange={e => setShowAccuracy(e.target.checked)} />Show GPS uncertainty</label>
           <button type="button" className="btn btn-sm" onClick={fitLocations}>Fit boundary + students</button>
           <button type="button" className="btn btn-sm" onClick={() => { if (mapInstanceRef.current && validCoordinates(activity.latitude, activity.longitude)) fitGeofence(mapInstanceRef.current, Number(activity.latitude), Number(activity.longitude), Number(activity.geofence_radius) || 100, [], true); }}>Focus boundary</button>
-          <span className="text-xs text-slate-500">Refreshes every 30 seconds. Location timestamps indicate stale readings.</span>
+          <span className="text-xs text-slate-500">Near-live monitor · refreshes every 5 seconds while visible. Phone uploads need internet and active activity tracking.</span>
         </div>
         <div className="relative">
           <div ref={mapContainerRef} className="h-[500px] w-full bg-slate-100" style={{ minHeight: "500px" }} />

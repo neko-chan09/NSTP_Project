@@ -991,7 +991,8 @@ export const adminApi = {
   },
 
   getActivityLocation: async (id: number) => {
-    const response = await fetch(`${API_URL}/activities/${id}/map`, {
+    const response = await fetch(`${API_URL}/activities/${id}/map?live=${Date.now()}`, {
+      cache: 'no-store',
       headers: headers(),
     });
     const result = await handleResponse(response);

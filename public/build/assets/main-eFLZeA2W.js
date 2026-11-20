@@ -13237,7 +13237,8 @@ const adminApi = {
     return result;
   },
   getActivityLocation: async (id) => {
-    const response = await fetch(`${API_URL}/activities/${id}/map`, {
+    const response = await fetch(`${API_URL}/activities/${id}/map?live=${Date.now()}`, {
+      cache: "no-store",
       headers: headers()
     });
     const result = await handleResponse(response);
@@ -29708,6 +29709,12 @@ function locationStatus(distance, accuracy, radius) {
   if (distance - accuracy > radius) return "Outside";
   return "Near boundary · GPS uncertain";
 }
+function monitorFreshness(recorded, source, now = Date.now()) {
+  if (source === "checkin") return "Check-in position - not live";
+  const time = recorded ? Date.parse(recorded) : NaN;
+  if (!Number.isFinite(time) || time > now + 3e4) return "Location time unknown";
+  return now - time > 6e4 ? "Stale - awaiting student connection" : "Recent GPS fix";
+}
 function fitGeofence(map, lat, lng, radius, people, venueOnly = false) {
   const bounds = L$1.latLng(lat, lng).toBounds(radius * 2);
   if (!venueOnly) people.forEach((p2) => {
@@ -29719,33 +29726,59 @@ function fitGeofence(map, lat, lng, radius, people, venueOnly = false) {
   map.invalidateSize();
   map.fitBounds(bounds, { padding: [45, 45], maxZoom: 19 });
 }
+const liveLayers = /* @__PURE__ */ new WeakMap();
 function drawGeofence(map, lat, lng, radius, people, showAccuracy, venue) {
-  map.eachLayer((layer) => {
-    if (layer instanceof L$1.Marker || layer instanceof L$1.Path) map.removeLayer(layer);
-  });
-  L$1.circle([lat, lng], { radius, color: "#b77900", fillColor: "#f5b928", fillOpacity: 0.18, weight: 3, dashArray: "7 5" }).addTo(map).bindTooltip(`Allowed boundary · ${radius} m radius`, { permanent: true, direction: "top" });
+  let state = liveLayers.get(map);
+  if (!state) {
+    const boundary = L$1.circle([lat, lng], { radius, color: "#b77900", fillColor: "#f5b928", fillOpacity: 0.18, weight: 3, dashArray: "7 5" }).addTo(map);
+    const venueMarker = L$1.marker([lat, lng], { icon: L$1.divIcon({ className: "", html: '<div style="width:18px;height:18px;border:3px solid white;border-radius:50%;background:#b77900"></div>', iconSize: [18, 18], iconAnchor: [9, 9] }) }).addTo(map);
+    state = { boundary, venue: venueMarker, people: /* @__PURE__ */ new Map() };
+    liveLayers.set(map, state);
+  }
+  state.boundary.setLatLng([lat, lng]).setRadius(radius).unbindTooltip().bindTooltip(`Allowed boundary - ${radius} m radius`, { permanent: true, direction: "top" });
   const venueLabel = document.createElement("div");
   venueLabel.textContent = venue;
-  L$1.marker([lat, lng], { icon: L$1.divIcon({ className: "", html: '<div style="width:18px;height:18px;border:3px solid white;border-radius:50%;background:#b77900;box-shadow:0 1px 5px #555"></div>', iconSize: [18, 18], iconAnchor: [9, 9] }) }).addTo(map).bindPopup(venueLabel);
+  state.venue.setLatLng([lat, lng]).bindPopup(venueLabel);
+  const present = /* @__PURE__ */ new Set();
   people.forEach((p2) => {
     if (!validCoordinates(p2.latitude, p2.longitude)) return;
+    present.add(p2.student_id);
     const position = [Number(p2.latitude), Number(p2.longitude)];
-    const distance = map.distance([lat, lng], position);
-    const status = locationStatus(distance, p2.accuracy, radius);
-    const color = status.startsWith("Near") ? "#b77900" : distance <= radius ? "#00855a" : "#d12e45";
-    if (showAccuracy && p2.accuracy != null && Number.isFinite(p2.accuracy) && p2.accuracy > 0) {
-      L$1.circle(position, { radius: p2.accuracy, color: "#2563eb", weight: 1, fillColor: "#2563eb", fillOpacity: 0.12 }).addTo(map).bindTooltip(`Reported GPS accuracy: ±${Math.round(p2.accuracy)} m`);
+    const distance = map.distance([lat, lng], position), freshness = monitorFreshness(p2.location_recorded_at, p2.location_source);
+    const status = freshness === "Recent GPS fix" ? locationStatus(distance, p2.accuracy, radius) : freshness;
+    const color = freshness !== "Recent GPS fix" ? "#64748b" : status.startsWith("Near") ? "#b77900" : distance <= radius ? "#00855a" : "#d12e45";
+    let item = state.people.get(p2.student_id);
+    if (!item) {
+      item = { marker: L$1.marker(position).addTo(map) };
+      state.people.set(p2.student_id, item);
     }
+    item.marker.setLatLng(position);
     const icon = document.createElement("div");
     icon.textContent = p2.student_name.slice(0, 1);
     Object.assign(icon.style, { width: "30px", height: "30px", borderRadius: "50%", border: "2px solid white", background: color, color: "white", display: "grid", placeItems: "center", fontWeight: "bold" });
+    item.marker.setIcon(L$1.divIcon({ className: "", html: icon, iconSize: [30, 30], iconAnchor: [15, 15] }));
     const popup = document.createElement("div");
-    for (const line of [p2.student_name, p2.student_id, status, `Distance: ${distance.toFixed(1)} m`, p2.accuracy == null ? "GPS accuracy unknown" : `Reported GPS accuracy: ±${Math.round(p2.accuracy)} m`, p2.location_recorded_at ? `Location recorded: ${new Date(p2.location_recorded_at).toLocaleString()}` : "Location time unknown"]) {
+    for (const line of [p2.student_name, p2.student_id, status, `Distance: ${distance.toFixed(1)} m`, p2.accuracy == null ? "GPS accuracy unknown" : `Reported GPS accuracy: +/-${Math.round(p2.accuracy)} m`, p2.location_recorded_at ? `Location recorded: ${new Date(p2.location_recorded_at).toLocaleString()}` : "Location time unknown"]) {
       const row = document.createElement("div");
       row.textContent = line;
       popup.appendChild(row);
     }
-    L$1.marker(position, { icon: L$1.divIcon({ className: "", html: icon, iconSize: [30, 30], iconAnchor: [15, 15] }) }).addTo(map).bindPopup(popup);
+    if (item.marker.getPopup()) item.marker.setPopupContent(popup);
+    else item.marker.bindPopup(popup);
+    if (showAccuracy && p2.accuracy != null && Number.isFinite(p2.accuracy) && p2.accuracy > 0) {
+      if (!item.accuracy) item.accuracy = L$1.circle(position, { radius: p2.accuracy, color: "#2563eb", weight: 1, fillColor: "#2563eb", fillOpacity: 0.12 }).addTo(map);
+      item.accuracy.setLatLng(position).setRadius(p2.accuracy);
+    } else if (item.accuracy) {
+      map.removeLayer(item.accuracy);
+      item.accuracy = void 0;
+    }
+  });
+  state.people.forEach((item, id) => {
+    if (!present.has(id)) {
+      map.removeLayer(item.marker);
+      if (item.accuracy) map.removeLayer(item.accuracy);
+      state.people.delete(id);
+    }
   });
 }
 delete L$1.Icon.Default.prototype._getIconUrl;
@@ -29762,19 +29795,25 @@ const FacultyActivityLocationView = () => {
   const mapContainerRef = reactExports.useRef(null);
   const mapInstanceRef = reactExports.useRef(null);
   const [mapLoaded, setMapLoaded] = reactExports.useState(false);
+  const [monitorTick, setMonitorTick] = reactExports.useState(0);
+  reactExports.useEffect(() => {
+    const timer = window.setInterval(() => setMonitorTick((t2) => t2 + 1), 1e4);
+    return () => window.clearInterval(timer);
+  }, []);
   const [showAccuracy, setShowAccuracy] = reactExports.useState(true);
   const fittedActivity = reactExports.useRef(null);
   const [filterType, setFilterType] = reactExports.useState("all");
   const canAccess = isFaculty ? true : isAdmin || isSuperAdmin ? "viewer" : false;
-  const { data: responseData, isLoading, refetch } = useQuery({
+  const { data: responseData, isLoading, refetch, dataUpdatedAt, isError } = useQuery({
     queryKey: ["activity", id, "location"],
     queryFn: async () => {
       const result = await adminApi.getActivityLocation(parseInt(id));
       return result;
     },
     enabled: !!id && !isNaN(parseInt(id)),
-    staleTime: 3e4,
-    refetchInterval: 3e4,
+    staleTime: 5e3,
+    refetchInterval: 5e3,
+    refetchIntervalInBackground: false,
     retry: 1
   });
   const activity = responseData?.activity;
@@ -29808,7 +29847,7 @@ const FacultyActivityLocationView = () => {
     const resize = new ResizeObserver(() => map.invalidateSize());
     resize.observe(mapContainerRef.current);
     return () => resize.disconnect();
-  }, [activity, participants, showAccuracy]);
+  }, [activity, participants, showAccuracy, monitorTick]);
   const fitLocations = () => {
     if (mapInstanceRef.current && activity && validCoordinates(activity.latitude, activity.longitude)) {
       fitGeofence(mapInstanceRef.current, Number(activity.latitude), Number(activity.longitude), Number(activity.geofence_radius) || 100, participants);
@@ -29928,6 +29967,7 @@ const FacultyActivityLocationView = () => {
         " Refresh"
       ] }) })
     ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-slate-600", role: "status", children: isError ? "Connection interrupted - showing last received positions." : `Monitor refreshed: ${dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString() : "waiting"}. Updates about every 5 seconds while visible.` }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid grid-cols-2 md:grid-cols-4 gap-4", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-white p-4 rounded-xl shadow-sm border-l-4 border-slate-600", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "block text-xs text-slate-500", children: "Total Participants" }),
@@ -30039,8 +30079,8 @@ const FacultyActivityLocationView = () => {
               /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "p-3", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                 "span",
                 {
-                  className: `px-2.5 py-1 rounded-full text-xs font-semibold ${locationStatus(participant.distance_from_venue, participant.accuracy, Number(activity.geofence_radius) || 100).startsWith("Near") ? "bg-amber-100 text-amber-900" : participant.is_within_geofence === true ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-700"}`,
-                  children: locationStatus(participant.distance_from_venue, participant.accuracy, Number(activity.geofence_radius) || 100)
+                  className: `px-2.5 py-1 rounded-full text-xs font-semibold ${monitorFreshness(participant.location_recorded_at, participant.location_source) !== "Recent GPS fix" ? "bg-slate-100 text-slate-700" : (monitorFreshness(participant.location_recorded_at, participant.location_source) !== "Recent GPS fix" ? monitorFreshness(participant.location_recorded_at, participant.location_source) : locationStatus(participant.distance_from_venue, participant.accuracy, Number(activity.geofence_radius) || 100)).startsWith("Near") ? "bg-amber-100 text-amber-900" : participant.is_within_geofence === true ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-700"}`,
+                  children: monitorFreshness(participant.location_recorded_at, participant.location_source) !== "Recent GPS fix" ? monitorFreshness(participant.location_recorded_at, participant.location_source) : locationStatus(participant.distance_from_venue, participant.accuracy, Number(activity.geofence_radius) || 100)
                 }
               ) }),
               /* @__PURE__ */ jsxRuntimeExports.jsxs("td", { className: "p-3 text-sm text-slate-600 font-mono", children: [
@@ -30124,7 +30164,7 @@ const FacultyActivityLocationView = () => {
         /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "btn btn-sm", onClick: () => {
           if (mapInstanceRef.current && validCoordinates(activity.latitude, activity.longitude)) fitGeofence(mapInstanceRef.current, Number(activity.latitude), Number(activity.longitude), Number(activity.geofence_radius) || 100, [], true);
         }, children: "Focus boundary" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-slate-500", children: "Refreshes every 30 seconds. Location timestamps indicate stale readings." })
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-slate-500", children: "Near-live monitor · refreshes every 5 seconds while visible. Phone uploads need internet and active activity tracking." })
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "relative", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", { ref: mapContainerRef, className: "h-[500px] w-full bg-slate-100", style: { minHeight: "500px" } }),
@@ -46042,12 +46082,17 @@ const ActivityLocationView = () => {
   const mapContainerRef = reactExports.useRef(null);
   const mapInstanceRef = reactExports.useRef(null);
   const [mapLoaded, setMapLoaded] = reactExports.useState(false);
+  const [monitorTick, setMonitorTick] = reactExports.useState(0);
+  reactExports.useEffect(() => {
+    const timer = window.setInterval(() => setMonitorTick((t2) => t2 + 1), 1e4);
+    return () => window.clearInterval(timer);
+  }, []);
   const [showAccuracy, setShowAccuracy] = reactExports.useState(true);
   const fittedActivity = reactExports.useRef(null);
   const [error, setError] = reactExports.useState(null);
   const [filterType, setFilterType] = reactExports.useState("all");
   const canAccess = isFaculty ? true : isAdmin || isSuperAdmin ? "viewer" : false;
-  const { data: responseData, isLoading, refetch } = useQuery({
+  const { data: responseData, isLoading, refetch, dataUpdatedAt, isError } = useQuery({
     queryKey: ["activity", id, "location"],
     queryFn: async () => {
       try {
@@ -46059,8 +46104,9 @@ const ActivityLocationView = () => {
       }
     },
     enabled: !!id && !isNaN(parseInt(id)),
-    staleTime: 3e4,
-    refetchInterval: 3e4,
+    staleTime: 5e3,
+    refetchInterval: 5e3,
+    refetchIntervalInBackground: false,
     retry: 1
   });
   const activity = responseData?.activity;
@@ -46093,7 +46139,7 @@ const ActivityLocationView = () => {
     const resize = new ResizeObserver(() => map.invalidateSize());
     resize.observe(mapContainerRef.current);
     return () => resize.disconnect();
-  }, [activity, participants, showAccuracy]);
+  }, [activity, participants, showAccuracy, monitorTick]);
   const fitLocations = () => {
     if (mapInstanceRef.current && activity && validCoordinates(activity.latitude, activity.longitude)) {
       fitGeofence(mapInstanceRef.current, Number(activity.latitude), Number(activity.longitude), Number(activity.geofence_radius) || 100, participants);
@@ -46213,6 +46259,7 @@ const ActivityLocationView = () => {
         " Refresh"
       ] }) })
     ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-slate-600", role: "status", children: isError ? "Connection interrupted - showing last received positions." : `Monitor refreshed: ${dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString() : "waiting"}. Updates about every 5 seconds while visible.` }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid grid-cols-2 md:grid-cols-4 gap-4", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-white p-4 rounded-xl shadow-sm border-l-4 border-slate-600", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "block text-xs text-slate-500", children: "Total Participants" }),
@@ -46324,8 +46371,8 @@ const ActivityLocationView = () => {
               /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "p-3", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                 "span",
                 {
-                  className: `px-2.5 py-1 rounded-full text-xs font-semibold ${locationStatus(participant.distance_from_venue, participant.accuracy, Number(activity.geofence_radius) || 100).startsWith("Near") ? "bg-amber-100 text-amber-900" : participant.is_within_geofence === true ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-700"}`,
-                  children: locationStatus(participant.distance_from_venue, participant.accuracy, Number(activity.geofence_radius) || 100)
+                  className: `px-2.5 py-1 rounded-full text-xs font-semibold ${monitorFreshness(participant.location_recorded_at, participant.location_source) !== "Recent GPS fix" ? "bg-slate-100 text-slate-700" : (monitorFreshness(participant.location_recorded_at, participant.location_source) !== "Recent GPS fix" ? monitorFreshness(participant.location_recorded_at, participant.location_source) : locationStatus(participant.distance_from_venue, participant.accuracy, Number(activity.geofence_radius) || 100)).startsWith("Near") ? "bg-amber-100 text-amber-900" : participant.is_within_geofence === true ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-700"}`,
+                  children: monitorFreshness(participant.location_recorded_at, participant.location_source) !== "Recent GPS fix" ? monitorFreshness(participant.location_recorded_at, participant.location_source) : locationStatus(participant.distance_from_venue, participant.accuracy, Number(activity.geofence_radius) || 100)
                 }
               ) }),
               /* @__PURE__ */ jsxRuntimeExports.jsxs("td", { className: "p-3 text-sm text-slate-600 font-mono", children: [
@@ -46409,7 +46456,7 @@ const ActivityLocationView = () => {
         /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "btn btn-sm", onClick: () => {
           if (mapInstanceRef.current && validCoordinates(activity.latitude, activity.longitude)) fitGeofence(mapInstanceRef.current, Number(activity.latitude), Number(activity.longitude), Number(activity.geofence_radius) || 100, [], true);
         }, children: "Focus boundary" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-slate-500", children: "Refreshes every 30 seconds. Location timestamps indicate stale readings." })
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-slate-500", children: "Near-live monitor · refreshes every 5 seconds while visible. Phone uploads need internet and active activity tracking." })
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "relative", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", { ref: mapContainerRef, className: "h-[500px] w-full bg-slate-100", style: { minHeight: "500px" } }),
@@ -50630,4 +50677,4 @@ startSyncEngine();
 ReactDOM.createRoot(document.getElementById("root")).render(
   /* @__PURE__ */ jsxRuntimeExports.jsx(React.StrictMode, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(App, {}) })
 );
-//# sourceMappingURL=main-DUIzzfGJ.js.map
+//# sourceMappingURL=main-eFLZeA2W.js.map

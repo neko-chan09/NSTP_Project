@@ -295,7 +295,14 @@ class LocationTrackingController extends Controller
             $distanceFromVenue = null;
             $isWithinGeofence = false;
 
-            if ($activity && $activity->latitude && $activity->longitude) {
+            if ($participation->is_tracking_location === false || ($activity?->end_datetime && now()->gt(\Carbon\Carbon::parse($activity->end_datetime)))) {
+                return response()->json(['success'=>false,'code'=>'TRACKING_ENDED','message'=>'Activity tracking is stopped or has ended.'],410);
+            }
+            if ($activity?->start_datetime && now()->lt(\Carbon\Carbon::parse($activity->start_datetime))) {
+                return response()->json(['success'=>false,'message'=>'Activity tracking has not started.'],403);
+            }
+
+            if ($activity && $activity->latitude !== null && $activity->longitude !== null) {
                 $distanceFromVenue = $this->calculateDistance(
                     (float)$latitude,
                     (float)$longitude,
@@ -305,8 +312,12 @@ class LocationTrackingController extends Controller
                 $isWithinGeofence = $distanceFromVenue <= ($activity->geofence_radius ?? 100);
             }
 
+            $location = \Illuminate\Support\Facades\DB::transaction(function() use ($student,$activityId,$latitude,$longitude,$accuracy,$distanceFromVenue,$isWithinGeofence,$source,$capturedAt,$participation) {
+                \App\Models\Student::whereKey($student->id)->lockForUpdate()->firstOrFail();
+                $previous=StudentLocation::where('student_id',$student->id)->where('activity_id',$activityId)->orderByDesc('tracked_at')->orderByDesc('id')->first();
+                if($previous && $previous->tracked_at->gte($capturedAt))return $previous;
             // Create location record
-            $location = StudentLocation::create([
+            $saved = StudentLocation::create([
                 'student_id' => $student->id,
                 'activity_id' => $activityId,
                 'latitude' => $latitude,
@@ -330,13 +341,15 @@ class LocationTrackingController extends Controller
                 'check_in_at' => $participation->check_in_at ?? now(),
             ]);
 
+                return $saved;
+            });
             return response()->json([
                 'success' => true,
                 'message' => 'Location updated successfully',
                 'data' => [
                     'id' => $location->id,
-                    'is_within_geofence' => $isWithinGeofence,
-                    'distance_from_venue' => $distanceFromVenue,
+                    'is_within_geofence' => $location->is_within_geofence,
+                    'distance_from_venue' => $location->distance_from_venue,
                     'tracked_at' => $location->tracked_at,
                 ]
             ]);

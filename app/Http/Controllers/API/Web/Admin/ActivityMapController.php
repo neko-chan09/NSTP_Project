@@ -65,9 +65,12 @@ class ActivityMapController extends Controller
 
                 // FIX 2: Only calculate geofence status if valid coordinates exist
                 $isWithin = null;
-                if ($hasCheckIn) {
+                if ($hasCheckIn && $fix && $fix->tracked_at && $fix->tracked_at->gte(now()->subSeconds(60)) && $fix->tracked_at->lte(now()->addSeconds(30)) && $fix->accuracy !== null) {
                     $geofenceRadius = $activity->geofence_radius ?? 100;
-                    $isWithin = $distance !== null ? ($distance <= $geofenceRadius) : (bool)($participation->is_within_geofence ?? false);
+                    if ($distance !== null && $fix->accuracy >= 0) {
+                        if ($distance + $fix->accuracy <= $geofenceRadius) $isWithin = true;
+                        elseif ($distance - $fix->accuracy > $geofenceRadius) $isWithin = false;
+                    }
                 }
 
                 return [
@@ -78,6 +81,7 @@ class ActivityMapController extends Controller
                     'longitude' => $hasCheckIn ? (float)$lng : null,
                     'has_checked_in' => $hasCheckIn,
                     'accuracy' => $fix && $fix->accuracy !== null ? (float)$fix->accuracy : null,
+                    'location_source' => $fix ? $fix->location_source : 'checkin',
                     'location_recorded_at' => $fix ? $fix->tracked_at : ($participation->check_in_at ?? $participation->attended_at),
                     'check_in_at' => $participation->check_in_at ?? $participation->attended_at ?? $participation->created_at,
                     'attendance_status' => $participation->attendance_status ?? 'registered',
@@ -123,7 +127,7 @@ class ActivityMapController extends Controller
                     'participants' => $participants->values(),
                     'stats' => $stats,
                 ]
-            ]);
+            ])->header('Cache-Control','private, no-store');
 
         } catch (\Exception $e) {
             Log::error('Activity Map Error: ' . $e->getMessage());

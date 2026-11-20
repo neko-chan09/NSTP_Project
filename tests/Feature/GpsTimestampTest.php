@@ -16,7 +16,7 @@ class GpsTimestampTest extends ProjectReviewRegressionTest
         $student=Student::create(['user_id'=>$user->id,'student_id'=>'GPS-TIME']);
         Schema::table('activities', fn(Blueprint $t) => $t->integer('geofence_radius')->default(50));
         Schema::create('activity_participations', function(Blueprint $t) {
-            $t->id();$t->integer('activity_id');$t->integer('student_id');$t->double('checkin_latitude')->nullable();$t->double('checkin_longitude')->nullable();$t->double('latitude')->nullable();$t->double('longitude')->nullable();$t->boolean('is_within_geofence')->nullable();$t->double('distance_from_venue')->nullable();$t->string('attendance_status')->nullable();$t->timestamp('check_in_at')->nullable();$t->timestamps();
+            $t->id();$t->integer('activity_id');$t->integer('student_id');$t->boolean('is_tracking_location')->default(true);$t->double('checkin_latitude')->nullable();$t->double('checkin_longitude')->nullable();$t->double('latitude')->nullable();$t->double('longitude')->nullable();$t->boolean('is_within_geofence')->nullable();$t->double('distance_from_venue')->nullable();$t->string('attendance_status')->nullable();$t->timestamp('check_in_at')->nullable();$t->timestamps();
         });
         Schema::create('student_locations', function(Blueprint $t) {
             $t->id();$t->integer('activity_id');$t->integer('student_id');$t->double('latitude');$t->double('longitude');$t->double('accuracy')->nullable();$t->boolean('is_within_geofence');$t->double('distance_from_venue')->nullable();$t->string('location_source');$t->timestamp('tracked_at');$t->timestamps();
@@ -32,5 +32,15 @@ class GpsTimestampTest extends ProjectReviewRegressionTest
         $payload['captured_at']=now()->addMinutes(2)->toIso8601String();
         $this->postJson('/api/student/location/update',$payload)->assertUnprocessable();
         $this->assertSame(1,DB::table('student_locations')->count());
+        $payload['captured_at']=now()->subSeconds(5)->toIso8601String();$payload['latitude']=8.49;
+        $this->postJson('/api/student/location/update',$payload)->assertOk();
+        $payload['captured_at']=now()->subSeconds(15)->toIso8601String();$payload['latitude']=8.47;
+        $this->postJson('/api/student/location/update',$payload)->assertOk();
+        $this->assertSame(2,DB::table('student_locations')->count());
+        $this->assertEquals(8.49,DB::table('activity_participations')->first()->latitude);
+        DB::table('activity_participations')->update(['is_tracking_location'=>false]);
+        $payload['captured_at']=now()->toIso8601String();
+        $this->postJson('/api/student/location/update',$payload)->assertStatus(410)->assertJsonPath('code','TRACKING_ENDED');
+        $this->assertSame(2,DB::table('student_locations')->count());
     }
 }
