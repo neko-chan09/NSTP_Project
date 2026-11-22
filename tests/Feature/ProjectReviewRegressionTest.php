@@ -25,7 +25,7 @@ class ProjectReviewRegressionTest extends TestCase
         config(['database.default' => 'sqlite', 'database.connections.sqlite' => ['driver' => 'sqlite', 'database' => ':memory:', 'prefix' => '', 'foreign_key_constraints' => true], 'cache.default' => 'array', 'session.driver' => 'array']);
         DB::purge('sqlite');
         foreach (['0001_01_01_000000_create_framework_tables.php', '2026_03_26_000002_create_students_table.php',
-            '2026_06_28_000001_create_classes_and_attendance_tables.php', '2026_11_13_000002_secure_password_reset_tokens.php','2026_11_20_000001_add_recovery_audit_and_attendance_records.php'] as $name) {
+            '2026_06_28_000001_create_classes_and_attendance_tables.php', '2026_11_13_000002_secure_password_reset_tokens.php','2026_11_20_000001_add_recovery_audit_and_attendance_records.php','2026_11_23_000001_add_attendance_capture_receipts_and_session_revisions.php'] as $name) {
             (require database_path('migrations/' . $name))->up();
         }
         Schema::table('users', fn(Blueprint $t) => $t->boolean('must_change_password')->default(false));

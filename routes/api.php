@@ -141,6 +141,7 @@ Route::middleware(['auth:sanctum', \App\Http\Middleware\RequireActiveUser::class
     Route::get('/directory/options', [\App\Http\Controllers\API\Shared\StudentDirectoryController::class,'options'])->middleware(RequireRoles::class . ':admin,super_admin,faculty');
     Route::get('/classes/{id}/record', [\App\Http\Controllers\API\Shared\ClassRecordController::class,'show'])->middleware(RequireRoles::class . ':admin,super_admin,faculty');
     Route::post('/attendance/sessions/{id}/manual', [\App\Http\Controllers\API\Shared\ClassRecordController::class,'manual'])->middleware(RequireRoles::class . ':admin,super_admin,faculty');
+    Route::put('/attendance/sessions/{sessionId}', [\App\Http\Controllers\API\Shared\ClassRecordController::class,'updateSession'])->middleware(RequireRoles::class . ':admin,super_admin,faculty');
     Route::post('/attendance/sessions/{id}/checkout', [\App\Http\Controllers\API\Shared\ClassRecordController::class,'checkout'])->middleware('student');
     Route::get('/attendance/my-status/{sessionId}', [AttendanceController::class, 'myStatus']);
 

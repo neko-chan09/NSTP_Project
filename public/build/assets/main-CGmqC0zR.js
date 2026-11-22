@@ -7008,6 +7008,2740 @@ function requireClient() {
 }
 var clientExports = requireClient();
 const ReactDOM = /* @__PURE__ */ getDefaultExportFromCjs(clientExports);
+const getToken$1 = () => localStorage.getItem("token") || localStorage.getItem("nstp_token");
+const setToken = (token) => {
+  localStorage.setItem("token", token);
+  localStorage.setItem("nstp_token", token);
+};
+const removeToken = () => {
+  localStorage.removeItem("token");
+  localStorage.removeItem("nstp_token");
+  localStorage.removeItem("user");
+  localStorage.removeItem("nstp_user");
+};
+function getCurrentUserId() {
+  try {
+    const raw = localStorage.getItem("user") || localStorage.getItem("nstp_user");
+    const user = raw ? JSON.parse(raw) : null;
+    return user?.id == null ? null : String(user.id);
+  } catch {
+    return null;
+  }
+}
+const instanceOfAny = (object, constructors) => constructors.some((c2) => object instanceof c2);
+let idbProxyableTypes;
+let cursorAdvanceMethods;
+function getIdbProxyableTypes() {
+  return idbProxyableTypes || (idbProxyableTypes = [
+    IDBIndex,
+    IDBObjectStore,
+    IDBCursor,
+    IDBDatabase,
+    IDBTransaction
+  ]);
+}
+function getCursorAdvanceMethods() {
+  return cursorAdvanceMethods || (cursorAdvanceMethods = ["advance", "continue", "continuePrimaryKey"].map((method) => IDBCursor.prototype[method]));
+}
+const transactionDoneMap = /* @__PURE__ */ new WeakMap();
+const transformCache = /* @__PURE__ */ new WeakMap();
+const reverseTransformCache = /* @__PURE__ */ new WeakMap();
+function promisifyRequest(request2) {
+  const promise = new Promise((resolve, reject) => {
+    const unlisten = () => {
+      request2.removeEventListener("success", success);
+      request2.removeEventListener("error", error);
+    };
+    const success = () => {
+      resolve(wrap(request2.result));
+      unlisten();
+    };
+    const error = () => {
+      reject(request2.error);
+      unlisten();
+    };
+    request2.addEventListener("success", success);
+    request2.addEventListener("error", error);
+  });
+  reverseTransformCache.set(promise, request2);
+  return promise;
+}
+function cacheDonePromiseForTransaction(tx) {
+  if (transactionDoneMap.has(tx))
+    return;
+  const done = new Promise((resolve, reject) => {
+    const unlisten = () => {
+      tx.removeEventListener("complete", complete);
+      tx.removeEventListener("error", error);
+      tx.removeEventListener("abort", error);
+    };
+    const complete = () => {
+      resolve();
+      unlisten();
+    };
+    const error = () => {
+      reject(tx.error || new DOMException("AbortError", "AbortError"));
+      unlisten();
+    };
+    tx.addEventListener("complete", complete);
+    tx.addEventListener("error", error);
+    tx.addEventListener("abort", error);
+  });
+  transactionDoneMap.set(tx, done);
+}
+let idbProxyTraps = {
+  get(target, prop, receiver) {
+    if (target instanceof IDBTransaction) {
+      if (prop === "done")
+        return transactionDoneMap.get(target);
+      if (prop === "store") {
+        return receiver.objectStoreNames[1] ? void 0 : receiver.objectStore(receiver.objectStoreNames[0]);
+      }
+    }
+    return wrap(target[prop]);
+  },
+  set(target, prop, value) {
+    target[prop] = value;
+    return true;
+  },
+  has(target, prop) {
+    if (target instanceof IDBTransaction && (prop === "done" || prop === "store")) {
+      return true;
+    }
+    return prop in target;
+  }
+};
+function replaceTraps(callback) {
+  idbProxyTraps = callback(idbProxyTraps);
+}
+function wrapFunction(func) {
+  if (getCursorAdvanceMethods().includes(func)) {
+    return function(...args) {
+      func.apply(unwrap(this), args);
+      return wrap(this.request);
+    };
+  }
+  return function(...args) {
+    return wrap(func.apply(unwrap(this), args));
+  };
+}
+function transformCachableValue(value) {
+  if (typeof value === "function")
+    return wrapFunction(value);
+  if (value instanceof IDBTransaction)
+    cacheDonePromiseForTransaction(value);
+  if (instanceOfAny(value, getIdbProxyableTypes()))
+    return new Proxy(value, idbProxyTraps);
+  return value;
+}
+function wrap(value) {
+  if (value instanceof IDBRequest)
+    return promisifyRequest(value);
+  if (transformCache.has(value))
+    return transformCache.get(value);
+  const newValue = transformCachableValue(value);
+  if (!Object.is(newValue, value)) {
+    transformCache.set(value, newValue);
+    reverseTransformCache.set(newValue, value);
+  }
+  return newValue;
+}
+const unwrap = (value) => reverseTransformCache.get(value);
+function openDB(name, version2, { blocked, upgrade, blocking, terminated } = {}) {
+  const request2 = indexedDB.open(name, version2);
+  const openPromise = wrap(request2);
+  if (upgrade) {
+    request2.addEventListener("upgradeneeded", (event) => {
+      upgrade(wrap(request2.result), event.oldVersion, event.newVersion, wrap(request2.transaction), event);
+    });
+  }
+  if (blocked) {
+    request2.addEventListener("blocked", (event) => blocked(
+      // Casting due to https://github.com/microsoft/TypeScript-DOM-lib-generator/pull/1405
+      event.oldVersion,
+      event.newVersion,
+      event
+    ));
+  }
+  openPromise.then((db) => {
+    if (terminated)
+      db.addEventListener("close", () => terminated());
+    if (blocking) {
+      db.addEventListener("versionchange", (event) => blocking(event.oldVersion, event.newVersion, event));
+    }
+  }).catch(() => {
+  });
+  return openPromise;
+}
+const readMethods = ["get", "getKey", "getAll", "getAllKeys", "count"];
+const writeMethods = ["put", "add", "delete", "clear"];
+const cachedMethods = {};
+function getMethod(target, prop) {
+  if (!(target instanceof IDBDatabase && !(prop in target) && typeof prop === "string")) {
+    return;
+  }
+  if (cachedMethods[prop])
+    return cachedMethods[prop];
+  const targetFuncName = prop.replace(/FromIndex$/, "");
+  const useIndex = prop !== targetFuncName;
+  const isWrite = writeMethods.includes(targetFuncName);
+  if (
+    // Bail if the target doesn't exist on the target. Eg, getAll isn't in Edge.
+    !(targetFuncName in (useIndex ? IDBIndex : IDBObjectStore).prototype) || !(isWrite || readMethods.includes(targetFuncName))
+  ) {
+    return;
+  }
+  const method = async function(storeName, ...args) {
+    const tx = this.transaction(storeName, isWrite ? "readwrite" : "readonly");
+    let target2 = tx.store;
+    if (useIndex)
+      target2 = target2.index(args.shift());
+    return (await Promise.all([
+      target2[targetFuncName](...args),
+      isWrite && tx.done
+    ]))[0];
+  };
+  return cachedMethods[prop] = method;
+}
+replaceTraps((oldTraps) => ({
+  ...oldTraps,
+  get: (target, prop, receiver) => getMethod(target, prop) || oldTraps.get(target, prop, receiver),
+  has: (target, prop) => !!getMethod(target, prop) || oldTraps.has(target, prop)
+}));
+const advanceMethodProps = ["advance", "continue", "continuePrimaryKey"];
+const methodMap = {};
+const advanceResults = /* @__PURE__ */ new WeakMap();
+const ittrProxiedCursorToOriginalProxy = /* @__PURE__ */ new WeakMap();
+const cursorIteratorTraps = {
+  get(target, prop) {
+    if (!advanceMethodProps.includes(prop))
+      return target[prop];
+    let cachedFunc = methodMap[prop];
+    if (!cachedFunc) {
+      cachedFunc = methodMap[prop] = function(...args) {
+        advanceResults.set(this, ittrProxiedCursorToOriginalProxy.get(this)[prop](...args));
+      };
+    }
+    return cachedFunc;
+  }
+};
+async function* iterate(...args) {
+  let cursor = this;
+  if (!(cursor instanceof IDBCursor)) {
+    cursor = await cursor.openCursor(...args);
+  }
+  if (!cursor)
+    return;
+  cursor = cursor;
+  const proxiedCursor = new Proxy(cursor, cursorIteratorTraps);
+  ittrProxiedCursorToOriginalProxy.set(proxiedCursor, cursor);
+  reverseTransformCache.set(proxiedCursor, unwrap(cursor));
+  while (cursor) {
+    yield proxiedCursor;
+    cursor = await (advanceResults.get(proxiedCursor) || cursor.continue());
+    advanceResults.delete(proxiedCursor);
+  }
+}
+function isIteratorProp(target, prop) {
+  return prop === Symbol.asyncIterator && instanceOfAny(target, [IDBIndex, IDBObjectStore, IDBCursor]) || prop === "iterate" && instanceOfAny(target, [IDBIndex, IDBObjectStore]);
+}
+replaceTraps((oldTraps) => ({
+  ...oldTraps,
+  get(target, prop, receiver) {
+    if (isIteratorProp(target, prop))
+      return iterate;
+    return oldTraps.get(target, prop, receiver);
+  },
+  has(target, prop) {
+    return isIteratorProp(target, prop) || oldTraps.has(target, prop);
+  }
+}));
+const DB_NAME = "nstp-offline";
+const DB_VERSION = 1;
+let dbPromise = null;
+function getDB() {
+  if (!dbPromise) {
+    dbPromise = openDB(DB_NAME, DB_VERSION, {
+      upgrade(db) {
+        if (!db.objectStoreNames.contains("outbox")) {
+          const store = db.createObjectStore("outbox", {
+            keyPath: "id",
+            autoIncrement: true
+          });
+          store.createIndex("createdAt", "createdAt");
+          store.createIndex("tag", "tag");
+        }
+        if (!db.objectStoreNames.contains("cache")) {
+          const cache = db.createObjectStore("cache", { keyPath: "url" });
+          cache.createIndex("cachedAt", "cachedAt");
+        }
+        if (!db.objectStoreNames.contains("meta")) {
+          db.createObjectStore("meta");
+        }
+      }
+    });
+  }
+  return dbPromise;
+}
+async function addToOutbox(item) {
+  const db = await getDB();
+  const id = await db.add("outbox", item);
+  return id;
+}
+async function getOutbox() {
+  const db = await getDB();
+  return db.getAll("outbox");
+}
+async function deleteFromOutbox(id) {
+  const db = await getDB();
+  await db.delete("outbox", id);
+}
+async function updateOutboxItem(id, updates) {
+  const db = await getDB();
+  const existing = await db.get("outbox", id);
+  if (!existing) return;
+  await db.put("outbox", { ...existing, ...updates, id });
+}
+async function setMeta(key, value) {
+  const db = await getDB();
+  await db.put("meta", value, key);
+}
+const OUTBOX_CHANGED_EVENT = "nstp:outbox-changed";
+function emitChange() {
+  window.dispatchEvent(new CustomEvent(OUTBOX_CHANGED_EVENT));
+}
+async function queueMutation(mutation) {
+  if (!mutation.ownerId) throw new Error("Sign in before saving offline changes.");
+  const id = await addToOutbox({
+    ...mutation,
+    createdAt: Date.now(),
+    attempts: 0
+  });
+  emitChange();
+  return id;
+}
+async function listQueue() {
+  const owner = getCurrentUserId();
+  return owner ? (await getOutbox()).filter((item) => item.ownerId === owner) : [];
+}
+async function queueCount() {
+  return (await listQueue()).length;
+}
+async function removeFromQueue(id) {
+  await deleteFromOutbox(id);
+  emitChange();
+}
+async function markAttempt(id, error) {
+  const items = await getOutbox();
+  const item = items.find((i2) => i2.id === id);
+  if (!item) return;
+  await updateOutboxItem(id, {
+    attempts: (item.attempts || 0) + 1,
+    lastError: error
+  });
+  emitChange();
+}
+async function clearQueue() {
+  for (const item of await listQueue()) {
+    if (item.id != null) await deleteFromOutbox(item.id);
+  }
+  emitChange();
+}
+function serializeFormData(fd) {
+  const entries = [];
+  const files = [];
+  fd.forEach((value, key) => {
+    if (value instanceof File) {
+      files.push({
+        key,
+        name: value.name,
+        type: value.type,
+        data: value
+      });
+    } else {
+      entries.push([key, String(value)]);
+    }
+  });
+  return { entries, files };
+}
+function deserializeFormData(data) {
+  const fd = new FormData();
+  for (const [k2, v2] of data.entries) {
+    fd.append(k2, v2);
+  }
+  if (data.files) {
+    for (const f2 of data.files) {
+      fd.append(f2.key, f2.data, f2.name);
+    }
+  }
+  return fd;
+}
+const API_URL = "https://orangered-oryx-492151.hostingersite.com/api";
+const headers = () => ({
+  Accept: "application/json",
+  "Content-Type": "application/json",
+  Authorization: `Bearer ${getToken$1()}`
+});
+const handleResponse = async (response) => {
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    if (response.status === 401) {
+      removeToken();
+      window.location.href = "/login";
+    }
+    if (error.code === "PASSWORD_CHANGE_REQUIRED") window.location.assign("/change-temporary-password");
+    throw new Error(Object.values(error.errors ?? {}).flat().join(" ") || error.message || `HTTP ${response.status}`);
+  }
+  return response.json();
+};
+async function mutateWithQueue(url, method, options = {}) {
+  const token = getToken$1();
+  const ownerId = getCurrentUserId();
+  const online = typeof navigator === "undefined" ? true : navigator.onLine;
+  const doFetch = async () => {
+    const h2 = {
+      Accept: "application/json",
+      ...options.headers || {}
+    };
+    if (token) h2["Authorization"] = `Bearer ${token}`;
+    let body;
+    if (options.formData) {
+      body = options.formData;
+    } else if (options.body !== void 0) {
+      h2["Content-Type"] = "application/json";
+      body = JSON.stringify(options.body);
+    }
+    return fetch(url, { method, headers: h2, body });
+  };
+  if (online) {
+    try {
+      const res = await doFetch();
+      if (res.status === 401) {
+        removeToken();
+        window.location.href = "/login";
+        throw new Error("Unauthorized");
+      }
+      if (res.ok) return res.json().catch(() => ({}));
+      const error = await res.json().catch(() => ({}));
+      throw new Error(error.message || `HTTP ${res.status}`);
+    } catch (err) {
+      const isNetworkError = err instanceof TypeError || /network|fetch/i.test(err?.message || "");
+      if (!isNetworkError) throw err;
+    }
+  }
+  const id = await queueMutation({
+    ownerId: ownerId ?? void 0,
+    url,
+    method,
+    body: options.body,
+    formData: options.formData ? serializeFormData(options.formData) : void 0,
+    tag: options.tag || "generic",
+    label: options.label
+  });
+  return {
+    success: true,
+    queued: true,
+    offline: !online,
+    queue_id: id,
+    message: online ? "Network error — change queued for retry." : "You're offline — change queued and will sync automatically."
+  };
+}
+const profileApi = {
+  getProfile: async () => {
+    const response = await fetch(`${API_URL}/profile`, {
+      headers: headers()
+    });
+    const result = await handleResponse(response);
+    return result.data ?? result;
+  },
+  updateProfile: async (data) => {
+    const response = await fetch(`${API_URL}/profile`, {
+      method: "POST",
+      headers: headers(),
+      body: JSON.stringify(data)
+    });
+    const result = await handleResponse(response);
+    return result.data ?? result;
+  },
+  uploadPhoto: async (formData) => {
+    const token = getToken$1();
+    const response = await fetch(`${API_URL}/profile/photo`, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${token}`
+        // DO NOT set Content-Type — the browser sets the boundary
+      },
+      body: formData
+    });
+    const result = await handleResponse(response);
+    return result.data ?? result;
+  },
+  deletePhoto: async () => {
+    const response = await fetch(`${API_URL}/profile/photo`, {
+      method: "DELETE",
+      headers: headers()
+    });
+    return handleResponse(response);
+  },
+  changePassword: async (currentPassword, newPassword, newPasswordConfirmation) => {
+    const response = await fetch(`${API_URL}/profile/change-password`, {
+      method: "POST",
+      headers: headers(),
+      body: JSON.stringify({
+        current_password: currentPassword,
+        new_password: newPassword,
+        new_password_confirmation: newPasswordConfirmation
+      })
+    });
+    return handleResponse(response);
+  }
+};
+const authApi = {
+  sendOtp: async (email) => {
+    const response = await fetch(`${API_URL}/password/send-otp`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email })
+    });
+    return handleResponse(response);
+  },
+  verifyOtp: async (email, otp) => {
+    const response = await fetch(`${API_URL}/password/verify-otp`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, otp })
+    });
+    return handleResponse(response);
+  },
+  resetPassword: async (email, resetToken, newPassword, newPasswordConfirmation) => {
+    const response = await fetch(`${API_URL}/password/reset`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email,
+        reset_token: resetToken,
+        new_password: newPassword,
+        new_password_confirmation: newPasswordConfirmation
+      })
+    });
+    return handleResponse(response);
+  },
+  resendOtp: async (email) => {
+    const response = await fetch(`${API_URL}/password/resend-otp`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email })
+    });
+    return handleResponse(response);
+  },
+  changePassword: async (currentPassword, newPassword, newPasswordConfirmation) => {
+    const response = await fetch(`${API_URL}/change-password`, {
+      method: "POST",
+      headers: headers(),
+      body: JSON.stringify({
+        current_password: currentPassword,
+        new_password: newPassword,
+        new_password_confirmation: newPasswordConfirmation
+      })
+    });
+    return handleResponse(response);
+  },
+  login: async (login, password) => {
+    const response = await fetch(`${API_URL}/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ login, password })
+    });
+    const data = await handleResponse(response);
+    if (data.access_token) {
+      setToken(data.access_token);
+      localStorage.setItem("user", JSON.stringify(data.user));
+    }
+    return data;
+  },
+  adminLogin: async (email, password) => {
+    const response = await fetch(`${API_URL}/admin/login`, {
+      method: "POST",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ email, password })
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.message || "Login failed");
+    if (data.access_token || data.token) {
+      const token = data.access_token || data.token;
+      setToken(token);
+      localStorage.setItem("user", JSON.stringify(data.user));
+    }
+    return data;
+  },
+  logout: () => {
+    removeToken();
+    window.location.href = "/login";
+  },
+  getCurrentUser: () => {
+    const user = localStorage.getItem("user");
+    return user ? JSON.parse(user) : null;
+  }
+};
+const superAdminApi = {
+  // ---------------- FACE RESET (online only, not queued) ----------------
+  searchStudentsForFaceReset: async (search) => {
+    const response = await fetch(
+      `${API_URL}/superadmin/students/search?search=${encodeURIComponent(search)}`,
+      { headers: headers() }
+    );
+    const result = await handleResponse(response);
+    return result.data ?? [];
+  },
+  resetStudentFace: async (studentId) => {
+    const response = await fetch(
+      `${API_URL}/superadmin/students/${studentId}/face-embeddings`,
+      { method: "DELETE", headers: headers() }
+    );
+    return handleResponse(response);
+  },
+  // ---------------- BACKUPS ----------------
+  getBackups: async () => {
+    const response = await fetch(`${API_URL}/superadmin/backups`, {
+      headers: headers()
+    });
+    const result = await handleResponse(response);
+    return result.data ?? result;
+  },
+  getBackupStats: async () => {
+    const response = await fetch(`${API_URL}/superadmin/backups/stats`, {
+      headers: headers()
+    });
+    const result = await handleResponse(response);
+    return result.data ?? result;
+  },
+  createBackup: async (notes) => {
+    return mutateWithQueue(`${API_URL}/superadmin/backups`, "POST", {
+      body: { notes },
+      label: "Create backup",
+      tag: "backup-create"
+    });
+  },
+  downloadBackup: async (id) => {
+    const response = await fetch(
+      `${API_URL}/superadmin/backups/${id}/download`,
+      { headers: { Authorization: `Bearer ${getToken$1()}` } }
+    );
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.message || `Download failed (${response.status})`);
+    }
+    return response.blob();
+  },
+  restoreBackup: async (id) => {
+    return mutateWithQueue(
+      `${API_URL}/superadmin/backups/${id}/restore`,
+      "POST",
+      {
+        label: `Restore backup ${id}`,
+        tag: "backup-restore"
+      }
+    );
+  },
+  deleteBackup: async (id) => {
+    return mutateWithQueue(
+      `${API_URL}/superadmin/backups/${id}`,
+      "DELETE",
+      {
+        label: `Delete backup ${id}`,
+        tag: "backup-delete"
+      }
+    );
+  },
+  // ---------------- BACKUP SCHEDULES ----------------
+  getBackupSchedules: async () => {
+    const response = await fetch(`${API_URL}/superadmin/backups/schedules`, {
+      headers: headers()
+    });
+    const result = await handleResponse(response);
+    return result.data ?? result;
+  },
+  createBackupSchedule: async (data) => {
+    const response = await fetch(`${API_URL}/superadmin/backups/schedules`, {
+      method: "POST",
+      headers: headers(),
+      body: JSON.stringify(data)
+    });
+    const result = await handleResponse(response);
+    return result.data ?? result;
+  },
+  updateBackupSchedule: async (id, data) => {
+    const response = await fetch(
+      `${API_URL}/superadmin/backups/schedules/${id}`,
+      {
+        method: "PUT",
+        headers: headers(),
+        body: JSON.stringify(data)
+      }
+    );
+    const result = await handleResponse(response);
+    return result.data ?? result;
+  },
+  toggleBackupSchedule: async (id) => {
+    const response = await fetch(
+      `${API_URL}/superadmin/backups/schedules/${id}/toggle`,
+      {
+        method: "PATCH",
+        headers: headers()
+      }
+    );
+    const result = await handleResponse(response);
+    return result.data ?? result;
+  },
+  runBackupScheduleNow: async (id) => {
+    const response = await fetch(
+      `${API_URL}/superadmin/backups/schedules/${id}/run-now`,
+      {
+        method: "POST",
+        headers: headers()
+      }
+    );
+    const result = await handleResponse(response);
+    return result.data ?? result;
+  },
+  deleteBackupSchedule: async (id) => {
+    const response = await fetch(
+      `${API_URL}/superadmin/backups/schedules/${id}`,
+      {
+        method: "DELETE",
+        headers: headers()
+      }
+    );
+    return handleResponse(response);
+  },
+  purgeOldBackupsNow: async () => {
+    const response = await fetch(
+      `${API_URL}/superadmin/backups/purge-now`,
+      {
+        method: "POST",
+        headers: headers()
+      }
+    );
+    return handleResponse(response);
+  },
+  // ---------------- USERS ----------------
+  getUsers: async () => {
+    const response = await fetch(`${API_URL}/superadmin/users`, {
+      headers: headers()
+    });
+    const result = await handleResponse(response);
+    return result.data ?? result;
+  },
+  getUser: async (id) => {
+    const response = await fetch(`${API_URL}/superadmin/users/${id}`, {
+      headers: headers()
+    });
+    const result = await handleResponse(response);
+    return result.data ?? result;
+  },
+  createUser: async (data) => {
+    return mutateWithQueue(`${API_URL}/superadmin/users`, "POST", {
+      formData: data,
+      label: "Create user",
+      tag: "user-create"
+    });
+  },
+  updateUser: async (id, data) => {
+    return mutateWithQueue(`${API_URL}/superadmin/users/${id}`, "POST", {
+      formData: data,
+      label: `Update user ${id}`,
+      tag: "user-update"
+    });
+  },
+  deleteUser: async (id) => {
+    return mutateWithQueue(`${API_URL}/superadmin/users/${id}`, "DELETE", {
+      label: `Delete user ${id}`,
+      tag: "user-delete"
+    });
+  },
+  toggleUserActive: async (id, is_active) => {
+    return mutateWithQueue(
+      `${API_URL}/superadmin/users/${id}/toggle`,
+      "PATCH",
+      {
+        body: { is_active },
+        label: `Toggle user ${id}`,
+        tag: "user-toggle"
+      }
+    );
+  },
+  getStats: async () => {
+    const response = await fetch(`${API_URL}/superadmin/stats`, {
+      headers: headers()
+    });
+    const result = await handleResponse(response);
+    return result.data ?? result;
+  },
+  // ---------------- FACULTY CSV ----------------
+  downloadFacultyTemplate: async () => {
+    const response = await fetch(`${API_URL}/superadmin/faculty/template`, {
+      headers: { Authorization: `Bearer ${getToken$1()}` }
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.message || `Template failed (${response.status})`);
+    }
+    return response.blob();
+  },
+  exportFacultyCsv: async () => {
+    const response = await fetch(`${API_URL}/superadmin/faculty/export`, {
+      headers: { Authorization: `Bearer ${getToken$1()}` }
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.message || `Export failed (${response.status})`);
+    }
+    return response.blob();
+  },
+  startFacultyImport: async (formData) => {
+    const response = await fetch(`${API_URL}/superadmin/faculty/import/start`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${getToken$1()}` },
+      body: formData
+    });
+    return handleResponse(response);
+  },
+  processFacultyImportChunk: async (id, chunkSize = 25) => {
+    const response = await fetch(
+      `${API_URL}/superadmin/faculty/import/${id}/process-chunk`,
+      {
+        method: "POST",
+        headers: headers(),
+        body: JSON.stringify({ chunk_size: chunkSize })
+      }
+    );
+    const result = await handleResponse(response);
+    return result.data ?? result;
+  },
+  getFacultyImportStatus: async (id) => {
+    const response = await fetch(
+      `${API_URL}/superadmin/faculty/import/${id}/status`,
+      { headers: headers() }
+    );
+    const result = await handleResponse(response);
+    return result.data ?? result;
+  },
+  cancelFacultyImport: async (id) => {
+    const response = await fetch(
+      `${API_URL}/superadmin/faculty/import/${id}/cancel`,
+      { method: "POST", headers: headers() }
+    );
+    return handleResponse(response);
+  },
+  getFacultyImportHistory: async () => {
+    const response = await fetch(
+      `${API_URL}/superadmin/faculty/import/history`,
+      { headers: headers() }
+    );
+    const result = await handleResponse(response);
+    return result.data ?? result;
+  },
+  // ---------------- FACULTY CSV (legacy single-shot import) ----------------
+  importFacultyCsv: async (formData) => {
+    const response = await fetch(`${API_URL}/superadmin/faculty/import`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${getToken$1()}` },
+      body: formData
+    });
+    return handleResponse(response);
+  }
+};
+const adminApi = {
+  // ---------------- STUDENT IMPORT (legacy single-shot) ----------------
+  importStudents: async (formData) => {
+    const response = await fetch(`${API_URL}/admin/students/import`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${getToken$1()}` },
+      body: formData
+    });
+    return handleResponse(response);
+  },
+  // ---------------- DASHBOARD ----------------
+  getStats: async () => {
+    const response = await fetch(`${API_URL}/dashboard/stats`, {
+      headers: headers()
+    });
+    const result = await handleResponse(response);
+    return result.data ?? result;
+  },
+  // ---------------- OPTIONS ----------------
+  getCourses: async () => {
+    const response = await fetch(`${API_URL}/options/courses`, {
+      headers: headers()
+    });
+    const result = await handleResponse(response);
+    return result.data ?? [];
+  },
+  getSections: async () => {
+    const response = await fetch(`${API_URL}/options/sections`, {
+      headers: headers()
+    });
+    const result = await handleResponse(response);
+    return result.data ?? [];
+  },
+  getYearLevels: async () => {
+    const response = await fetch(`${API_URL}/options/year-levels`, {
+      headers: headers()
+    });
+    const result = await handleResponse(response);
+    return result.data ?? [];
+  },
+  getComponents: async () => {
+    const response = await fetch(`${API_URL}/options/components`, {
+      headers: headers()
+    });
+    const result = await handleResponse(response);
+    return result.data ?? [];
+  },
+  // ---------------- STUDENTS ----------------
+  getStudents: async (params) => {
+    const query = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== void 0 && value !== null && value !== "") {
+          query.append(key, String(value));
+        }
+      });
+    }
+    const response = await fetch(
+      `${API_URL}/admin/students?${query.toString()}`,
+      { headers: headers() }
+    );
+    const result = await handleResponse(response);
+    return {
+      data: result.data || [],
+      meta: result.meta || {
+        current_page: 1,
+        last_page: 1,
+        per_page: 15,
+        total: 0,
+        from: 0,
+        to: 0
+      }
+    };
+  },
+  getStudent: async (id) => {
+    const response = await fetch(`${API_URL}/admin/students/${id}`, {
+      headers: headers()
+    });
+    const result = await handleResponse(response);
+    return result.data ?? result;
+  },
+  createStudent: async (data) => {
+    const result = await mutateWithQueue(`${API_URL}/admin/students`, "POST", {
+      body: data,
+      label: `Create student ${data.student_id || ""}`,
+      tag: "student-create"
+    });
+    return result.data ?? result;
+  },
+  updateStudent: async (id, data) => {
+    const result = await mutateWithQueue(
+      `${API_URL}/admin/students/${id}`,
+      "PUT",
+      {
+        body: data,
+        label: `Update student ${id}`,
+        tag: "student-update"
+      }
+    );
+    return result.data ?? result;
+  },
+  deleteStudent: async (id) => {
+    return mutateWithQueue(`${API_URL}/admin/students/${id}`, "DELETE", {
+      label: `Delete student ${id}`,
+      tag: "student-delete"
+    });
+  },
+  bulkDeleteStudents: async (ids) => {
+    return mutateWithQueue(`${API_URL}/admin/students/bulk`, "DELETE", {
+      body: { ids },
+      label: `Bulk delete ${ids.length} students`,
+      tag: "student-bulk-delete"
+    });
+  },
+  exportStudents: async (params) => {
+    const query = new URLSearchParams();
+    if (params?.component) query.append("component", params.component);
+    for (const key of ["course", "section", "status", "search"]) if (params?.[key]) query.append(key, params[key]);
+    const response = await fetch(
+      `${API_URL}/admin/students/export?${query.toString()}`,
+      { headers: { Authorization: `Bearer ${getToken$1()}` } }
+    );
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.message || `Export failed (${response.status})`);
+    }
+    return response.blob();
+  },
+  downloadStudentTemplate: async () => {
+    const response = await fetch(`${API_URL}/admin/students/template`, {
+      headers: { Authorization: `Bearer ${getToken$1()}` }
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.message || `Template failed (${response.status})`);
+    }
+    return response.blob();
+  },
+  // ---------------- STUDENT IMPORT (chunked sync) ----------------
+  startStudentImport: async (formData) => {
+    const response = await fetch(`${API_URL}/admin/students/import/start`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${getToken$1()}` },
+      body: formData
+    });
+    return handleResponse(response);
+  },
+  processStudentImportChunk: async (id, chunkSize = 50) => {
+    const response = await fetch(
+      `${API_URL}/admin/students/import/${id}/process-chunk`,
+      {
+        method: "POST",
+        headers: headers(),
+        body: JSON.stringify({ chunk_size: chunkSize })
+      }
+    );
+    const result = await handleResponse(response);
+    return result.data ?? result;
+  },
+  getStudentImportStatus: async (id) => {
+    const response = await fetch(
+      `${API_URL}/admin/students/import/${id}/status`,
+      { headers: headers() }
+    );
+    const result = await handleResponse(response);
+    return result.data ?? result;
+  },
+  cancelStudentImport: async (id) => {
+    const response = await fetch(
+      `${API_URL}/admin/students/import/${id}/cancel`,
+      { method: "POST", headers: headers() }
+    );
+    return handleResponse(response);
+  },
+  getStudentImportHistory: async () => {
+    const response = await fetch(
+      `${API_URL}/admin/students/import/history`,
+      { headers: headers() }
+    );
+    const result = await handleResponse(response);
+    return result.data ?? result;
+  },
+  getStudentStats: async () => {
+    const response = await fetch(`${API_URL}/admin/students/stats`, {
+      headers: headers()
+    });
+    const result = await handleResponse(response);
+    return result.data ?? result;
+  },
+  // ---------------- COMPONENT CHANGE REQUESTS ----------------
+  getChangeRequests: async (status) => {
+    const query = status ? `?status=${status}` : "";
+    const response = await fetch(
+      `${API_URL}/admin/component-requests${query}`,
+      { headers: headers() }
+    );
+    const result = await handleResponse(response);
+    return result.data ?? result;
+  },
+  handleChangeRequest: async (id, status, admin_remarks) => {
+    const result = await mutateWithQueue(
+      `${API_URL}/admin/component-requests/${id}`,
+      "PUT",
+      {
+        body: { status, admin_remarks },
+        label: `Handle component request ${id}`,
+        tag: "component-request"
+      }
+    );
+    return result.data ?? result;
+  },
+  // ---------------- ACTIVITIES ----------------
+  getActivities: async () => {
+    const response = await fetch(`${API_URL}/activities`, {
+      headers: headers()
+    });
+    const result = await handleResponse(response);
+    return result.data ?? result;
+  },
+  createActivity: async (data) => {
+    const result = await mutateWithQueue(`${API_URL}/activities`, "POST", {
+      body: data,
+      label: `Create activity: ${data.title || ""}`,
+      tag: "activity-create"
+    });
+    return result.data ?? result;
+  },
+  updateActivity: async (id, data) => {
+    const result = await mutateWithQueue(
+      `${API_URL}/activities/${id}`,
+      "PUT",
+      {
+        body: data,
+        label: `Update activity ${id}`,
+        tag: "activity-update"
+      }
+    );
+    return result.data ?? result;
+  },
+  deleteActivity: async (id) => {
+    return mutateWithQueue(`${API_URL}/activities/${id}`, "DELETE", {
+      label: `Delete activity ${id}`,
+      tag: "activity-delete"
+    });
+  },
+  getActivityParticipants: async (id) => {
+    const response = await fetch(`${API_URL}/activities/${id}/participants`, {
+      headers: headers()
+    });
+    const result = await handleResponse(response);
+    return result.data ?? result;
+  },
+  updateParticipantStatus: async (activityId, participantId, status) => {
+    return mutateWithQueue(
+      `${API_URL}/activities/${activityId}/participants/${participantId}`,
+      "PUT",
+      {
+        body: { attendance_status: status },
+        label: `Update participant ${participantId}`,
+        tag: "activity-participant-update"
+      }
+    );
+  },
+  removeParticipant: async (activityId, participantId) => {
+    return mutateWithQueue(
+      `${API_URL}/activities/${activityId}/participants/${participantId}`,
+      "DELETE",
+      {
+        label: `Remove participant ${participantId}`,
+        tag: "activity-participant-delete"
+      }
+    );
+  },
+  // ---------------- ACTIVITY MAP ----------------
+  getActivitiesWithLocations: async (params) => {
+    const query = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value && value !== "all") query.append(key, value);
+      });
+    }
+    const response = await fetch(
+      `${API_URL}/activities/map?${query.toString()}`,
+      { headers: headers() }
+    );
+    const result = await handleResponse(response);
+    return result;
+  },
+  getActivityLocation: async (id) => {
+    const response = await fetch(`${API_URL}/activities/${id}/map?live=${Date.now()}`, {
+      cache: "no-store",
+      headers: headers()
+    });
+    const result = await handleResponse(response);
+    return result.data;
+  },
+  updateActivityLocation: async (id, data) => {
+    const result = await mutateWithQueue(
+      `${API_URL}/activities/${id}/location`,
+      "PUT",
+      {
+        body: data,
+        label: `Update activity ${id} location`,
+        tag: "activity-location"
+      }
+    );
+    return result.data;
+  },
+  // ---------------- CLASSES ----------------
+  getClasses: async (params) => {
+    const query = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== void 0 && value !== null && value !== "" && value !== "all") {
+          query.append(key, String(value));
+        }
+      });
+    }
+    const response = await fetch(
+      `${API_URL}/admin/classes?${query.toString()}`,
+      { headers: headers() }
+    );
+    const result = await handleResponse(response);
+    return result.data ?? result;
+  },
+  getClassSchoolYears: async () => {
+    const response = await fetch(`${API_URL}/admin/classes/school-years`, {
+      headers: headers()
+    });
+    const result = await handleResponse(response);
+    return result.data ?? [];
+  },
+  exportClasses: async (params) => {
+    const query = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([k2, v2]) => {
+        if (v2 && v2 !== "all") query.append(k2, v2);
+      });
+    }
+    const response = await fetch(
+      `${API_URL}/admin/classes/export?${query.toString()}`,
+      { headers: { Authorization: `Bearer ${getToken$1()}` } }
+    );
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.message || `Export failed (${response.status})`);
+    }
+    return response.blob();
+  },
+  createClass: async (data) => {
+    const result = await mutateWithQueue(`${API_URL}/admin/classes`, "POST", {
+      body: data,
+      label: `Create class: ${data.name || ""}`,
+      tag: "class-create"
+    });
+    return result.data ?? result;
+  },
+  getClass: async (id) => {
+    const response = await fetch(`${API_URL}/admin/classes/${id}`, {
+      headers: headers()
+    });
+    const result = await handleResponse(response);
+    return result.data ?? result;
+  },
+  updateClass: async (id, data) => {
+    const result = await mutateWithQueue(
+      `${API_URL}/admin/classes/${id}`,
+      "PUT",
+      {
+        body: data,
+        label: `Update class ${id}`,
+        tag: "class-update"
+      }
+    );
+    return result.data ?? result;
+  },
+  toggleArchiveClass: async (id) => {
+    const result = await mutateWithQueue(
+      `${API_URL}/admin/classes/${id}/toggle-archive`,
+      "PATCH",
+      {
+        label: `Toggle archive class ${id}`,
+        tag: "class-toggle"
+      }
+    );
+    return result.data ?? result;
+  },
+  getClassStudents: async (id) => {
+    const response = await fetch(`${API_URL}/admin/classes/${id}/students`, {
+      headers: headers()
+    });
+    const result = await handleResponse(response);
+    return result.data ?? result;
+  },
+  addStudentsToClass: async (id, studentIds) => {
+    const result = await mutateWithQueue(
+      `${API_URL}/admin/classes/${id}/students`,
+      "POST",
+      {
+        body: { student_ids: studentIds },
+        label: `Add students to class ${id}`,
+        tag: "class-add-students"
+      }
+    );
+    return result.data ?? result;
+  },
+  removeStudentFromClass: async (classId, studentId) => {
+    return mutateWithQueue(
+      `${API_URL}/admin/classes/${classId}/students/${studentId}`,
+      "DELETE",
+      {
+        label: `Remove student from class ${classId}`,
+        tag: "class-remove-student"
+      }
+    );
+  },
+  // ---------------- DOCUMENTS ----------------
+  getDocuments: async (params) => {
+    const query = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== void 0 && value !== null && value !== "") {
+          query.append(key, String(value));
+        }
+      });
+    }
+    const response = await fetch(
+      `${API_URL}/admin/documents?${query.toString()}`,
+      { headers: headers() }
+    );
+    const result = await handleResponse(response);
+    return {
+      data: result.data || [],
+      meta: result.meta || {
+        current_page: 1,
+        last_page: 1,
+        per_page: 15,
+        total: 0,
+        from: 0,
+        to: 0
+      }
+    };
+  },
+  verifyDocument: async (id, status, rejection_reason) => {
+    const result = await mutateWithQueue(
+      `${API_URL}/admin/documents/${id}/verify`,
+      "PUT",
+      {
+        body: { status, rejection_reason },
+        label: `Verify document ${id}`,
+        tag: "document-verify"
+      }
+    );
+    return result.data ?? result;
+  },
+  // ---------------- OFFICE DOCUMENTS ----------------
+  getOfficeDocuments: async (params) => {
+    const query = new URLSearchParams();
+    if (params?.category) query.append("category", params.category);
+    const response = await fetch(
+      `${API_URL}/office-documents?${query.toString()}`,
+      { headers: headers() }
+    );
+    const result = await handleResponse(response);
+    return { data: result.data || [] };
+  },
+  uploadOfficeDocument: async (formData) => {
+    return mutateWithQueue(`${API_URL}/office-documents`, "POST", {
+      formData,
+      label: "Upload office document",
+      tag: "office-doc-upload"
+    });
+  },
+  deleteOfficeDocument: async (id) => {
+    return mutateWithQueue(`${API_URL}/office-documents/${id}`, "DELETE", {
+      label: `Delete office document ${id}`,
+      tag: "office-doc-delete"
+    });
+  },
+  // ---------------- ATTENDANCE ----------------
+  getAttendanceSessions: async (params) => {
+    const query = new URLSearchParams();
+    if (params?.class_id) query.append("class_id", String(params.class_id));
+    const response = await fetch(
+      `${API_URL}/attendance/sessions?${query.toString()}`,
+      { headers: headers() }
+    );
+    const result = await handleResponse(response);
+    return result.data ?? result;
+  },
+  createAttendanceSession: async (data) => {
+    const result = await mutateWithQueue(
+      `${API_URL}/attendance/session`,
+      "POST",
+      {
+        body: data,
+        label: `Create attendance session`,
+        tag: "attendance-session-create"
+      }
+    );
+    return result.data ?? result;
+  },
+  closeAttendanceSession: async (id) => {
+    return mutateWithQueue(
+      `${API_URL}/attendance/session/${id}/close`,
+      "PATCH",
+      {
+        label: `Close session ${id}`,
+        tag: "attendance-session-close"
+      }
+    );
+  },
+  getSessionLogs: async (sessionId) => {
+    const response = await fetch(
+      `${API_URL}/attendance/session/${sessionId}/logs`,
+      { headers: headers() }
+    );
+    const result = await handleResponse(response);
+    return result.data ?? result;
+  },
+  // ---------------- CERTIFICATES ----------------
+  getCertificates: async () => {
+    const response = await fetch(`${API_URL}/admin/certificates`, {
+      headers: headers()
+    });
+    const result = await handleResponse(response);
+    return result.data ?? result;
+  },
+  getEligibleStudents: async (search) => {
+    const query = search ? `?search=${encodeURIComponent(search)}` : "";
+    const response = await fetch(
+      `${API_URL}/admin/certificates/eligible-students${query}`,
+      { headers: headers() }
+    );
+    const result = await handleResponse(response);
+    return result.data ?? result;
+  },
+  generateCertificate: async (data) => {
+    const response = await fetch(`${API_URL}/admin/certificates/generate`, {
+      method: "POST",
+      headers: headers(),
+      body: JSON.stringify(data)
+    });
+    const result = await handleResponse(response);
+    return result.data ?? result;
+  },
+  batchGenerateCertificates: async (data) => {
+    const response = await fetch(`${API_URL}/admin/certificates/batch`, {
+      method: "POST",
+      headers: headers(),
+      body: JSON.stringify(data)
+    });
+    const result = await handleResponse(response);
+    return result.data ?? result;
+  },
+  // ---------------- REPORTS ----------------
+  getEnrollmentReport: async () => {
+    const response = await fetch(`${API_URL}/admin/reports/compliance`, {
+      headers: headers()
+    });
+    const result = await handleResponse(response);
+    return result.data ?? result;
+  },
+  getDeficiencyReport: async () => {
+    const response = await fetch(`${API_URL}/admin/reports/deficiency`, {
+      headers: headers()
+    });
+    const result = await handleResponse(response);
+    return result.data ?? result;
+  },
+  getAttendanceReport: async (params) => {
+    const query = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value) query.append(key, String(value));
+    });
+    const response = await fetch(
+      `${API_URL}/admin/reports/attendance?${query.toString()}`,
+      { headers: headers() }
+    );
+    const result = await handleResponse(response);
+    return result.data ?? result;
+  },
+  getAccomplishmentReport: async (params) => {
+    const query = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== void 0 && value !== null && value !== "") {
+          query.append(key, String(value));
+        }
+      });
+    }
+    const response = await fetch(
+      `${API_URL}/admin/reports/accomplishment?${query.toString()}`,
+      { headers: headers() }
+    );
+    const result = await handleResponse(response);
+    return result.data ?? result;
+  },
+  downloadAccomplishmentPDF: async (params) => {
+    const query = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== void 0 && value !== null && value !== "") {
+          query.append(key, String(value));
+        }
+      });
+    }
+    const response = await fetch(
+      `${API_URL}/admin/reports/accomplishment/pdf?${query.toString()}`,
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${getToken$1()}` }
+      }
+    );
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(
+        error.message || `PDF generation failed (${response.status})`
+      );
+    }
+    return response.blob();
+  },
+  exportAccomplishmentCSV: async (params) => {
+    const query = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== void 0 && value !== null && value !== "") {
+          query.append(key, String(value));
+        }
+      });
+    }
+    const response = await fetch(
+      `${API_URL}/admin/reports/accomplishment/export?${query.toString()}`,
+      { headers: { Authorization: `Bearer ${getToken$1()}` } }
+    );
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.message || `Export failed (${response.status})`);
+    }
+    return response.blob();
+  },
+  // ---------------- ACADEMIC YEARS ----------------
+  getAcademicYears: async () => {
+    const response = await fetch(`${API_URL}/admin/academic-years`, {
+      headers: headers()
+    });
+    const result = await handleResponse(response);
+    return result.data ?? result;
+  },
+  createAcademicYear: async (data) => {
+    const result = await mutateWithQueue(
+      `${API_URL}/admin/academic-years`,
+      "POST",
+      {
+        body: data,
+        label: `Create academic year`,
+        tag: "academic-year-create"
+      }
+    );
+    return result.data ?? result;
+  },
+  updateAcademicYear: async (id, data) => {
+    const result = await mutateWithQueue(
+      `${API_URL}/admin/academic-years/${id}`,
+      "PUT",
+      {
+        body: data,
+        label: `Update academic year ${id}`,
+        tag: "academic-year-update"
+      }
+    );
+    return result.data ?? result;
+  },
+  deleteAcademicYear: async (id) => {
+    return mutateWithQueue(
+      `${API_URL}/admin/academic-years/${id}`,
+      "DELETE",
+      {
+        label: `Delete academic year ${id}`,
+        tag: "academic-year-delete"
+      }
+    );
+  },
+  getCurrentAcademicYear: async () => {
+    const response = await fetch(`${API_URL}/admin/academic-years/current`, {
+      headers: headers()
+    });
+    const result = await handleResponse(response);
+    return result.data ?? result;
+  },
+  // ---------------- BULLETIN ----------------
+  getBulletin: async () => {
+    const response = await fetch(`${API_URL}/bulletin?fresh=${Date.now()}`, {
+      cache: "no-store",
+      headers: headers()
+    });
+    const result = await handleResponse(response);
+    return result.data ?? result;
+  },
+  createBulletin: async (data) => {
+    const result = await mutateWithQueue(`${API_URL}/bulletin`, "POST", {
+      body: data,
+      label: `Create bulletin: ${data.title || ""}`,
+      tag: "bulletin-create"
+    });
+    return result.data ?? result;
+  },
+  updateBulletin: async (id, data) => {
+    const result = await mutateWithQueue(`${API_URL}/bulletin/${id}`, "PUT", {
+      body: data,
+      label: `Update bulletin ${id}`,
+      tag: "bulletin-update"
+    });
+    return result.data ?? result;
+  },
+  deleteBulletin: async (id) => {
+    return mutateWithQueue(`${API_URL}/bulletin/${id}`, "DELETE", {
+      label: `Delete bulletin ${id}`,
+      tag: "bulletin-delete"
+    });
+  },
+  // ---------------- SETTINGS ----------------
+  getSettings: async () => {
+    const response = await fetch(`${API_URL}/settings`, {
+      headers: headers()
+    });
+    return handleResponse(response);
+  },
+  updateSettings: async (data) => {
+    return mutateWithQueue(`${API_URL}/settings`, "PUT", {
+      body: data,
+      label: "Update settings",
+      tag: "settings-update"
+    });
+  },
+  // ---------------- GRADES ----------------
+  getGrades: async (params) => {
+    const query = new URLSearchParams();
+    if (params) {
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== void 0 && value !== null && value !== "") {
+          query.append(key, String(value));
+        }
+      });
+    }
+    const response = await fetch(`${API_URL}/admin/grades?${query.toString()}`, {
+      headers: headers()
+    });
+    const result = await handleResponse(response);
+    return result.data ?? result;
+  },
+  getGradeScale: async () => {
+    const response = await fetch(`${API_URL}/admin/grades/scale`, {
+      headers: headers()
+    });
+    const result = await handleResponse(response);
+    return result.data ?? result;
+  },
+  getGradeStats: async () => {
+    const response = await fetch(`${API_URL}/admin/grades/stats`, {
+      headers: headers()
+    });
+    const result = await handleResponse(response);
+    return result.data ?? result;
+  },
+  getStudentGrade: async (id) => {
+    const response = await fetch(`${API_URL}/admin/grades/${id}`, {
+      headers: headers()
+    });
+    const result = await handleResponse(response);
+    return result.data ?? result;
+  },
+  updateGrade: async (id, data) => {
+    const result = await mutateWithQueue(
+      `${API_URL}/admin/grades/${id}`,
+      "PUT",
+      {
+        body: data,
+        label: `Update grade for student ${id}`,
+        tag: "grade-update"
+      }
+    );
+    return result.data ?? result;
+  },
+  batchUpdateGrades: async (data) => {
+    const result = await mutateWithQueue(
+      `${API_URL}/admin/grades/batch`,
+      "POST",
+      {
+        body: data,
+        label: `Batch update ${data.student_ids.length} grades`,
+        tag: "grade-batch"
+      }
+    );
+    return result.data ?? result;
+  },
+  recalculateGrades: async (params) => {
+    const query = new URLSearchParams();
+    if (params?.component) query.append("component", params.component);
+    const result = await mutateWithQueue(
+      `${API_URL}/admin/grades/recalculate?${query.toString()}`,
+      "POST",
+      {
+        label: "Recalculate all grades",
+        tag: "grade-recalculate"
+      }
+    );
+    return result.data ?? result;
+  },
+  exportGrades: async (params) => {
+    const query = new URLSearchParams();
+    if (params?.component) query.append("component", params.component);
+    const response = await fetch(
+      `${API_URL}/admin/grades/export?${query.toString()}`,
+      { headers: { Authorization: `Bearer ${getToken$1()}` } }
+    );
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.message || `Export failed (${response.status})`);
+    }
+    return response.blob();
+  }
+};
+const ocrApi = {
+  saveOCR: async (data) => {
+    const result = await mutateWithQueue(`${API_URL}/documents/save-ocr`, "POST", {
+      body: data,
+      label: `Save OCR for document ${data.document_id}`,
+      tag: "ocr-save"
+    });
+    return result.data ?? result;
+  },
+  getOCRHistory: async (documentId) => {
+    const response = await fetch(
+      `${API_URL}/documents/${documentId}/ocr-history`,
+      { headers: headers() }
+    );
+    const result = await handleResponse(response);
+    return result.data ?? result;
+  },
+  downloadOCR: async (id) => {
+    const response = await fetch(`${API_URL}/ocr-texts/${id}/download`, {
+      headers: { Authorization: `Bearer ${getToken$1()}` }
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.message || `Download failed (${response.status})`);
+    }
+    return response.blob();
+  },
+  deleteOCR: async (id) => {
+    return mutateWithQueue(`${API_URL}/ocr-texts/${id}`, "DELETE", {
+      label: `Delete OCR ${id}`,
+      tag: "ocr-delete"
+    });
+  },
+  getOCRStats: async () => {
+    const response = await fetch(`${API_URL}/ocr-stats`, {
+      headers: headers()
+    });
+    const result = await handleResponse(response);
+    return result.data ?? result;
+  }
+};
+const facultyApi = {
+  getClass: async (id) => {
+    const response = await fetch(`${API_URL}/faculty/class/${id}`, {
+      headers: headers()
+    });
+    const result = await handleResponse(response);
+    return result.data ?? result;
+  },
+  getClasses: async () => {
+    const response = await fetch(`${API_URL}/faculty/classes`, {
+      headers: headers()
+    });
+    const result = await handleResponse(response);
+    return result.data ?? result;
+  },
+  getClassStudents: async (id) => {
+    const response = await fetch(`${API_URL}/faculty/classes/${id}/students`, {
+      headers: headers()
+    });
+    const result = await handleResponse(response);
+    return result.data ?? result;
+  },
+  getDashboard: async () => {
+    const response = await fetch(`${API_URL}/faculty/dashboard`, {
+      headers: headers()
+    });
+    const result = await handleResponse(response);
+    return result.data ?? result;
+  },
+  getStudents: async (search) => {
+    const query = search ? `?search=${encodeURIComponent(search)}` : "";
+    const response = await fetch(`${API_URL}/faculty/students${query}`, {
+      headers: headers()
+    });
+    const result = await handleResponse(response);
+    return result.data ?? result;
+  },
+  createClass: async (data) => {
+    const result = await mutateWithQueue(`${API_URL}/faculty/classes`, "POST", {
+      body: data,
+      label: `Create class: ${data.name || ""}`,
+      tag: "faculty-class-create"
+    });
+    return result.data ?? result;
+  },
+  updateClass: async (id, data) => {
+    const result = await mutateWithQueue(
+      `${API_URL}/faculty/classes/${id}`,
+      "PUT",
+      {
+        body: data,
+        label: `Update class ${id}`,
+        tag: "faculty-class-update"
+      }
+    );
+    return result.data ?? result;
+  },
+  archiveClass: async (id) => {
+    const result = await mutateWithQueue(
+      `${API_URL}/faculty/classes/${id}/archive`,
+      "PATCH",
+      {
+        label: `Archive class ${id}`,
+        tag: "faculty-class-archive"
+      }
+    );
+    return result.data ?? result;
+  },
+  // NOTE: regenerateClassCode REMOVED — join_code concept deleted
+  getClassMaterials: async (classId) => {
+    const response = await fetch(
+      `${API_URL}/faculty/classes/${classId}/materials`,
+      { headers: headers() }
+    );
+    const result = await handleResponse(response);
+    return result.data ?? result;
+  },
+  uploadMaterial: async (classId, formData) => {
+    return mutateWithQueue(
+      `${API_URL}/faculty/classes/${classId}/materials`,
+      "POST",
+      {
+        formData,
+        label: `Upload material to class ${classId}`,
+        tag: "faculty-material-upload"
+      }
+    );
+  },
+  updateMaterial: async (id, data) => {
+    const result = await mutateWithQueue(
+      `${API_URL}/faculty/materials/${id}`,
+      "PUT",
+      {
+        body: data,
+        label: `Update material ${id}`,
+        tag: "faculty-material-update"
+      }
+    );
+    return result.data ?? result;
+  },
+  deleteMaterial: async (id) => {
+    return mutateWithQueue(`${API_URL}/faculty/materials/${id}`, "DELETE", {
+      label: `Delete material ${id}`,
+      tag: "faculty-material-delete"
+    });
+  },
+  getAnnouncements: async () => {
+    const response = await fetch(`${API_URL}/faculty/announcements`, {
+      headers: headers()
+    });
+    const result = await handleResponse(response);
+    return result.data ?? result;
+  },
+  createAnnouncement: async (data) => {
+    const result = await mutateWithQueue(
+      `${API_URL}/faculty/announcements`,
+      "POST",
+      {
+        body: data,
+        label: `Create announcement: ${data.title || ""}`,
+        tag: "faculty-announcement-create"
+      }
+    );
+    return result.data ?? result;
+  },
+  updateAnnouncement: async (id, data) => {
+    const result = await mutateWithQueue(
+      `${API_URL}/faculty/announcements/${id}`,
+      "PUT",
+      {
+        body: data,
+        label: `Update announcement ${id}`,
+        tag: "faculty-announcement-update"
+      }
+    );
+    return result.data ?? result;
+  },
+  deleteAnnouncement: async (id) => {
+    return mutateWithQueue(
+      `${API_URL}/faculty/announcements/${id}`,
+      "DELETE",
+      {
+        label: `Delete announcement ${id}`,
+        tag: "faculty-announcement-delete"
+      }
+    );
+  },
+  getAttendanceSessions: async () => {
+    const response = await fetch(`${API_URL}/attendance/sessions`, {
+      headers: headers()
+    });
+    const result = await handleResponse(response);
+    return result.data ?? result;
+  },
+  createAttendanceSession: async (data) => {
+    const result = await mutateWithQueue(
+      `${API_URL}/attendance/session`,
+      "POST",
+      {
+        body: data,
+        label: "Create attendance session",
+        tag: "faculty-attendance-create"
+      }
+    );
+    return result.data ?? result;
+  },
+  closeAttendanceSession: async (id) => {
+    return mutateWithQueue(
+      `${API_URL}/attendance/session/${id}/close`,
+      "PATCH",
+      {
+        label: `Close session ${id}`,
+        tag: "faculty-attendance-close"
+      }
+    );
+  },
+  getSessionLogs: async (sessionId) => {
+    const response = await fetch(
+      `${API_URL}/attendance/session/${sessionId}/logs`,
+      { headers: headers() }
+    );
+    const result = await handleResponse(response);
+    return result.data ?? result;
+  }
+};
+async function secureRequest(path, method = "GET", body, signal) {
+  const multipart = body instanceof FormData;
+  const response = await fetch(`${API_URL}${path}`, { method, signal, headers: { Accept: "application/json", ...!multipart ? { "Content-Type": "application/json" } : {}, Authorization: `Bearer ${getToken$1()}` }, body: body === void 0 ? void 0 : multipart ? body : JSON.stringify(body) });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    if (data.code === "PASSWORD_CHANGE_REQUIRED") window.location.assign("/change-temporary-password");
+    throw new Error(Object.values(data.errors ?? {}).flat().join(" ") || data.message || `Request failed (${response.status})`);
+  }
+  return data;
+}
+let e = { data: "" }, t = (t2) => {
+  if ("object" == typeof window) {
+    let e2 = (t2 ? t2.querySelector("#_goober") : window._goober) || Object.assign(document.createElement("style"), { innerHTML: " ", id: "_goober" });
+    return e2.nonce = window.__nonce__, e2.parentNode || (t2 || document.head).appendChild(e2), e2.firstChild;
+  }
+  return t2 || e;
+}, a = /(?:([\u0080-\uFFFF\w-%@]+) *:? *([^{;]+?);|([^;}{]*?) *{)|(}\s*)/g, l = /\/\*[^]*?\*\/|  +/g, n$1 = /\n+/g, o = (e2, t2) => {
+  let r = "", a2 = "", l2 = "";
+  for (let n2 in e2) {
+    let c2 = e2[n2];
+    "@" == n2[0] ? "i" == n2[1] ? r = n2 + " " + c2 + ";" : a2 += "f" == n2[1] ? o(c2, n2) : n2 + "{" + o(c2, "k" == n2[1] ? "" : t2) + "}" : "object" == typeof c2 ? a2 += o(c2, t2 ? t2.replace(/([^,])+/g, (e3) => n2.replace(/([^,]*:\S+\([^)]*\))|([^,])+/g, (t3) => /&/.test(t3) ? t3.replace(/&/g, e3) : e3 ? e3 + " " + t3 : t3)) : n2) : null != c2 && (n2 = "-" == n2[1] ? n2 : n2.replace(/[A-Z]/g, "-$&").toLowerCase(), l2 += o.p ? o.p(n2, c2) : n2 + ":" + c2 + ";");
+  }
+  return r + (t2 && l2 ? t2 + "{" + l2 + "}" : l2) + a2;
+}, c = {}, i = (e2) => {
+  if ("object" == typeof e2) {
+    let t2 = "";
+    for (let r in e2) t2 += r + i(e2[r]);
+    return t2;
+  }
+  return e2;
+}, s = (e2, t2, r, s2, p2) => {
+  let u2 = i(e2), d2 = c[u2] || (c[u2] = ((e3) => {
+    let t3 = 0, r2 = 11;
+    for (; t3 < e3.length; ) r2 = 101 * r2 + e3.charCodeAt(t3++) >>> 0;
+    return "go" + r2;
+  })(u2));
+  if (!c[d2]) {
+    let t3 = u2 !== e2 ? e2 : ((e3) => {
+      let t4, r2, o2 = [{}];
+      for (; t4 = a.exec(e3.replace(l, "")); ) t4[4] ? o2.shift() : t4[3] ? (r2 = t4[3].replace(n$1, " ").trim(), o2.unshift(o2[0][r2] = o2[0][r2] || {})) : o2[0][t4[1]] = t4[2].replace(n$1, " ").trim();
+      return o2[0];
+    })(e2);
+    c[d2] = o(p2 ? { ["@keyframes " + d2]: t3 } : t3, r ? "" : "." + d2);
+  }
+  let f2 = r && c.g;
+  return r && (c.g = c[d2]), ((e3, t3, r2, a2) => {
+    a2 ? t3.data = t3.data.replace(a2, e3) : -1 === t3.data.indexOf(e3) && (t3.data = r2 ? e3 + t3.data : t3.data + e3);
+  })(c[d2], t2, s2, f2), d2;
+}, p = (e2, t2, r) => e2.reduce((e3, a2, l2) => {
+  let n2 = t2[l2];
+  if (n2 && n2.call) {
+    let e4 = n2(r), t3 = e4 && e4.props && e4.props.className || /^go/.test(e4) && e4;
+    n2 = t3 ? "." + t3 : e4 && "object" == typeof e4 ? e4.props ? "" : o(e4, "") : false === e4 ? "" : e4;
+  }
+  return e3 + a2 + (null == n2 ? "" : n2);
+}, "");
+function u(e2) {
+  let r = this || {}, a2 = e2.call ? e2(r.p) : e2;
+  return s(a2.unshift ? a2.raw ? p(a2, [].slice.call(arguments, 1), r.p) : a2.reduce((e3, t2) => Object.assign(e3, t2 && t2.call ? t2(r.p) : t2), {}) : a2, t(r.target), r.g, r.o, r.k);
+}
+let d, f$2, g;
+u.bind({ g: 1 });
+let h$1 = u.bind({ k: 1 });
+function m(e2, t2, r, a2) {
+  o.p = t2, d = e2, f$2 = r, g = a2;
+}
+function w$1(e2, t2) {
+  let r = this || {};
+  return function() {
+    let a2 = arguments;
+    function l2(n2, o2) {
+      let c2 = Object.assign({}, n2), i2 = c2.className || l2.className;
+      r.p = Object.assign({ theme: f$2 && f$2() }, c2), r.o = /go\d/.test(i2), c2.className = u.apply(r, a2) + (i2 ? " " + i2 : "");
+      let s2 = e2;
+      return e2[0] && (s2 = c2.as || e2, delete c2.as), g && s2[0] && g(c2), d(s2, c2);
+    }
+    return l2;
+  };
+}
+var Z$1 = (e2) => typeof e2 == "function", h = (e2, t2) => Z$1(e2) ? e2(t2) : e2;
+var W$1 = /* @__PURE__ */ (() => {
+  let e2 = 0;
+  return () => (++e2).toString();
+})(), E = /* @__PURE__ */ (() => {
+  let e2;
+  return () => {
+    if (e2 === void 0 && typeof window < "u") {
+      let t2 = matchMedia("(prefers-reduced-motion: reduce)");
+      e2 = !t2 || t2.matches;
+    }
+    return e2;
+  };
+})();
+var re = 20, k = "default";
+var H$1 = (e2, t2) => {
+  let { toastLimit: o2 } = e2.settings;
+  switch (t2.type) {
+    case 0:
+      return { ...e2, toasts: [t2.toast, ...e2.toasts].slice(0, o2) };
+    case 1:
+      return { ...e2, toasts: e2.toasts.map((r) => r.id === t2.toast.id ? { ...r, ...t2.toast } : r) };
+    case 2:
+      let { toast: s2 } = t2;
+      return H$1(e2, { type: e2.toasts.find((r) => r.id === s2.id) ? 1 : 0, toast: s2 });
+    case 3:
+      let { toastId: a2 } = t2;
+      return { ...e2, toasts: e2.toasts.map((r) => r.id === a2 || a2 === void 0 ? { ...r, dismissed: true, visible: false } : r) };
+    case 4:
+      return t2.toastId === void 0 ? { ...e2, toasts: [] } : { ...e2, toasts: e2.toasts.filter((r) => r.id !== t2.toastId) };
+    case 5:
+      return { ...e2, pausedAt: t2.time };
+    case 6:
+      let i2 = t2.time - (e2.pausedAt || 0);
+      return { ...e2, pausedAt: void 0, toasts: e2.toasts.map((r) => ({ ...r, pauseDuration: r.pauseDuration + i2 })) };
+  }
+}, v = [], j$1 = { toasts: [], pausedAt: void 0, settings: { toastLimit: re } }, f$1 = {}, Y = (e2, t2 = k) => {
+  f$1[t2] = H$1(f$1[t2] || j$1, e2), v.forEach(([o2, s2]) => {
+    o2 === t2 && s2(f$1[t2]);
+  });
+}, _ = (e2) => Object.keys(f$1).forEach((t2) => Y(e2, t2)), Q$1 = (e2) => Object.keys(f$1).find((t2) => f$1[t2].toasts.some((o2) => o2.id === e2)), S = (e2 = k) => (t2) => {
+  Y(t2, e2);
+}, se = { blank: 4e3, error: 4e3, success: 2e3, loading: 1 / 0, custom: 4e3 }, V$1 = (e2 = {}, t2 = k) => {
+  let [o2, s2] = reactExports.useState(f$1[t2] || j$1), a2 = reactExports.useRef(f$1[t2]);
+  reactExports.useEffect(() => (a2.current !== f$1[t2] && s2(f$1[t2]), v.push([t2, s2]), () => {
+    let r = v.findIndex(([l2]) => l2 === t2);
+    r > -1 && v.splice(r, 1);
+  }), [t2]);
+  let i2 = o2.toasts.map((r) => {
+    var l2, g2, T;
+    return { ...e2, ...e2[r.type], ...r, removeDelay: r.removeDelay || ((l2 = e2[r.type]) == null ? void 0 : l2.removeDelay) || (e2 == null ? void 0 : e2.removeDelay), duration: r.duration || ((g2 = e2[r.type]) == null ? void 0 : g2.duration) || (e2 == null ? void 0 : e2.duration) || se[r.type], style: { ...e2.style, ...(T = e2[r.type]) == null ? void 0 : T.style, ...r.style } };
+  });
+  return { ...o2, toasts: i2 };
+};
+var ie = (e2, t2 = "blank", o2) => ({ createdAt: Date.now(), visible: true, dismissed: false, type: t2, ariaProps: { role: "status", "aria-live": "polite" }, message: e2, pauseDuration: 0, ...o2, id: (o2 == null ? void 0 : o2.id) || W$1() }), P$1 = (e2) => (t2, o2) => {
+  let s2 = ie(t2, e2, o2);
+  return S(s2.toasterId || Q$1(s2.id))({ type: 2, toast: s2 }), s2.id;
+}, n = (e2, t2) => P$1("blank")(e2, t2);
+n.error = P$1("error");
+n.success = P$1("success");
+n.loading = P$1("loading");
+n.custom = P$1("custom");
+n.dismiss = (e2, t2) => {
+  let o2 = { type: 3, toastId: e2 };
+  t2 ? S(t2)(o2) : _(o2);
+};
+n.dismissAll = (e2) => n.dismiss(void 0, e2);
+n.remove = (e2, t2) => {
+  let o2 = { type: 4, toastId: e2 };
+  t2 ? S(t2)(o2) : _(o2);
+};
+n.removeAll = (e2) => n.remove(void 0, e2);
+n.promise = (e2, t2, o2) => {
+  let s2 = n.loading(t2.loading, { ...o2, ...o2 == null ? void 0 : o2.loading });
+  return typeof e2 == "function" && (e2 = e2()), e2.then((a2) => {
+    let i2 = t2.success ? h(t2.success, a2) : void 0;
+    return i2 ? n.success(i2, { id: s2, ...o2, ...o2 == null ? void 0 : o2.success }) : n.dismiss(s2), a2;
+  }).catch((a2) => {
+    let i2 = t2.error ? h(t2.error, a2) : void 0;
+    i2 ? n.error(i2, { id: s2, ...o2, ...o2 == null ? void 0 : o2.error }) : n.dismiss(s2);
+  }), e2;
+};
+var ce = 1e3, w = (e2, t2 = "default") => {
+  let { toasts: o2, pausedAt: s2 } = V$1(e2, t2), a2 = reactExports.useRef(/* @__PURE__ */ new Map()).current, i2 = reactExports.useCallback((c2, m2 = ce) => {
+    if (a2.has(c2)) return;
+    let p2 = setTimeout(() => {
+      a2.delete(c2), r({ type: 4, toastId: c2 });
+    }, m2);
+    a2.set(c2, p2);
+  }, []);
+  reactExports.useEffect(() => {
+    if (s2) return;
+    let c2 = Date.now(), m2 = o2.map((p2) => {
+      if (p2.duration === 1 / 0) return;
+      let R = (p2.duration || 0) + p2.pauseDuration - (c2 - p2.createdAt);
+      if (R < 0) {
+        p2.visible && n.dismiss(p2.id);
+        return;
+      }
+      return setTimeout(() => n.dismiss(p2.id, t2), R);
+    });
+    return () => {
+      m2.forEach((p2) => p2 && clearTimeout(p2));
+    };
+  }, [o2, s2, t2]);
+  let r = reactExports.useCallback(S(t2), [t2]), l2 = reactExports.useCallback(() => {
+    r({ type: 5, time: Date.now() });
+  }, [r]), g2 = reactExports.useCallback((c2, m2) => {
+    r({ type: 1, toast: { id: c2, height: m2 } });
+  }, [r]), T = reactExports.useCallback(() => {
+    s2 && r({ type: 6, time: Date.now() });
+  }, [s2, r]), d2 = reactExports.useCallback((c2, m2) => {
+    let { reverseOrder: p2 = false, gutter: R = 8, defaultPosition: z2 } = m2 || {}, O2 = o2.filter((u2) => (u2.position || z2) === (c2.position || z2) && u2.height), K2 = O2.findIndex((u2) => u2.id === c2.id), B = O2.filter((u2, I) => I < K2 && u2.visible).length;
+    return O2.filter((u2) => u2.visible).slice(...p2 ? [B + 1] : [0, B]).reduce((u2, I) => u2 + (I.height || 0) + R, 0);
+  }, [o2]);
+  return reactExports.useEffect(() => {
+    o2.forEach((c2) => {
+      if (c2.dismissed) i2(c2.id, c2.removeDelay);
+      else {
+        let m2 = a2.get(c2.id);
+        m2 && (clearTimeout(m2), a2.delete(c2.id));
+      }
+    });
+  }, [o2, i2]), { toasts: o2, handlers: { updateHeight: g2, startPause: l2, endPause: T, calculateOffset: d2 } };
+};
+var de = h$1` from { transform: scale(0) rotate(45deg); opacity: 0; } to { transform: scale(1) rotate(45deg); opacity: 1; }`, me = h$1` from { transform: scale(0); opacity: 0; } to { transform: scale(1); opacity: 1; }`, le = h$1` from { transform: scale(0) rotate(90deg); opacity: 0; } to { transform: scale(1) rotate(90deg); opacity: 1; }`, C = w$1("div")` width: 20px; opacity: 0; height: 20px; border-radius: 10px; background: ${(e2) => e2.primary || "#ff4b4b"}; position: relative; transform: rotate(45deg); animation: ${de} 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; animation-delay: 100ms; &:after, &:before { content: ''; animation: ${me} 0.15s ease-out forwards; animation-delay: 150ms; position: absolute; border-radius: 3px; opacity: 0; background: ${(e2) => e2.secondary || "#fff"}; bottom: 9px; left: 4px; height: 2px; width: 12px; } &:before { animation: ${le} 0.15s ease-out forwards; animation-delay: 180ms; transform: rotate(90deg); } `;
+var Te = h$1` from { transform: rotate(0deg); } to { transform: rotate(360deg); } `, F = w$1("div")` width: 12px; height: 12px; box-sizing: border-box; border: 2px solid; border-radius: 100%; border-color: ${(e2) => e2.secondary || "#e0e0e0"}; border-right-color: ${(e2) => e2.primary || "#616161"}; animation: ${Te} 1s linear infinite; `;
+var ge = h$1` from { transform: scale(0) rotate(45deg); opacity: 0; } to { transform: scale(1) rotate(45deg); opacity: 1; }`, he = h$1` 0% { height: 0; width: 0; opacity: 0; } 40% { height: 0; width: 6px; opacity: 1; } 100% { opacity: 1; height: 10px; }`, L$2 = w$1("div")` width: 20px; opacity: 0; height: 20px; border-radius: 10px; background: ${(e2) => e2.primary || "#61d345"}; position: relative; transform: rotate(45deg); animation: ${ge} 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; animation-delay: 100ms; &:after { content: ''; box-sizing: border-box; animation: ${he} 0.2s ease-out forwards; opacity: 0; animation-delay: 200ms; position: absolute; border-right: 2px solid; border-bottom: 2px solid; border-color: ${(e2) => e2.secondary || "#fff"}; bottom: 6px; left: 6px; height: 10px; width: 6px; } `;
+var be = w$1("div")` position: absolute; `, Se = w$1("div")` position: relative; display: flex; justify-content: center; align-items: center; min-width: 20px; min-height: 20px; `, Ae = h$1` from { transform: scale(0.6); opacity: 0.4; } to { transform: scale(1); opacity: 1; }`, Pe = w$1("div")` position: relative; transform: scale(0.6); opacity: 0.4; min-width: 20px; animation: ${Ae} 0.3s 0.12s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; `, $$1 = ({ toast: e2 }) => {
+  let { icon: t2, type: o2, iconTheme: s2 } = e2;
+  return t2 !== void 0 ? typeof t2 == "string" ? reactExports.createElement(Pe, null, t2) : t2 : o2 === "blank" ? null : reactExports.createElement(Se, null, reactExports.createElement(F, { ...s2 }), o2 !== "loading" && reactExports.createElement(be, null, o2 === "error" ? reactExports.createElement(C, { ...s2 }) : reactExports.createElement(L$2, { ...s2 })));
+};
+var Re = (e2) => ` 0% {transform: translate3d(0,${e2 * -200}%,0) scale(.6); opacity:.5;} 100% {transform: translate3d(0,0,0) scale(1); opacity:1;} `, Ee = (e2) => ` 0% {transform: translate3d(0,0,-1px) scale(1); opacity:1;} 100% {transform: translate3d(0,${e2 * -150}%,-1px) scale(.6); opacity:0;} `, ve = "0%{opacity:0;} 100%{opacity:1;}", De = "0%{opacity:1;} 100%{opacity:0;}", Oe = w$1("div")` :where(&) { display: flex; align-items: center; background: #fff; color: #363636; line-height: 1.3; will-change: transform; box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1), 0 3px 3px rgba(0, 0, 0, 0.05); max-width: 350px; pointer-events: auto; padding: 8px 10px; border-radius: 8px; } `, Ie = w$1("div")` display: flex; justify-content: center; margin: 4px 10px; color: inherit; flex: 1 1 auto; white-space: pre-line; `, ke = (e2, t2) => {
+  let s2 = e2.includes("top") ? 1 : -1, [a2, i2] = E() ? [ve, De] : [Re(s2), Ee(s2)];
+  return { animation: t2 ? `${h$1(a2)} 0.35s cubic-bezier(.21,1.02,.73,1) forwards` : `${h$1(i2)} 0.4s forwards cubic-bezier(.06,.71,.55,1)` };
+}, N = reactExports.memo(({ toast: e2, position: t2, style: o2, children: s2 }) => {
+  let a2 = e2.height ? ke(e2.position || t2 || "top-center", e2.visible) : { opacity: 0 }, i2 = reactExports.createElement($$1, { toast: e2 }), r = reactExports.createElement(Ie, { ...e2.ariaProps }, h(e2.message, e2));
+  return reactExports.createElement(Oe, { className: e2.className, style: { ...a2, ...o2, ...e2.style } }, typeof s2 == "function" ? s2({ icon: i2, message: r }) : reactExports.createElement(reactExports.Fragment, null, i2, r));
+});
+m(reactExports.createElement);
+var we = ({ id: e2, className: t2, style: o2, onHeightUpdate: s2, children: a2 }) => {
+  let i2 = reactExports.useCallback((r) => {
+    if (r) {
+      let l2 = () => {
+        let g2 = r.getBoundingClientRect().height;
+        s2(e2, g2);
+      };
+      l2(), new MutationObserver(l2).observe(r, { subtree: true, childList: true, characterData: true });
+    }
+  }, [e2, s2]);
+  return reactExports.createElement("div", { ref: i2, className: t2, style: o2 }, a2);
+}, Me = (e2, t2) => {
+  let o2 = e2.includes("top"), s2 = o2 ? { top: 0 } : { bottom: 0 }, a2 = e2.includes("center") ? { justifyContent: "center" } : e2.includes("right") ? { justifyContent: "flex-end" } : {};
+  return { left: 0, right: 0, display: "flex", position: "absolute", transition: E() ? void 0 : "all 230ms cubic-bezier(.21,1.02,.73,1)", transform: `translateY(${t2 * (o2 ? 1 : -1)}px)`, ...s2, ...a2 };
+}, Ce = u` z-index: 9999; > * { pointer-events: auto; } `, D = 16, Fe = ({ reverseOrder: e2, position: t2 = "top-center", toastOptions: o2, gutter: s2, children: a2, toasterId: i2, containerStyle: r, containerClassName: l2 }) => {
+  let { toasts: g2, handlers: T } = w(o2, i2);
+  return reactExports.createElement("div", { "data-rht-toaster": i2 || "", style: { position: "fixed", zIndex: 9999, top: D, left: D, right: D, bottom: D, pointerEvents: "none", ...r }, className: l2, onMouseEnter: T.startPause, onMouseLeave: T.endPause }, g2.map((d2) => {
+    let c2 = d2.position || t2, m2 = T.calculateOffset(d2, { reverseOrder: e2, gutter: s2, defaultPosition: t2 }), p2 = Me(c2, m2);
+    return reactExports.createElement(we, { id: d2.id, key: d2.id, onHeightUpdate: T.updateHeight, className: d2.visible ? Ce : "", style: p2 }, d2.type === "custom" ? h(d2.message, d2) : a2 ? a2(d2) : reactExports.createElement(N, { toast: d2, position: c2 }));
+  }));
+};
+var zt = n;
+const LocationPicker = ({
+  latitude,
+  longitude,
+  onLocationSelect,
+  venueName,
+  radius = 100,
+  onRadiusChange,
+  showRadiusCircle = true
+}) => {
+  const [searchQuery, setSearchQuery] = reactExports.useState("");
+  const [searching, setSearching] = reactExports.useState(false);
+  const [searchResults, setSearchResults] = reactExports.useState([]);
+  const [position, setPosition] = reactExports.useState(
+    latitude !== null && longitude !== null ? [latitude, longitude] : null
+  );
+  const [mapLoaded, setMapLoaded] = reactExports.useState(false);
+  const [mapError, setMapError] = reactExports.useState(null);
+  const [showSearchResults, setShowSearchResults] = reactExports.useState(false);
+  const searchRef = reactExports.useRef(null);
+  const mapContainerRef = reactExports.useRef(null);
+  const mapRef = reactExports.useRef(null);
+  const markerRef = reactExports.useRef(null);
+  const circleRef = reactExports.useRef(null);
+  const leafletRef = reactExports.useRef(null);
+  const isConfirmed = position !== null && latitude !== null && longitude !== null && Math.abs(position[0] - latitude) < 1e-7 && Math.abs(position[1] - longitude) < 1e-7;
+  reactExports.useEffect(() => {
+    let cancelled = false;
+    const initMap = async () => {
+      if (!mapContainerRef.current) return;
+      if (mapRef.current) return;
+      try {
+        const L2 = (await __vitePreload(async () => {
+          const { default: __vite_default__ } = await Promise.resolve().then(() => leafletSrc);
+          return { default: __vite_default__ };
+        }, true ? void 0 : void 0)).default;
+        delete L2.Icon.Default.prototype._getIconUrl;
+        L2.Icon.Default.mergeOptions({
+          iconUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png",
+          iconRetinaUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png",
+          shadowUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png"
+        });
+        leafletRef.current = L2;
+        if (mapContainerRef.current._leaflet_id) {
+          mapContainerRef.current._leaflet_id = null;
+        }
+        const map = L2.map(mapContainerRef.current, {
+          center: [8.521826076323629, 124.57249491758405],
+          zoom: 17,
+          zoomControl: false,
+          maxZoom: 19,
+          minZoom: 12
+        });
+        if (cancelled) {
+          map.remove();
+          return;
+        }
+        L2.tileLayer(
+          "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+          {
+            attribution: '&copy; <a href="https://www.esri.com/">Esri</a>',
+            maxZoom: 19,
+            minZoom: 12
+          }
+        ).addTo(map);
+        L2.control.zoom({ position: "topright" }).addTo(map);
+        map.on("click", (e2) => {
+          const { lat, lng } = e2.latlng;
+          setPosition([lat, lng]);
+          updateMarker(L2, lat, lng);
+        });
+        if (position) {
+          updateMarker(L2, position[0], position[1]);
+        }
+        mapRef.current = map;
+        setTimeout(() => {
+          if (cancelled) return;
+          map.invalidateSize();
+          setMapLoaded(true);
+        }, 200);
+      } catch (err) {
+        console.error("Leaflet init error:", err);
+        if (!cancelled) {
+          setMapError(err?.message || "Failed to load map");
+          zt.error("Failed to load map. Check console for details.");
+        }
+      }
+    };
+    initMap();
+    return () => {
+      cancelled = true;
+      if (circleRef.current) {
+        try {
+          circleRef.current.remove();
+        } catch {
+        }
+        circleRef.current = null;
+      }
+      if (mapRef.current) {
+        try {
+          mapRef.current.remove();
+        } catch {
+        }
+        mapRef.current = null;
+      }
+      markerRef.current = null;
+      if (mapContainerRef.current) {
+        mapContainerRef.current._leaflet_id = null;
+      }
+    };
+  }, []);
+  reactExports.useEffect(() => {
+    if (!mapRef.current || !leafletRef.current) return;
+    if (latitude !== null && longitude !== null) {
+      updateMarker(leafletRef.current, latitude, longitude, true);
+      setPosition([latitude, longitude]);
+    }
+  }, [latitude, longitude]);
+  reactExports.useEffect(() => {
+    if (!mapRef.current || !leafletRef.current) return;
+    const L2 = leafletRef.current;
+    if (circleRef.current) {
+      circleRef.current.remove();
+      circleRef.current = null;
+    }
+    if (!showRadiusCircle) return;
+    if (!position || !radius || radius <= 0) return;
+    const circle = L2.circle(position, {
+      radius: Number(radius),
+      color: "#D4AF37",
+      fillColor: "#D4AF37",
+      fillOpacity: 0.12,
+      weight: 2,
+      dashArray: "6, 4"
+    }).addTo(mapRef.current);
+    circle.bindPopup(
+      `<div style="text-align:center">
+         <strong>Geofence Boundary</strong><br/>
+         <span style="font-size:11px;color:#666">Radius: ${radius}m</span>
+       </div>`
+    );
+    circleRef.current = circle;
+  }, [position, radius, showRadiusCircle]);
+  const updateMarker = (L2, lat, lng, panTo = false) => {
+    if (!mapRef.current) return;
+    if (markerRef.current) {
+      markerRef.current.setLatLng([lat, lng]);
+    } else {
+      const marker = L2.marker([lat, lng], { draggable: true }).addTo(
+        mapRef.current
+      );
+      marker.bindPopup(`
+        <div style="text-align:center">
+          <strong>${venueName || "Selected Location"}</strong><br/>
+          <span style="font-size:11px;color:#666">
+            ${lat.toFixed(6)}, ${lng.toFixed(6)}
+          </span>
+        </div>
+      `);
+      marker.on("dragend", (e2) => {
+        const pos = e2.target.getLatLng();
+        setPosition([pos.lat, pos.lng]);
+      });
+      markerRef.current = marker;
+    }
+    if (circleRef.current) {
+      circleRef.current.setLatLng([lat, lng]);
+    }
+    if (panTo) {
+      mapRef.current.setView([lat, lng], 17);
+    }
+  };
+  const searchLocation = async (query) => {
+    if (!query.trim()) {
+      setSearchResults([]);
+      setShowSearchResults(false);
+      return;
+    }
+    setSearching(true);
+    setShowSearchResults(true);
+    try {
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
+          query
+        )}&limit=5&countrycodes=ph`
+      );
+      const data = await response.json();
+      setSearchResults(data);
+    } catch (error) {
+      console.error("Search error:", error);
+      zt.error("Failed to search location");
+    } finally {
+      setSearching(false);
+    }
+  };
+  const selectSearchResult = (result) => {
+    const lat = parseFloat(result.lat);
+    const lng = parseFloat(result.lon);
+    setPosition([lat, lng]);
+    setSearchResults([]);
+    setShowSearchResults(false);
+    setSearchQuery(result.display_name.split(",")[0]);
+    if (mapRef.current && leafletRef.current) {
+      updateMarker(leafletRef.current, lat, lng, true);
+    }
+    zt(
+      `Previewing ${result.display_name.split(",")[0]}. Click "Confirm Location" to use it.`,
+      { icon: "👁️" }
+    );
+  };
+  const getCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      zt.error("Geolocation is not supported by your browser");
+      return;
+    }
+    zt.loading("Getting your location...");
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude: lat, longitude: lng } = pos.coords;
+        setPosition([lat, lng]);
+        if (mapRef.current && leafletRef.current) {
+          updateMarker(leafletRef.current, lat, lng, true);
+        }
+        zt.dismiss();
+        zt(`Previewing your location. Click "Confirm Location" to use it.`, {
+          icon: "👁️"
+        });
+      },
+      (error) => {
+        console.error(error);
+        zt.dismiss();
+        zt.error("Unable to get your location. Please try searching.");
+      },
+      { enableHighAccuracy: true }
+    );
+  };
+  reactExports.useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (searchRef.current && !searchRef.current.contains(event.target)) {
+        setShowSearchResults(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+  const quickVenues = [
+    {
+      label: "📍 OCC Main Campus",
+      lat: 8.52182,
+      lng: 124.57244
+    },
+    { label: "🏟️ OCC Gymnasium", lat: 8.5215, lng: 124.572294 },
+    { label: "🏟️ Taboc Opol Gymnasium", lat: 8.518316, lng: 124.576157 },
+    { label: "🏟️ Opol Boardwalk", lat: 8.521507, lng: 124.575593 }
+  ];
+  const previewQuickVenue = (venue) => {
+    if (mapRef.current && leafletRef.current) {
+      mapRef.current.setView([venue.lat, venue.lng], 18);
+      updateMarker(leafletRef.current, venue.lat, venue.lng);
+    }
+    setPosition([venue.lat, venue.lng]);
+    zt(`Previewing ${venue.label}. Click "Confirm Location" to use it.`, {
+      icon: "👁️"
+    });
+  };
+  const confirmCurrentPosition = () => {
+    if (position) {
+      onLocationSelect(position[0], position[1]);
+      zt.success("Location confirmed!");
+    } else {
+      zt.error("Click on the map first to pick a location");
+    }
+  };
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-3", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col sm:flex-row gap-2", ref: searchRef, children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1 relative", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "input",
+          {
+            type: "text",
+            className: "input pr-10",
+            placeholder: "Search for a location in Opol, Misamis Oriental...",
+            value: searchQuery,
+            onChange: (e2) => {
+              setSearchQuery(e2.target.value);
+              if (e2.target.value.length > 2) {
+                searchLocation(e2.target.value);
+              } else {
+                setSearchResults([]);
+                setShowSearchResults(false);
+              }
+            },
+            onKeyDown: (e2) => {
+              if (e2.key === "Enter") {
+                e2.preventDefault();
+                searchLocation(searchQuery);
+              }
+            }
+          }
+        ),
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "button",
+          {
+            type: "button",
+            className: "absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600",
+            onClick: () => searchLocation(searchQuery),
+            disabled: searching,
+            children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "i",
+              {
+                className: `fas ${searching ? "fa-spinner fa-spin" : "fa-search"}`
+              }
+            )
+          }
+        )
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs(
+        "button",
+        {
+          type: "button",
+          className: "btn btn-secondary btn-sm whitespace-nowrap",
+          onClick: getCurrentLocation,
+          children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-location-dot mr-1" }),
+            "Use My Location"
+          ]
+        }
+      )
+    ] }),
+    showSearchResults && searchResults.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "bg-white border border-slate-200 rounded-lg shadow-lg max-h-60 overflow-y-auto z-10 relative", children: searchResults.map((result, index) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+      "button",
+      {
+        type: "button",
+        className: "w-full text-left px-4 py-2 hover:bg-slate-50 border-b border-slate-100 last:border-0 transition-colors flex items-start gap-2",
+        onClick: () => selectSearchResult(result),
+        children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-map-pin text-gold-500 mt-1" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-sm font-medium text-navy-900", children: result.display_name.split(",")[0] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-slate-500", children: result.display_name.split(",").slice(1).join(",").trim() })
+          ] })
+        ]
+      },
+      index
+    )) }),
+    onRadiusChange && showRadiusCircle && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-3 px-1", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "text-xs font-medium text-slate-600 whitespace-nowrap", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-circle-notch text-gold-500 mr-1" }),
+        "Geofence"
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "input",
+        {
+          type: "range",
+          min: 10,
+          max: 500,
+          step: 10,
+          value: radius,
+          onChange: (e2) => onRadiusChange(parseInt(e2.target.value)),
+          className: "flex-1 accent-gold-500"
+        }
+      ),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-xs font-semibold text-navy-900 tabular-nums w-12 text-right", children: [
+        radius,
+        "m"
+      ] })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "relative", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "div",
+        {
+          ref: mapContainerRef,
+          className: "h-[400px] rounded-xl overflow-hidden border border-slate-200 bg-slate-900",
+          style: { width: "100%", minHeight: 400 }
+        }
+      ),
+      !mapLoaded && !mapError && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute inset-0 flex items-center justify-center bg-slate-900/80 rounded-xl", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-center", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-spinner fa-spin text-3xl text-gold-500 mb-2" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-white/70", children: "Loading satellite map..." })
+      ] }) }),
+      mapError && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute inset-0 flex items-center justify-center bg-slate-900/90 rounded-xl", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-center p-6", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-exclamation-triangle text-4xl text-red-400 mb-3" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-white font-medium mb-1", children: "Map failed to load" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-white/60 mb-3", children: mapError }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs(
+          "button",
+          {
+            type: "button",
+            className: "btn btn-primary btn-sm",
+            onClick: () => window.location.reload(),
+            children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-sync mr-1" }),
+              " Reload Page"
+            ]
+          }
+        )
+      ] }) }),
+      mapLoaded && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/70 backdrop-blur-sm px-4 py-2 rounded-lg shadow-md text-xs text-white/80 border border-white/10", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-hand-pointer text-gold-400 mr-1" }),
+        "Click on the map to set location • Drag marker to adjust"
+      ] }),
+      showRadiusCircle && position && radius > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "absolute top-3 left-3 bg-black/70 backdrop-blur-sm px-3 py-1.5 rounded-lg shadow-md text-xs text-white/90 border border-gold-500/30 flex items-center gap-2", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "inline-block w-3 h-3 rounded-full border-2 border-dashed border-gold-400" }),
+        "Geofence: ",
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "font-semibold text-gold-300", children: [
+          radius,
+          "m"
+        ] })
+      ] })
+    ] }),
+    position && /* @__PURE__ */ jsxRuntimeExports.jsx(
+      "div",
+      {
+        className: `rounded-lg p-3 border ${isConfirmed ? "bg-emerald-50 border-emerald-200" : "bg-amber-50 border-amber-200"}`,
+        children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsxs(
+              "p",
+              {
+                className: `text-sm font-medium ${isConfirmed ? "text-emerald-700" : "text-amber-700"}`,
+                children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(
+                    "i",
+                    {
+                      className: `fas ${isConfirmed ? "fa-check-circle" : "fa-eye"} mr-1`
+                    }
+                  ),
+                  isConfirmed ? "Location saved" : "Preview — not saved yet"
+                ]
+              }
+            ),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs(
+              "p",
+              {
+                className: `text-xs ${isConfirmed ? "text-emerald-600" : "text-amber-600"}`,
+                children: [
+                  "Lat: ",
+                  position[0].toFixed(6),
+                  ", Lng: ",
+                  position[1].toFixed(6)
+                ]
+              }
+            ),
+            venueName && /* @__PURE__ */ jsxRuntimeExports.jsxs(
+              "p",
+              {
+                className: `text-xs ${isConfirmed ? "text-emerald-600" : "text-amber-600"}`,
+                children: [
+                  "Venue: ",
+                  venueName
+                ]
+              }
+            ),
+            showRadiusCircle && radius > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs(
+              "p",
+              {
+                className: `text-xs ${isConfirmed ? "text-emerald-600" : "text-amber-600"}`,
+                children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-circle-notch mr-1" }),
+                  "Geofence: ",
+                  radius,
+                  "m radius"
+                ]
+              }
+            ),
+            !isConfirmed && (latitude || longitude) && /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-xs text-amber-700 mt-1", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-exclamation-triangle mr-1" }),
+              "This differs from the saved location. Click",
+              " ",
+              /* @__PURE__ */ jsxRuntimeExports.jsx("strong", { children: "Confirm" }),
+              " to update."
+            ] })
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-2", children: [
+            !isConfirmed && /* @__PURE__ */ jsxRuntimeExports.jsxs(
+              "button",
+              {
+                type: "button",
+                className: "btn btn-success btn-sm",
+                onClick: confirmCurrentPosition,
+                children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-check mr-1" }),
+                  "Confirm Location"
+                ]
+              }
+            ),
+            isConfirmed && /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-xs text-emerald-600 flex items-center", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-check-circle mr-1" }),
+              "Saved"
+            ] })
+          ] })
+        ] })
+      }
+    ),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-wrap gap-2", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-slate-400 self-center", children: "📍 Quick preview:" }),
+      quickVenues.map((place, index) => /* @__PURE__ */ jsxRuntimeExports.jsx(
+        "button",
+        {
+          type: "button",
+          className: `px-3 py-1 rounded-full text-xs transition-colors ${position && position[0] === place.lat && position[1] === place.lng ? "bg-gold-500 text-white" : "bg-slate-100 hover:bg-slate-200 text-slate-600"}`,
+          onClick: () => previewQuickVenue(place),
+          children: place.label
+        },
+        index
+      ))
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "bg-blue-50 rounded-lg p-3 border border-blue-200", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-start gap-2", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-info-circle text-blue-500 mt-0.5" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-blue-700 font-medium", children: "Opol Community College" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-blue-600", children: "Poblacion, Opol, Misamis Oriental, Philippines" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-xs text-blue-500 mt-1", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-lightbulb mr-1" }),
+          "Click on the map, drag the marker, or preview a quick place — then click ",
+          /* @__PURE__ */ jsxRuntimeExports.jsx("strong", { children: "Confirm Location" }),
+          " to save it. The",
+          " ",
+          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-gold-600 font-medium", children: "gold dashed circle" }),
+          " ",
+          "shows the geofence boundary."
+        ] })
+      ] })
+    ] }) })
+  ] });
+};
+const phtTime = (value) => value ? new Intl.DateTimeFormat("en-PH", { timeZone: "Asia/Manila", dateStyle: "medium", timeStyle: "medium", hour12: true }).format(new Date(value)) : "—";
+function phtInput(value) {
+  if (!value) return "";
+  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Manila", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).formatToParts(new Date(value));
+  const get = (type) => parts.find((p2) => p2.type === type)?.value;
+  return `${get("year")}-${get("month")}-${get("day")}T${get("hour")}:${get("minute")}`;
+}
+const phtInstant = (value) => (/* @__PURE__ */ new Date(value + "+08:00")).toISOString();
+function SessionEditor({ session, onSaved }) {
+  const [open, setOpen] = reactExports.useState(false), [form, setForm] = reactExports.useState({}), [busy, setBusy] = reactExports.useState(false), [error, setError] = reactExports.useState("");
+  const lock = reactExports.useRef(false);
+  const field = (name, value) => setForm((v2) => ({ ...v2, [name]: value }));
+  async function save(e2) {
+    e2.preventDefault();
+    if (lock.current) return;
+    lock.current = true;
+    setBusy(true);
+    setError("");
+    try {
+      await secureRequest(`/attendance/sessions/${session.id}`, "PUT", { ...form, scheduled_start: phtInstant(form.scheduled_start), scheduled_end: phtInstant(form.scheduled_end) });
+      setOpen(false);
+      onSaved();
+    } catch (error2) {
+      setError(error2.message);
+    } finally {
+      lock.current = false;
+      setBusy(false);
+    }
+  }
+  if (!session) return null;
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "border rounded p-3", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-secondary", disabled: busy, onClick: () => {
+      setForm({ expected_version: session.rules_version ?? 1, description: session.description || "", scheduled_start: phtInput(session.scheduled_start || session.start_time), scheduled_end: phtInput(session.scheduled_end || session.end_time), grace_period_minutes: session.grace_period_minutes ?? 15, require_location: !!session.require_location, latitude: session.latitude == null ? null : Number(session.latitude), longitude: session.longitude == null ? null : Number(session.longitude), geofence_radius: session.geofence_radius ?? 100, reason: "" });
+      setError("");
+      setOpen((v2) => !v2);
+    }, children: open ? "Close session editor" : "Edit session time / place" }),
+    open && /* @__PURE__ */ jsxRuntimeExports.jsxs("form", { onSubmit: save, className: "space-y-3 mt-3", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "All times are Philippine time. Actual attendance timestamps are preserved. Older downloaded rules require review after an edit." }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "block", children: [
+        "Description",
+        /* @__PURE__ */ jsxRuntimeExports.jsx("input", { className: "input", value: form.description, onChange: (e2) => field("description", e2.target.value), maxLength: 500 })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "block", children: [
+        "Time-in starts",
+        /* @__PURE__ */ jsxRuntimeExports.jsx("input", { className: "input", type: "datetime-local", required: true, value: form.scheduled_start, onChange: (e2) => field("scheduled_start", e2.target.value) })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "block", children: [
+        "Time-out opens / session ends",
+        /* @__PURE__ */ jsxRuntimeExports.jsx("input", { className: "input", type: "datetime-local", required: true, value: form.scheduled_end, min: form.scheduled_start, onChange: (e2) => field("scheduled_end", e2.target.value) })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "block", children: [
+        "Late grace (minutes)",
+        /* @__PURE__ */ jsxRuntimeExports.jsx("input", { className: "input", type: "number", min: 0, max: 120, required: true, value: form.grace_period_minutes, onChange: (e2) => field("grace_period_minutes", Number(e2.target.value)) })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "checkbox", checked: form.require_location, onChange: (e2) => field("require_location", e2.target.checked) }),
+        "Require location at both scans"
+      ] }),
+      form.require_location && /* @__PURE__ */ jsxRuntimeExports.jsx(LocationPicker, { latitude: form.latitude, longitude: form.longitude, radius: form.geofence_radius, onLocationSelect: (latitude, longitude) => setForm((v2) => ({ ...v2, latitude, longitude })), onRadiusChange: (radius) => field("geofence_radius", radius) }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "block", children: [
+        "Geofence radius (metres)",
+        /* @__PURE__ */ jsxRuntimeExports.jsx("input", { className: "input", type: "number", min: 10, max: 1e3, value: form.geofence_radius, onChange: (e2) => field("geofence_radius", Number(e2.target.value)) })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "block", children: [
+        "Reason for edit",
+        /* @__PURE__ */ jsxRuntimeExports.jsx("input", { className: "input", required: true, minLength: 3, maxLength: 500, value: form.reason, onChange: (e2) => field("reason", e2.target.value) })
+      ] }),
+      error && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { role: "alert", children: error }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-primary", disabled: busy, children: busy ? "Saving…" : "Save session changes" })
+    ] })
+  ] });
+}
 requireReactDom();
 function _extends$2() {
   return _extends$2 = Object.assign ? Object.assign.bind() : function(n2) {
@@ -12101,1912 +14835,6 @@ function useMutation(options, queryClient2) {
     mutateAsync: result.mutate
   };
 }
-const getToken$1 = () => localStorage.getItem("token") || localStorage.getItem("nstp_token");
-const setToken = (token) => {
-  localStorage.setItem("token", token);
-  localStorage.setItem("nstp_token", token);
-};
-const removeToken = () => {
-  localStorage.removeItem("token");
-  localStorage.removeItem("nstp_token");
-  localStorage.removeItem("user");
-  localStorage.removeItem("nstp_user");
-};
-function getCurrentUserId() {
-  try {
-    const raw = localStorage.getItem("user") || localStorage.getItem("nstp_user");
-    const user = raw ? JSON.parse(raw) : null;
-    return user?.id == null ? null : String(user.id);
-  } catch {
-    return null;
-  }
-}
-const instanceOfAny = (object, constructors) => constructors.some((c2) => object instanceof c2);
-let idbProxyableTypes;
-let cursorAdvanceMethods;
-function getIdbProxyableTypes() {
-  return idbProxyableTypes || (idbProxyableTypes = [
-    IDBIndex,
-    IDBObjectStore,
-    IDBCursor,
-    IDBDatabase,
-    IDBTransaction
-  ]);
-}
-function getCursorAdvanceMethods() {
-  return cursorAdvanceMethods || (cursorAdvanceMethods = ["advance", "continue", "continuePrimaryKey"].map((method) => IDBCursor.prototype[method]));
-}
-const transactionDoneMap = /* @__PURE__ */ new WeakMap();
-const transformCache = /* @__PURE__ */ new WeakMap();
-const reverseTransformCache = /* @__PURE__ */ new WeakMap();
-function promisifyRequest(request2) {
-  const promise = new Promise((resolve, reject) => {
-    const unlisten = () => {
-      request2.removeEventListener("success", success);
-      request2.removeEventListener("error", error);
-    };
-    const success = () => {
-      resolve(wrap(request2.result));
-      unlisten();
-    };
-    const error = () => {
-      reject(request2.error);
-      unlisten();
-    };
-    request2.addEventListener("success", success);
-    request2.addEventListener("error", error);
-  });
-  reverseTransformCache.set(promise, request2);
-  return promise;
-}
-function cacheDonePromiseForTransaction(tx) {
-  if (transactionDoneMap.has(tx))
-    return;
-  const done = new Promise((resolve, reject) => {
-    const unlisten = () => {
-      tx.removeEventListener("complete", complete);
-      tx.removeEventListener("error", error);
-      tx.removeEventListener("abort", error);
-    };
-    const complete = () => {
-      resolve();
-      unlisten();
-    };
-    const error = () => {
-      reject(tx.error || new DOMException("AbortError", "AbortError"));
-      unlisten();
-    };
-    tx.addEventListener("complete", complete);
-    tx.addEventListener("error", error);
-    tx.addEventListener("abort", error);
-  });
-  transactionDoneMap.set(tx, done);
-}
-let idbProxyTraps = {
-  get(target, prop, receiver) {
-    if (target instanceof IDBTransaction) {
-      if (prop === "done")
-        return transactionDoneMap.get(target);
-      if (prop === "store") {
-        return receiver.objectStoreNames[1] ? void 0 : receiver.objectStore(receiver.objectStoreNames[0]);
-      }
-    }
-    return wrap(target[prop]);
-  },
-  set(target, prop, value) {
-    target[prop] = value;
-    return true;
-  },
-  has(target, prop) {
-    if (target instanceof IDBTransaction && (prop === "done" || prop === "store")) {
-      return true;
-    }
-    return prop in target;
-  }
-};
-function replaceTraps(callback) {
-  idbProxyTraps = callback(idbProxyTraps);
-}
-function wrapFunction(func) {
-  if (getCursorAdvanceMethods().includes(func)) {
-    return function(...args) {
-      func.apply(unwrap(this), args);
-      return wrap(this.request);
-    };
-  }
-  return function(...args) {
-    return wrap(func.apply(unwrap(this), args));
-  };
-}
-function transformCachableValue(value) {
-  if (typeof value === "function")
-    return wrapFunction(value);
-  if (value instanceof IDBTransaction)
-    cacheDonePromiseForTransaction(value);
-  if (instanceOfAny(value, getIdbProxyableTypes()))
-    return new Proxy(value, idbProxyTraps);
-  return value;
-}
-function wrap(value) {
-  if (value instanceof IDBRequest)
-    return promisifyRequest(value);
-  if (transformCache.has(value))
-    return transformCache.get(value);
-  const newValue = transformCachableValue(value);
-  if (!Object.is(newValue, value)) {
-    transformCache.set(value, newValue);
-    reverseTransformCache.set(newValue, value);
-  }
-  return newValue;
-}
-const unwrap = (value) => reverseTransformCache.get(value);
-function openDB(name, version2, { blocked, upgrade, blocking, terminated } = {}) {
-  const request2 = indexedDB.open(name, version2);
-  const openPromise = wrap(request2);
-  if (upgrade) {
-    request2.addEventListener("upgradeneeded", (event) => {
-      upgrade(wrap(request2.result), event.oldVersion, event.newVersion, wrap(request2.transaction), event);
-    });
-  }
-  if (blocked) {
-    request2.addEventListener("blocked", (event) => blocked(
-      // Casting due to https://github.com/microsoft/TypeScript-DOM-lib-generator/pull/1405
-      event.oldVersion,
-      event.newVersion,
-      event
-    ));
-  }
-  openPromise.then((db) => {
-    if (terminated)
-      db.addEventListener("close", () => terminated());
-    if (blocking) {
-      db.addEventListener("versionchange", (event) => blocking(event.oldVersion, event.newVersion, event));
-    }
-  }).catch(() => {
-  });
-  return openPromise;
-}
-const readMethods = ["get", "getKey", "getAll", "getAllKeys", "count"];
-const writeMethods = ["put", "add", "delete", "clear"];
-const cachedMethods = {};
-function getMethod(target, prop) {
-  if (!(target instanceof IDBDatabase && !(prop in target) && typeof prop === "string")) {
-    return;
-  }
-  if (cachedMethods[prop])
-    return cachedMethods[prop];
-  const targetFuncName = prop.replace(/FromIndex$/, "");
-  const useIndex = prop !== targetFuncName;
-  const isWrite = writeMethods.includes(targetFuncName);
-  if (
-    // Bail if the target doesn't exist on the target. Eg, getAll isn't in Edge.
-    !(targetFuncName in (useIndex ? IDBIndex : IDBObjectStore).prototype) || !(isWrite || readMethods.includes(targetFuncName))
-  ) {
-    return;
-  }
-  const method = async function(storeName, ...args) {
-    const tx = this.transaction(storeName, isWrite ? "readwrite" : "readonly");
-    let target2 = tx.store;
-    if (useIndex)
-      target2 = target2.index(args.shift());
-    return (await Promise.all([
-      target2[targetFuncName](...args),
-      isWrite && tx.done
-    ]))[0];
-  };
-  return cachedMethods[prop] = method;
-}
-replaceTraps((oldTraps) => ({
-  ...oldTraps,
-  get: (target, prop, receiver) => getMethod(target, prop) || oldTraps.get(target, prop, receiver),
-  has: (target, prop) => !!getMethod(target, prop) || oldTraps.has(target, prop)
-}));
-const advanceMethodProps = ["advance", "continue", "continuePrimaryKey"];
-const methodMap = {};
-const advanceResults = /* @__PURE__ */ new WeakMap();
-const ittrProxiedCursorToOriginalProxy = /* @__PURE__ */ new WeakMap();
-const cursorIteratorTraps = {
-  get(target, prop) {
-    if (!advanceMethodProps.includes(prop))
-      return target[prop];
-    let cachedFunc = methodMap[prop];
-    if (!cachedFunc) {
-      cachedFunc = methodMap[prop] = function(...args) {
-        advanceResults.set(this, ittrProxiedCursorToOriginalProxy.get(this)[prop](...args));
-      };
-    }
-    return cachedFunc;
-  }
-};
-async function* iterate(...args) {
-  let cursor = this;
-  if (!(cursor instanceof IDBCursor)) {
-    cursor = await cursor.openCursor(...args);
-  }
-  if (!cursor)
-    return;
-  cursor = cursor;
-  const proxiedCursor = new Proxy(cursor, cursorIteratorTraps);
-  ittrProxiedCursorToOriginalProxy.set(proxiedCursor, cursor);
-  reverseTransformCache.set(proxiedCursor, unwrap(cursor));
-  while (cursor) {
-    yield proxiedCursor;
-    cursor = await (advanceResults.get(proxiedCursor) || cursor.continue());
-    advanceResults.delete(proxiedCursor);
-  }
-}
-function isIteratorProp(target, prop) {
-  return prop === Symbol.asyncIterator && instanceOfAny(target, [IDBIndex, IDBObjectStore, IDBCursor]) || prop === "iterate" && instanceOfAny(target, [IDBIndex, IDBObjectStore]);
-}
-replaceTraps((oldTraps) => ({
-  ...oldTraps,
-  get(target, prop, receiver) {
-    if (isIteratorProp(target, prop))
-      return iterate;
-    return oldTraps.get(target, prop, receiver);
-  },
-  has(target, prop) {
-    return isIteratorProp(target, prop) || oldTraps.has(target, prop);
-  }
-}));
-const DB_NAME = "nstp-offline";
-const DB_VERSION = 1;
-let dbPromise = null;
-function getDB() {
-  if (!dbPromise) {
-    dbPromise = openDB(DB_NAME, DB_VERSION, {
-      upgrade(db) {
-        if (!db.objectStoreNames.contains("outbox")) {
-          const store = db.createObjectStore("outbox", {
-            keyPath: "id",
-            autoIncrement: true
-          });
-          store.createIndex("createdAt", "createdAt");
-          store.createIndex("tag", "tag");
-        }
-        if (!db.objectStoreNames.contains("cache")) {
-          const cache = db.createObjectStore("cache", { keyPath: "url" });
-          cache.createIndex("cachedAt", "cachedAt");
-        }
-        if (!db.objectStoreNames.contains("meta")) {
-          db.createObjectStore("meta");
-        }
-      }
-    });
-  }
-  return dbPromise;
-}
-async function addToOutbox(item) {
-  const db = await getDB();
-  const id = await db.add("outbox", item);
-  return id;
-}
-async function getOutbox() {
-  const db = await getDB();
-  return db.getAll("outbox");
-}
-async function deleteFromOutbox(id) {
-  const db = await getDB();
-  await db.delete("outbox", id);
-}
-async function updateOutboxItem(id, updates) {
-  const db = await getDB();
-  const existing = await db.get("outbox", id);
-  if (!existing) return;
-  await db.put("outbox", { ...existing, ...updates, id });
-}
-async function setMeta(key, value) {
-  const db = await getDB();
-  await db.put("meta", value, key);
-}
-const OUTBOX_CHANGED_EVENT = "nstp:outbox-changed";
-function emitChange() {
-  window.dispatchEvent(new CustomEvent(OUTBOX_CHANGED_EVENT));
-}
-async function queueMutation(mutation) {
-  if (!mutation.ownerId) throw new Error("Sign in before saving offline changes.");
-  const id = await addToOutbox({
-    ...mutation,
-    createdAt: Date.now(),
-    attempts: 0
-  });
-  emitChange();
-  return id;
-}
-async function listQueue() {
-  const owner = getCurrentUserId();
-  return owner ? (await getOutbox()).filter((item) => item.ownerId === owner) : [];
-}
-async function queueCount() {
-  return (await listQueue()).length;
-}
-async function removeFromQueue(id) {
-  await deleteFromOutbox(id);
-  emitChange();
-}
-async function markAttempt(id, error) {
-  const items = await getOutbox();
-  const item = items.find((i2) => i2.id === id);
-  if (!item) return;
-  await updateOutboxItem(id, {
-    attempts: (item.attempts || 0) + 1,
-    lastError: error
-  });
-  emitChange();
-}
-async function clearQueue() {
-  for (const item of await listQueue()) {
-    if (item.id != null) await deleteFromOutbox(item.id);
-  }
-  emitChange();
-}
-function serializeFormData(fd) {
-  const entries = [];
-  const files = [];
-  fd.forEach((value, key) => {
-    if (value instanceof File) {
-      files.push({
-        key,
-        name: value.name,
-        type: value.type,
-        data: value
-      });
-    } else {
-      entries.push([key, String(value)]);
-    }
-  });
-  return { entries, files };
-}
-function deserializeFormData(data) {
-  const fd = new FormData();
-  for (const [k2, v2] of data.entries) {
-    fd.append(k2, v2);
-  }
-  if (data.files) {
-    for (const f2 of data.files) {
-      fd.append(f2.key, f2.data, f2.name);
-    }
-  }
-  return fd;
-}
-const API_URL = "https://orangered-oryx-492151.hostingersite.com/api";
-const headers = () => ({
-  Accept: "application/json",
-  "Content-Type": "application/json",
-  Authorization: `Bearer ${getToken$1()}`
-});
-const handleResponse = async (response) => {
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    if (response.status === 401) {
-      removeToken();
-      window.location.href = "/login";
-    }
-    if (error.code === "PASSWORD_CHANGE_REQUIRED") window.location.assign("/change-temporary-password");
-    throw new Error(Object.values(error.errors ?? {}).flat().join(" ") || error.message || `HTTP ${response.status}`);
-  }
-  return response.json();
-};
-async function mutateWithQueue(url, method, options = {}) {
-  const token = getToken$1();
-  const ownerId = getCurrentUserId();
-  const online = typeof navigator === "undefined" ? true : navigator.onLine;
-  const doFetch = async () => {
-    const h2 = {
-      Accept: "application/json",
-      ...options.headers || {}
-    };
-    if (token) h2["Authorization"] = `Bearer ${token}`;
-    let body;
-    if (options.formData) {
-      body = options.formData;
-    } else if (options.body !== void 0) {
-      h2["Content-Type"] = "application/json";
-      body = JSON.stringify(options.body);
-    }
-    return fetch(url, { method, headers: h2, body });
-  };
-  if (online) {
-    try {
-      const res = await doFetch();
-      if (res.status === 401) {
-        removeToken();
-        window.location.href = "/login";
-        throw new Error("Unauthorized");
-      }
-      if (res.ok) return res.json().catch(() => ({}));
-      const error = await res.json().catch(() => ({}));
-      throw new Error(error.message || `HTTP ${res.status}`);
-    } catch (err) {
-      const isNetworkError = err instanceof TypeError || /network|fetch/i.test(err?.message || "");
-      if (!isNetworkError) throw err;
-    }
-  }
-  const id = await queueMutation({
-    ownerId: ownerId ?? void 0,
-    url,
-    method,
-    body: options.body,
-    formData: options.formData ? serializeFormData(options.formData) : void 0,
-    tag: options.tag || "generic",
-    label: options.label
-  });
-  return {
-    success: true,
-    queued: true,
-    offline: !online,
-    queue_id: id,
-    message: online ? "Network error — change queued for retry." : "You're offline — change queued and will sync automatically."
-  };
-}
-const profileApi = {
-  getProfile: async () => {
-    const response = await fetch(`${API_URL}/profile`, {
-      headers: headers()
-    });
-    const result = await handleResponse(response);
-    return result.data ?? result;
-  },
-  updateProfile: async (data) => {
-    const response = await fetch(`${API_URL}/profile`, {
-      method: "POST",
-      headers: headers(),
-      body: JSON.stringify(data)
-    });
-    const result = await handleResponse(response);
-    return result.data ?? result;
-  },
-  uploadPhoto: async (formData) => {
-    const token = getToken$1();
-    const response = await fetch(`${API_URL}/profile/photo`, {
-      method: "POST",
-      headers: {
-        Accept: "application/json",
-        Authorization: `Bearer ${token}`
-        // DO NOT set Content-Type — the browser sets the boundary
-      },
-      body: formData
-    });
-    const result = await handleResponse(response);
-    return result.data ?? result;
-  },
-  deletePhoto: async () => {
-    const response = await fetch(`${API_URL}/profile/photo`, {
-      method: "DELETE",
-      headers: headers()
-    });
-    return handleResponse(response);
-  },
-  changePassword: async (currentPassword, newPassword, newPasswordConfirmation) => {
-    const response = await fetch(`${API_URL}/profile/change-password`, {
-      method: "POST",
-      headers: headers(),
-      body: JSON.stringify({
-        current_password: currentPassword,
-        new_password: newPassword,
-        new_password_confirmation: newPasswordConfirmation
-      })
-    });
-    return handleResponse(response);
-  }
-};
-const authApi = {
-  sendOtp: async (email) => {
-    const response = await fetch(`${API_URL}/password/send-otp`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email })
-    });
-    return handleResponse(response);
-  },
-  verifyOtp: async (email, otp) => {
-    const response = await fetch(`${API_URL}/password/verify-otp`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, otp })
-    });
-    return handleResponse(response);
-  },
-  resetPassword: async (email, resetToken, newPassword, newPasswordConfirmation) => {
-    const response = await fetch(`${API_URL}/password/reset`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        email,
-        reset_token: resetToken,
-        new_password: newPassword,
-        new_password_confirmation: newPasswordConfirmation
-      })
-    });
-    return handleResponse(response);
-  },
-  resendOtp: async (email) => {
-    const response = await fetch(`${API_URL}/password/resend-otp`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email })
-    });
-    return handleResponse(response);
-  },
-  changePassword: async (currentPassword, newPassword, newPasswordConfirmation) => {
-    const response = await fetch(`${API_URL}/change-password`, {
-      method: "POST",
-      headers: headers(),
-      body: JSON.stringify({
-        current_password: currentPassword,
-        new_password: newPassword,
-        new_password_confirmation: newPasswordConfirmation
-      })
-    });
-    return handleResponse(response);
-  },
-  login: async (login, password) => {
-    const response = await fetch(`${API_URL}/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ login, password })
-    });
-    const data = await handleResponse(response);
-    if (data.access_token) {
-      setToken(data.access_token);
-      localStorage.setItem("user", JSON.stringify(data.user));
-    }
-    return data;
-  },
-  adminLogin: async (email, password) => {
-    const response = await fetch(`${API_URL}/admin/login`, {
-      method: "POST",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ email, password })
-    });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.message || "Login failed");
-    if (data.access_token || data.token) {
-      const token = data.access_token || data.token;
-      setToken(token);
-      localStorage.setItem("user", JSON.stringify(data.user));
-    }
-    return data;
-  },
-  logout: () => {
-    removeToken();
-    window.location.href = "/login";
-  },
-  getCurrentUser: () => {
-    const user = localStorage.getItem("user");
-    return user ? JSON.parse(user) : null;
-  }
-};
-const superAdminApi = {
-  // ---------------- FACE RESET (online only, not queued) ----------------
-  searchStudentsForFaceReset: async (search) => {
-    const response = await fetch(
-      `${API_URL}/superadmin/students/search?search=${encodeURIComponent(search)}`,
-      { headers: headers() }
-    );
-    const result = await handleResponse(response);
-    return result.data ?? [];
-  },
-  resetStudentFace: async (studentId) => {
-    const response = await fetch(
-      `${API_URL}/superadmin/students/${studentId}/face-embeddings`,
-      { method: "DELETE", headers: headers() }
-    );
-    return handleResponse(response);
-  },
-  // ---------------- BACKUPS ----------------
-  getBackups: async () => {
-    const response = await fetch(`${API_URL}/superadmin/backups`, {
-      headers: headers()
-    });
-    const result = await handleResponse(response);
-    return result.data ?? result;
-  },
-  getBackupStats: async () => {
-    const response = await fetch(`${API_URL}/superadmin/backups/stats`, {
-      headers: headers()
-    });
-    const result = await handleResponse(response);
-    return result.data ?? result;
-  },
-  createBackup: async (notes) => {
-    return mutateWithQueue(`${API_URL}/superadmin/backups`, "POST", {
-      body: { notes },
-      label: "Create backup",
-      tag: "backup-create"
-    });
-  },
-  downloadBackup: async (id) => {
-    const response = await fetch(
-      `${API_URL}/superadmin/backups/${id}/download`,
-      { headers: { Authorization: `Bearer ${getToken$1()}` } }
-    );
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
-      throw new Error(error.message || `Download failed (${response.status})`);
-    }
-    return response.blob();
-  },
-  restoreBackup: async (id) => {
-    return mutateWithQueue(
-      `${API_URL}/superadmin/backups/${id}/restore`,
-      "POST",
-      {
-        label: `Restore backup ${id}`,
-        tag: "backup-restore"
-      }
-    );
-  },
-  deleteBackup: async (id) => {
-    return mutateWithQueue(
-      `${API_URL}/superadmin/backups/${id}`,
-      "DELETE",
-      {
-        label: `Delete backup ${id}`,
-        tag: "backup-delete"
-      }
-    );
-  },
-  // ---------------- BACKUP SCHEDULES ----------------
-  getBackupSchedules: async () => {
-    const response = await fetch(`${API_URL}/superadmin/backups/schedules`, {
-      headers: headers()
-    });
-    const result = await handleResponse(response);
-    return result.data ?? result;
-  },
-  createBackupSchedule: async (data) => {
-    const response = await fetch(`${API_URL}/superadmin/backups/schedules`, {
-      method: "POST",
-      headers: headers(),
-      body: JSON.stringify(data)
-    });
-    const result = await handleResponse(response);
-    return result.data ?? result;
-  },
-  updateBackupSchedule: async (id, data) => {
-    const response = await fetch(
-      `${API_URL}/superadmin/backups/schedules/${id}`,
-      {
-        method: "PUT",
-        headers: headers(),
-        body: JSON.stringify(data)
-      }
-    );
-    const result = await handleResponse(response);
-    return result.data ?? result;
-  },
-  toggleBackupSchedule: async (id) => {
-    const response = await fetch(
-      `${API_URL}/superadmin/backups/schedules/${id}/toggle`,
-      {
-        method: "PATCH",
-        headers: headers()
-      }
-    );
-    const result = await handleResponse(response);
-    return result.data ?? result;
-  },
-  runBackupScheduleNow: async (id) => {
-    const response = await fetch(
-      `${API_URL}/superadmin/backups/schedules/${id}/run-now`,
-      {
-        method: "POST",
-        headers: headers()
-      }
-    );
-    const result = await handleResponse(response);
-    return result.data ?? result;
-  },
-  deleteBackupSchedule: async (id) => {
-    const response = await fetch(
-      `${API_URL}/superadmin/backups/schedules/${id}`,
-      {
-        method: "DELETE",
-        headers: headers()
-      }
-    );
-    return handleResponse(response);
-  },
-  purgeOldBackupsNow: async () => {
-    const response = await fetch(
-      `${API_URL}/superadmin/backups/purge-now`,
-      {
-        method: "POST",
-        headers: headers()
-      }
-    );
-    return handleResponse(response);
-  },
-  // ---------------- USERS ----------------
-  getUsers: async () => {
-    const response = await fetch(`${API_URL}/superadmin/users`, {
-      headers: headers()
-    });
-    const result = await handleResponse(response);
-    return result.data ?? result;
-  },
-  getUser: async (id) => {
-    const response = await fetch(`${API_URL}/superadmin/users/${id}`, {
-      headers: headers()
-    });
-    const result = await handleResponse(response);
-    return result.data ?? result;
-  },
-  createUser: async (data) => {
-    return mutateWithQueue(`${API_URL}/superadmin/users`, "POST", {
-      formData: data,
-      label: "Create user",
-      tag: "user-create"
-    });
-  },
-  updateUser: async (id, data) => {
-    return mutateWithQueue(`${API_URL}/superadmin/users/${id}`, "POST", {
-      formData: data,
-      label: `Update user ${id}`,
-      tag: "user-update"
-    });
-  },
-  deleteUser: async (id) => {
-    return mutateWithQueue(`${API_URL}/superadmin/users/${id}`, "DELETE", {
-      label: `Delete user ${id}`,
-      tag: "user-delete"
-    });
-  },
-  toggleUserActive: async (id, is_active) => {
-    return mutateWithQueue(
-      `${API_URL}/superadmin/users/${id}/toggle`,
-      "PATCH",
-      {
-        body: { is_active },
-        label: `Toggle user ${id}`,
-        tag: "user-toggle"
-      }
-    );
-  },
-  getStats: async () => {
-    const response = await fetch(`${API_URL}/superadmin/stats`, {
-      headers: headers()
-    });
-    const result = await handleResponse(response);
-    return result.data ?? result;
-  },
-  // ---------------- FACULTY CSV ----------------
-  downloadFacultyTemplate: async () => {
-    const response = await fetch(`${API_URL}/superadmin/faculty/template`, {
-      headers: { Authorization: `Bearer ${getToken$1()}` }
-    });
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
-      throw new Error(error.message || `Template failed (${response.status})`);
-    }
-    return response.blob();
-  },
-  exportFacultyCsv: async () => {
-    const response = await fetch(`${API_URL}/superadmin/faculty/export`, {
-      headers: { Authorization: `Bearer ${getToken$1()}` }
-    });
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
-      throw new Error(error.message || `Export failed (${response.status})`);
-    }
-    return response.blob();
-  },
-  startFacultyImport: async (formData) => {
-    const response = await fetch(`${API_URL}/superadmin/faculty/import/start`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${getToken$1()}` },
-      body: formData
-    });
-    return handleResponse(response);
-  },
-  processFacultyImportChunk: async (id, chunkSize = 25) => {
-    const response = await fetch(
-      `${API_URL}/superadmin/faculty/import/${id}/process-chunk`,
-      {
-        method: "POST",
-        headers: headers(),
-        body: JSON.stringify({ chunk_size: chunkSize })
-      }
-    );
-    const result = await handleResponse(response);
-    return result.data ?? result;
-  },
-  getFacultyImportStatus: async (id) => {
-    const response = await fetch(
-      `${API_URL}/superadmin/faculty/import/${id}/status`,
-      { headers: headers() }
-    );
-    const result = await handleResponse(response);
-    return result.data ?? result;
-  },
-  cancelFacultyImport: async (id) => {
-    const response = await fetch(
-      `${API_URL}/superadmin/faculty/import/${id}/cancel`,
-      { method: "POST", headers: headers() }
-    );
-    return handleResponse(response);
-  },
-  getFacultyImportHistory: async () => {
-    const response = await fetch(
-      `${API_URL}/superadmin/faculty/import/history`,
-      { headers: headers() }
-    );
-    const result = await handleResponse(response);
-    return result.data ?? result;
-  },
-  // ---------------- FACULTY CSV (legacy single-shot import) ----------------
-  importFacultyCsv: async (formData) => {
-    const response = await fetch(`${API_URL}/superadmin/faculty/import`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${getToken$1()}` },
-      body: formData
-    });
-    return handleResponse(response);
-  }
-};
-const adminApi = {
-  // ---------------- STUDENT IMPORT (legacy single-shot) ----------------
-  importStudents: async (formData) => {
-    const response = await fetch(`${API_URL}/admin/students/import`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${getToken$1()}` },
-      body: formData
-    });
-    return handleResponse(response);
-  },
-  // ---------------- DASHBOARD ----------------
-  getStats: async () => {
-    const response = await fetch(`${API_URL}/dashboard/stats`, {
-      headers: headers()
-    });
-    const result = await handleResponse(response);
-    return result.data ?? result;
-  },
-  // ---------------- OPTIONS ----------------
-  getCourses: async () => {
-    const response = await fetch(`${API_URL}/options/courses`, {
-      headers: headers()
-    });
-    const result = await handleResponse(response);
-    return result.data ?? [];
-  },
-  getSections: async () => {
-    const response = await fetch(`${API_URL}/options/sections`, {
-      headers: headers()
-    });
-    const result = await handleResponse(response);
-    return result.data ?? [];
-  },
-  getYearLevels: async () => {
-    const response = await fetch(`${API_URL}/options/year-levels`, {
-      headers: headers()
-    });
-    const result = await handleResponse(response);
-    return result.data ?? [];
-  },
-  getComponents: async () => {
-    const response = await fetch(`${API_URL}/options/components`, {
-      headers: headers()
-    });
-    const result = await handleResponse(response);
-    return result.data ?? [];
-  },
-  // ---------------- STUDENTS ----------------
-  getStudents: async (params) => {
-    const query = new URLSearchParams();
-    if (params) {
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== void 0 && value !== null && value !== "") {
-          query.append(key, String(value));
-        }
-      });
-    }
-    const response = await fetch(
-      `${API_URL}/admin/students?${query.toString()}`,
-      { headers: headers() }
-    );
-    const result = await handleResponse(response);
-    return {
-      data: result.data || [],
-      meta: result.meta || {
-        current_page: 1,
-        last_page: 1,
-        per_page: 15,
-        total: 0,
-        from: 0,
-        to: 0
-      }
-    };
-  },
-  getStudent: async (id) => {
-    const response = await fetch(`${API_URL}/admin/students/${id}`, {
-      headers: headers()
-    });
-    const result = await handleResponse(response);
-    return result.data ?? result;
-  },
-  createStudent: async (data) => {
-    const result = await mutateWithQueue(`${API_URL}/admin/students`, "POST", {
-      body: data,
-      label: `Create student ${data.student_id || ""}`,
-      tag: "student-create"
-    });
-    return result.data ?? result;
-  },
-  updateStudent: async (id, data) => {
-    const result = await mutateWithQueue(
-      `${API_URL}/admin/students/${id}`,
-      "PUT",
-      {
-        body: data,
-        label: `Update student ${id}`,
-        tag: "student-update"
-      }
-    );
-    return result.data ?? result;
-  },
-  deleteStudent: async (id) => {
-    return mutateWithQueue(`${API_URL}/admin/students/${id}`, "DELETE", {
-      label: `Delete student ${id}`,
-      tag: "student-delete"
-    });
-  },
-  bulkDeleteStudents: async (ids) => {
-    return mutateWithQueue(`${API_URL}/admin/students/bulk`, "DELETE", {
-      body: { ids },
-      label: `Bulk delete ${ids.length} students`,
-      tag: "student-bulk-delete"
-    });
-  },
-  exportStudents: async (params) => {
-    const query = new URLSearchParams();
-    if (params?.component) query.append("component", params.component);
-    for (const key of ["course", "section", "status", "search"]) if (params?.[key]) query.append(key, params[key]);
-    const response = await fetch(
-      `${API_URL}/admin/students/export?${query.toString()}`,
-      { headers: { Authorization: `Bearer ${getToken$1()}` } }
-    );
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
-      throw new Error(error.message || `Export failed (${response.status})`);
-    }
-    return response.blob();
-  },
-  downloadStudentTemplate: async () => {
-    const response = await fetch(`${API_URL}/admin/students/template`, {
-      headers: { Authorization: `Bearer ${getToken$1()}` }
-    });
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
-      throw new Error(error.message || `Template failed (${response.status})`);
-    }
-    return response.blob();
-  },
-  // ---------------- STUDENT IMPORT (chunked sync) ----------------
-  startStudentImport: async (formData) => {
-    const response = await fetch(`${API_URL}/admin/students/import/start`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${getToken$1()}` },
-      body: formData
-    });
-    return handleResponse(response);
-  },
-  processStudentImportChunk: async (id, chunkSize = 50) => {
-    const response = await fetch(
-      `${API_URL}/admin/students/import/${id}/process-chunk`,
-      {
-        method: "POST",
-        headers: headers(),
-        body: JSON.stringify({ chunk_size: chunkSize })
-      }
-    );
-    const result = await handleResponse(response);
-    return result.data ?? result;
-  },
-  getStudentImportStatus: async (id) => {
-    const response = await fetch(
-      `${API_URL}/admin/students/import/${id}/status`,
-      { headers: headers() }
-    );
-    const result = await handleResponse(response);
-    return result.data ?? result;
-  },
-  cancelStudentImport: async (id) => {
-    const response = await fetch(
-      `${API_URL}/admin/students/import/${id}/cancel`,
-      { method: "POST", headers: headers() }
-    );
-    return handleResponse(response);
-  },
-  getStudentImportHistory: async () => {
-    const response = await fetch(
-      `${API_URL}/admin/students/import/history`,
-      { headers: headers() }
-    );
-    const result = await handleResponse(response);
-    return result.data ?? result;
-  },
-  getStudentStats: async () => {
-    const response = await fetch(`${API_URL}/admin/students/stats`, {
-      headers: headers()
-    });
-    const result = await handleResponse(response);
-    return result.data ?? result;
-  },
-  // ---------------- COMPONENT CHANGE REQUESTS ----------------
-  getChangeRequests: async (status) => {
-    const query = status ? `?status=${status}` : "";
-    const response = await fetch(
-      `${API_URL}/admin/component-requests${query}`,
-      { headers: headers() }
-    );
-    const result = await handleResponse(response);
-    return result.data ?? result;
-  },
-  handleChangeRequest: async (id, status, admin_remarks) => {
-    const result = await mutateWithQueue(
-      `${API_URL}/admin/component-requests/${id}`,
-      "PUT",
-      {
-        body: { status, admin_remarks },
-        label: `Handle component request ${id}`,
-        tag: "component-request"
-      }
-    );
-    return result.data ?? result;
-  },
-  // ---------------- ACTIVITIES ----------------
-  getActivities: async () => {
-    const response = await fetch(`${API_URL}/activities`, {
-      headers: headers()
-    });
-    const result = await handleResponse(response);
-    return result.data ?? result;
-  },
-  createActivity: async (data) => {
-    const result = await mutateWithQueue(`${API_URL}/activities`, "POST", {
-      body: data,
-      label: `Create activity: ${data.title || ""}`,
-      tag: "activity-create"
-    });
-    return result.data ?? result;
-  },
-  updateActivity: async (id, data) => {
-    const result = await mutateWithQueue(
-      `${API_URL}/activities/${id}`,
-      "PUT",
-      {
-        body: data,
-        label: `Update activity ${id}`,
-        tag: "activity-update"
-      }
-    );
-    return result.data ?? result;
-  },
-  deleteActivity: async (id) => {
-    return mutateWithQueue(`${API_URL}/activities/${id}`, "DELETE", {
-      label: `Delete activity ${id}`,
-      tag: "activity-delete"
-    });
-  },
-  getActivityParticipants: async (id) => {
-    const response = await fetch(`${API_URL}/activities/${id}/participants`, {
-      headers: headers()
-    });
-    const result = await handleResponse(response);
-    return result.data ?? result;
-  },
-  updateParticipantStatus: async (activityId, participantId, status) => {
-    return mutateWithQueue(
-      `${API_URL}/activities/${activityId}/participants/${participantId}`,
-      "PUT",
-      {
-        body: { attendance_status: status },
-        label: `Update participant ${participantId}`,
-        tag: "activity-participant-update"
-      }
-    );
-  },
-  removeParticipant: async (activityId, participantId) => {
-    return mutateWithQueue(
-      `${API_URL}/activities/${activityId}/participants/${participantId}`,
-      "DELETE",
-      {
-        label: `Remove participant ${participantId}`,
-        tag: "activity-participant-delete"
-      }
-    );
-  },
-  // ---------------- ACTIVITY MAP ----------------
-  getActivitiesWithLocations: async (params) => {
-    const query = new URLSearchParams();
-    if (params) {
-      Object.entries(params).forEach(([key, value]) => {
-        if (value && value !== "all") query.append(key, value);
-      });
-    }
-    const response = await fetch(
-      `${API_URL}/activities/map?${query.toString()}`,
-      { headers: headers() }
-    );
-    const result = await handleResponse(response);
-    return result;
-  },
-  getActivityLocation: async (id) => {
-    const response = await fetch(`${API_URL}/activities/${id}/map?live=${Date.now()}`, {
-      cache: "no-store",
-      headers: headers()
-    });
-    const result = await handleResponse(response);
-    return result.data;
-  },
-  updateActivityLocation: async (id, data) => {
-    const result = await mutateWithQueue(
-      `${API_URL}/activities/${id}/location`,
-      "PUT",
-      {
-        body: data,
-        label: `Update activity ${id} location`,
-        tag: "activity-location"
-      }
-    );
-    return result.data;
-  },
-  // ---------------- CLASSES ----------------
-  getClasses: async (params) => {
-    const query = new URLSearchParams();
-    if (params) {
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== void 0 && value !== null && value !== "" && value !== "all") {
-          query.append(key, String(value));
-        }
-      });
-    }
-    const response = await fetch(
-      `${API_URL}/admin/classes?${query.toString()}`,
-      { headers: headers() }
-    );
-    const result = await handleResponse(response);
-    return result.data ?? result;
-  },
-  getClassSchoolYears: async () => {
-    const response = await fetch(`${API_URL}/admin/classes/school-years`, {
-      headers: headers()
-    });
-    const result = await handleResponse(response);
-    return result.data ?? [];
-  },
-  exportClasses: async (params) => {
-    const query = new URLSearchParams();
-    if (params) {
-      Object.entries(params).forEach(([k2, v2]) => {
-        if (v2 && v2 !== "all") query.append(k2, v2);
-      });
-    }
-    const response = await fetch(
-      `${API_URL}/admin/classes/export?${query.toString()}`,
-      { headers: { Authorization: `Bearer ${getToken$1()}` } }
-    );
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
-      throw new Error(error.message || `Export failed (${response.status})`);
-    }
-    return response.blob();
-  },
-  createClass: async (data) => {
-    const result = await mutateWithQueue(`${API_URL}/admin/classes`, "POST", {
-      body: data,
-      label: `Create class: ${data.name || ""}`,
-      tag: "class-create"
-    });
-    return result.data ?? result;
-  },
-  getClass: async (id) => {
-    const response = await fetch(`${API_URL}/admin/classes/${id}`, {
-      headers: headers()
-    });
-    const result = await handleResponse(response);
-    return result.data ?? result;
-  },
-  updateClass: async (id, data) => {
-    const result = await mutateWithQueue(
-      `${API_URL}/admin/classes/${id}`,
-      "PUT",
-      {
-        body: data,
-        label: `Update class ${id}`,
-        tag: "class-update"
-      }
-    );
-    return result.data ?? result;
-  },
-  toggleArchiveClass: async (id) => {
-    const result = await mutateWithQueue(
-      `${API_URL}/admin/classes/${id}/toggle-archive`,
-      "PATCH",
-      {
-        label: `Toggle archive class ${id}`,
-        tag: "class-toggle"
-      }
-    );
-    return result.data ?? result;
-  },
-  getClassStudents: async (id) => {
-    const response = await fetch(`${API_URL}/admin/classes/${id}/students`, {
-      headers: headers()
-    });
-    const result = await handleResponse(response);
-    return result.data ?? result;
-  },
-  addStudentsToClass: async (id, studentIds) => {
-    const result = await mutateWithQueue(
-      `${API_URL}/admin/classes/${id}/students`,
-      "POST",
-      {
-        body: { student_ids: studentIds },
-        label: `Add students to class ${id}`,
-        tag: "class-add-students"
-      }
-    );
-    return result.data ?? result;
-  },
-  removeStudentFromClass: async (classId, studentId) => {
-    return mutateWithQueue(
-      `${API_URL}/admin/classes/${classId}/students/${studentId}`,
-      "DELETE",
-      {
-        label: `Remove student from class ${classId}`,
-        tag: "class-remove-student"
-      }
-    );
-  },
-  // ---------------- DOCUMENTS ----------------
-  getDocuments: async (params) => {
-    const query = new URLSearchParams();
-    if (params) {
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== void 0 && value !== null && value !== "") {
-          query.append(key, String(value));
-        }
-      });
-    }
-    const response = await fetch(
-      `${API_URL}/admin/documents?${query.toString()}`,
-      { headers: headers() }
-    );
-    const result = await handleResponse(response);
-    return {
-      data: result.data || [],
-      meta: result.meta || {
-        current_page: 1,
-        last_page: 1,
-        per_page: 15,
-        total: 0,
-        from: 0,
-        to: 0
-      }
-    };
-  },
-  verifyDocument: async (id, status, rejection_reason) => {
-    const result = await mutateWithQueue(
-      `${API_URL}/admin/documents/${id}/verify`,
-      "PUT",
-      {
-        body: { status, rejection_reason },
-        label: `Verify document ${id}`,
-        tag: "document-verify"
-      }
-    );
-    return result.data ?? result;
-  },
-  // ---------------- OFFICE DOCUMENTS ----------------
-  getOfficeDocuments: async (params) => {
-    const query = new URLSearchParams();
-    if (params?.category) query.append("category", params.category);
-    const response = await fetch(
-      `${API_URL}/office-documents?${query.toString()}`,
-      { headers: headers() }
-    );
-    const result = await handleResponse(response);
-    return { data: result.data || [] };
-  },
-  uploadOfficeDocument: async (formData) => {
-    return mutateWithQueue(`${API_URL}/office-documents`, "POST", {
-      formData,
-      label: "Upload office document",
-      tag: "office-doc-upload"
-    });
-  },
-  deleteOfficeDocument: async (id) => {
-    return mutateWithQueue(`${API_URL}/office-documents/${id}`, "DELETE", {
-      label: `Delete office document ${id}`,
-      tag: "office-doc-delete"
-    });
-  },
-  // ---------------- ATTENDANCE ----------------
-  getAttendanceSessions: async (params) => {
-    const query = new URLSearchParams();
-    if (params?.class_id) query.append("class_id", String(params.class_id));
-    const response = await fetch(
-      `${API_URL}/attendance/sessions?${query.toString()}`,
-      { headers: headers() }
-    );
-    const result = await handleResponse(response);
-    return result.data ?? result;
-  },
-  createAttendanceSession: async (data) => {
-    const result = await mutateWithQueue(
-      `${API_URL}/attendance/session`,
-      "POST",
-      {
-        body: data,
-        label: `Create attendance session`,
-        tag: "attendance-session-create"
-      }
-    );
-    return result.data ?? result;
-  },
-  closeAttendanceSession: async (id) => {
-    return mutateWithQueue(
-      `${API_URL}/attendance/session/${id}/close`,
-      "PATCH",
-      {
-        label: `Close session ${id}`,
-        tag: "attendance-session-close"
-      }
-    );
-  },
-  getSessionLogs: async (sessionId) => {
-    const response = await fetch(
-      `${API_URL}/attendance/session/${sessionId}/logs`,
-      { headers: headers() }
-    );
-    const result = await handleResponse(response);
-    return result.data ?? result;
-  },
-  // ---------------- CERTIFICATES ----------------
-  getCertificates: async () => {
-    const response = await fetch(`${API_URL}/admin/certificates`, {
-      headers: headers()
-    });
-    const result = await handleResponse(response);
-    return result.data ?? result;
-  },
-  getEligibleStudents: async (search) => {
-    const query = search ? `?search=${encodeURIComponent(search)}` : "";
-    const response = await fetch(
-      `${API_URL}/admin/certificates/eligible-students${query}`,
-      { headers: headers() }
-    );
-    const result = await handleResponse(response);
-    return result.data ?? result;
-  },
-  generateCertificate: async (data) => {
-    const response = await fetch(`${API_URL}/admin/certificates/generate`, {
-      method: "POST",
-      headers: headers(),
-      body: JSON.stringify(data)
-    });
-    const result = await handleResponse(response);
-    return result.data ?? result;
-  },
-  batchGenerateCertificates: async (data) => {
-    const response = await fetch(`${API_URL}/admin/certificates/batch`, {
-      method: "POST",
-      headers: headers(),
-      body: JSON.stringify(data)
-    });
-    const result = await handleResponse(response);
-    return result.data ?? result;
-  },
-  // ---------------- REPORTS ----------------
-  getEnrollmentReport: async () => {
-    const response = await fetch(`${API_URL}/admin/reports/compliance`, {
-      headers: headers()
-    });
-    const result = await handleResponse(response);
-    return result.data ?? result;
-  },
-  getDeficiencyReport: async () => {
-    const response = await fetch(`${API_URL}/admin/reports/deficiency`, {
-      headers: headers()
-    });
-    const result = await handleResponse(response);
-    return result.data ?? result;
-  },
-  getAttendanceReport: async (params) => {
-    const query = new URLSearchParams();
-    Object.entries(params).forEach(([key, value]) => {
-      if (value) query.append(key, String(value));
-    });
-    const response = await fetch(
-      `${API_URL}/admin/reports/attendance?${query.toString()}`,
-      { headers: headers() }
-    );
-    const result = await handleResponse(response);
-    return result.data ?? result;
-  },
-  getAccomplishmentReport: async (params) => {
-    const query = new URLSearchParams();
-    if (params) {
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== void 0 && value !== null && value !== "") {
-          query.append(key, String(value));
-        }
-      });
-    }
-    const response = await fetch(
-      `${API_URL}/admin/reports/accomplishment?${query.toString()}`,
-      { headers: headers() }
-    );
-    const result = await handleResponse(response);
-    return result.data ?? result;
-  },
-  downloadAccomplishmentPDF: async (params) => {
-    const query = new URLSearchParams();
-    if (params) {
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== void 0 && value !== null && value !== "") {
-          query.append(key, String(value));
-        }
-      });
-    }
-    const response = await fetch(
-      `${API_URL}/admin/reports/accomplishment/pdf?${query.toString()}`,
-      {
-        method: "POST",
-        headers: { Authorization: `Bearer ${getToken$1()}` }
-      }
-    );
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
-      throw new Error(
-        error.message || `PDF generation failed (${response.status})`
-      );
-    }
-    return response.blob();
-  },
-  exportAccomplishmentCSV: async (params) => {
-    const query = new URLSearchParams();
-    if (params) {
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== void 0 && value !== null && value !== "") {
-          query.append(key, String(value));
-        }
-      });
-    }
-    const response = await fetch(
-      `${API_URL}/admin/reports/accomplishment/export?${query.toString()}`,
-      { headers: { Authorization: `Bearer ${getToken$1()}` } }
-    );
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
-      throw new Error(error.message || `Export failed (${response.status})`);
-    }
-    return response.blob();
-  },
-  // ---------------- ACADEMIC YEARS ----------------
-  getAcademicYears: async () => {
-    const response = await fetch(`${API_URL}/admin/academic-years`, {
-      headers: headers()
-    });
-    const result = await handleResponse(response);
-    return result.data ?? result;
-  },
-  createAcademicYear: async (data) => {
-    const result = await mutateWithQueue(
-      `${API_URL}/admin/academic-years`,
-      "POST",
-      {
-        body: data,
-        label: `Create academic year`,
-        tag: "academic-year-create"
-      }
-    );
-    return result.data ?? result;
-  },
-  updateAcademicYear: async (id, data) => {
-    const result = await mutateWithQueue(
-      `${API_URL}/admin/academic-years/${id}`,
-      "PUT",
-      {
-        body: data,
-        label: `Update academic year ${id}`,
-        tag: "academic-year-update"
-      }
-    );
-    return result.data ?? result;
-  },
-  deleteAcademicYear: async (id) => {
-    return mutateWithQueue(
-      `${API_URL}/admin/academic-years/${id}`,
-      "DELETE",
-      {
-        label: `Delete academic year ${id}`,
-        tag: "academic-year-delete"
-      }
-    );
-  },
-  getCurrentAcademicYear: async () => {
-    const response = await fetch(`${API_URL}/admin/academic-years/current`, {
-      headers: headers()
-    });
-    const result = await handleResponse(response);
-    return result.data ?? result;
-  },
-  // ---------------- BULLETIN ----------------
-  getBulletin: async () => {
-    const response = await fetch(`${API_URL}/bulletin?fresh=${Date.now()}`, {
-      cache: "no-store",
-      headers: headers()
-    });
-    const result = await handleResponse(response);
-    return result.data ?? result;
-  },
-  createBulletin: async (data) => {
-    const result = await mutateWithQueue(`${API_URL}/bulletin`, "POST", {
-      body: data,
-      label: `Create bulletin: ${data.title || ""}`,
-      tag: "bulletin-create"
-    });
-    return result.data ?? result;
-  },
-  updateBulletin: async (id, data) => {
-    const result = await mutateWithQueue(`${API_URL}/bulletin/${id}`, "PUT", {
-      body: data,
-      label: `Update bulletin ${id}`,
-      tag: "bulletin-update"
-    });
-    return result.data ?? result;
-  },
-  deleteBulletin: async (id) => {
-    return mutateWithQueue(`${API_URL}/bulletin/${id}`, "DELETE", {
-      label: `Delete bulletin ${id}`,
-      tag: "bulletin-delete"
-    });
-  },
-  // ---------------- SETTINGS ----------------
-  getSettings: async () => {
-    const response = await fetch(`${API_URL}/settings`, {
-      headers: headers()
-    });
-    return handleResponse(response);
-  },
-  updateSettings: async (data) => {
-    return mutateWithQueue(`${API_URL}/settings`, "PUT", {
-      body: data,
-      label: "Update settings",
-      tag: "settings-update"
-    });
-  },
-  // ---------------- GRADES ----------------
-  getGrades: async (params) => {
-    const query = new URLSearchParams();
-    if (params) {
-      Object.entries(params).forEach(([key, value]) => {
-        if (value !== void 0 && value !== null && value !== "") {
-          query.append(key, String(value));
-        }
-      });
-    }
-    const response = await fetch(`${API_URL}/admin/grades?${query.toString()}`, {
-      headers: headers()
-    });
-    const result = await handleResponse(response);
-    return result.data ?? result;
-  },
-  getGradeScale: async () => {
-    const response = await fetch(`${API_URL}/admin/grades/scale`, {
-      headers: headers()
-    });
-    const result = await handleResponse(response);
-    return result.data ?? result;
-  },
-  getGradeStats: async () => {
-    const response = await fetch(`${API_URL}/admin/grades/stats`, {
-      headers: headers()
-    });
-    const result = await handleResponse(response);
-    return result.data ?? result;
-  },
-  getStudentGrade: async (id) => {
-    const response = await fetch(`${API_URL}/admin/grades/${id}`, {
-      headers: headers()
-    });
-    const result = await handleResponse(response);
-    return result.data ?? result;
-  },
-  updateGrade: async (id, data) => {
-    const result = await mutateWithQueue(
-      `${API_URL}/admin/grades/${id}`,
-      "PUT",
-      {
-        body: data,
-        label: `Update grade for student ${id}`,
-        tag: "grade-update"
-      }
-    );
-    return result.data ?? result;
-  },
-  batchUpdateGrades: async (data) => {
-    const result = await mutateWithQueue(
-      `${API_URL}/admin/grades/batch`,
-      "POST",
-      {
-        body: data,
-        label: `Batch update ${data.student_ids.length} grades`,
-        tag: "grade-batch"
-      }
-    );
-    return result.data ?? result;
-  },
-  recalculateGrades: async (params) => {
-    const query = new URLSearchParams();
-    if (params?.component) query.append("component", params.component);
-    const result = await mutateWithQueue(
-      `${API_URL}/admin/grades/recalculate?${query.toString()}`,
-      "POST",
-      {
-        label: "Recalculate all grades",
-        tag: "grade-recalculate"
-      }
-    );
-    return result.data ?? result;
-  },
-  exportGrades: async (params) => {
-    const query = new URLSearchParams();
-    if (params?.component) query.append("component", params.component);
-    const response = await fetch(
-      `${API_URL}/admin/grades/export?${query.toString()}`,
-      { headers: { Authorization: `Bearer ${getToken$1()}` } }
-    );
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
-      throw new Error(error.message || `Export failed (${response.status})`);
-    }
-    return response.blob();
-  }
-};
-const ocrApi = {
-  saveOCR: async (data) => {
-    const result = await mutateWithQueue(`${API_URL}/documents/save-ocr`, "POST", {
-      body: data,
-      label: `Save OCR for document ${data.document_id}`,
-      tag: "ocr-save"
-    });
-    return result.data ?? result;
-  },
-  getOCRHistory: async (documentId) => {
-    const response = await fetch(
-      `${API_URL}/documents/${documentId}/ocr-history`,
-      { headers: headers() }
-    );
-    const result = await handleResponse(response);
-    return result.data ?? result;
-  },
-  downloadOCR: async (id) => {
-    const response = await fetch(`${API_URL}/ocr-texts/${id}/download`, {
-      headers: { Authorization: `Bearer ${getToken$1()}` }
-    });
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({}));
-      throw new Error(error.message || `Download failed (${response.status})`);
-    }
-    return response.blob();
-  },
-  deleteOCR: async (id) => {
-    return mutateWithQueue(`${API_URL}/ocr-texts/${id}`, "DELETE", {
-      label: `Delete OCR ${id}`,
-      tag: "ocr-delete"
-    });
-  },
-  getOCRStats: async () => {
-    const response = await fetch(`${API_URL}/ocr-stats`, {
-      headers: headers()
-    });
-    const result = await handleResponse(response);
-    return result.data ?? result;
-  }
-};
-const facultyApi = {
-  getClass: async (id) => {
-    const response = await fetch(`${API_URL}/faculty/class/${id}`, {
-      headers: headers()
-    });
-    const result = await handleResponse(response);
-    return result.data ?? result;
-  },
-  getClasses: async () => {
-    const response = await fetch(`${API_URL}/faculty/classes`, {
-      headers: headers()
-    });
-    const result = await handleResponse(response);
-    return result.data ?? result;
-  },
-  getClassStudents: async (id) => {
-    const response = await fetch(`${API_URL}/faculty/classes/${id}/students`, {
-      headers: headers()
-    });
-    const result = await handleResponse(response);
-    return result.data ?? result;
-  },
-  getDashboard: async () => {
-    const response = await fetch(`${API_URL}/faculty/dashboard`, {
-      headers: headers()
-    });
-    const result = await handleResponse(response);
-    return result.data ?? result;
-  },
-  getStudents: async (search) => {
-    const query = search ? `?search=${encodeURIComponent(search)}` : "";
-    const response = await fetch(`${API_URL}/faculty/students${query}`, {
-      headers: headers()
-    });
-    const result = await handleResponse(response);
-    return result.data ?? result;
-  },
-  createClass: async (data) => {
-    const result = await mutateWithQueue(`${API_URL}/faculty/classes`, "POST", {
-      body: data,
-      label: `Create class: ${data.name || ""}`,
-      tag: "faculty-class-create"
-    });
-    return result.data ?? result;
-  },
-  updateClass: async (id, data) => {
-    const result = await mutateWithQueue(
-      `${API_URL}/faculty/classes/${id}`,
-      "PUT",
-      {
-        body: data,
-        label: `Update class ${id}`,
-        tag: "faculty-class-update"
-      }
-    );
-    return result.data ?? result;
-  },
-  archiveClass: async (id) => {
-    const result = await mutateWithQueue(
-      `${API_URL}/faculty/classes/${id}/archive`,
-      "PATCH",
-      {
-        label: `Archive class ${id}`,
-        tag: "faculty-class-archive"
-      }
-    );
-    return result.data ?? result;
-  },
-  // NOTE: regenerateClassCode REMOVED — join_code concept deleted
-  getClassMaterials: async (classId) => {
-    const response = await fetch(
-      `${API_URL}/faculty/classes/${classId}/materials`,
-      { headers: headers() }
-    );
-    const result = await handleResponse(response);
-    return result.data ?? result;
-  },
-  uploadMaterial: async (classId, formData) => {
-    return mutateWithQueue(
-      `${API_URL}/faculty/classes/${classId}/materials`,
-      "POST",
-      {
-        formData,
-        label: `Upload material to class ${classId}`,
-        tag: "faculty-material-upload"
-      }
-    );
-  },
-  updateMaterial: async (id, data) => {
-    const result = await mutateWithQueue(
-      `${API_URL}/faculty/materials/${id}`,
-      "PUT",
-      {
-        body: data,
-        label: `Update material ${id}`,
-        tag: "faculty-material-update"
-      }
-    );
-    return result.data ?? result;
-  },
-  deleteMaterial: async (id) => {
-    return mutateWithQueue(`${API_URL}/faculty/materials/${id}`, "DELETE", {
-      label: `Delete material ${id}`,
-      tag: "faculty-material-delete"
-    });
-  },
-  getAnnouncements: async () => {
-    const response = await fetch(`${API_URL}/faculty/announcements`, {
-      headers: headers()
-    });
-    const result = await handleResponse(response);
-    return result.data ?? result;
-  },
-  createAnnouncement: async (data) => {
-    const result = await mutateWithQueue(
-      `${API_URL}/faculty/announcements`,
-      "POST",
-      {
-        body: data,
-        label: `Create announcement: ${data.title || ""}`,
-        tag: "faculty-announcement-create"
-      }
-    );
-    return result.data ?? result;
-  },
-  updateAnnouncement: async (id, data) => {
-    const result = await mutateWithQueue(
-      `${API_URL}/faculty/announcements/${id}`,
-      "PUT",
-      {
-        body: data,
-        label: `Update announcement ${id}`,
-        tag: "faculty-announcement-update"
-      }
-    );
-    return result.data ?? result;
-  },
-  deleteAnnouncement: async (id) => {
-    return mutateWithQueue(
-      `${API_URL}/faculty/announcements/${id}`,
-      "DELETE",
-      {
-        label: `Delete announcement ${id}`,
-        tag: "faculty-announcement-delete"
-      }
-    );
-  },
-  getAttendanceSessions: async () => {
-    const response = await fetch(`${API_URL}/attendance/sessions`, {
-      headers: headers()
-    });
-    const result = await handleResponse(response);
-    return result.data ?? result;
-  },
-  createAttendanceSession: async (data) => {
-    const result = await mutateWithQueue(
-      `${API_URL}/attendance/session`,
-      "POST",
-      {
-        body: data,
-        label: "Create attendance session",
-        tag: "faculty-attendance-create"
-      }
-    );
-    return result.data ?? result;
-  },
-  closeAttendanceSession: async (id) => {
-    return mutateWithQueue(
-      `${API_URL}/attendance/session/${id}/close`,
-      "PATCH",
-      {
-        label: `Close session ${id}`,
-        tag: "faculty-attendance-close"
-      }
-    );
-  },
-  getSessionLogs: async (sessionId) => {
-    const response = await fetch(
-      `${API_URL}/attendance/session/${sessionId}/logs`,
-      { headers: headers() }
-    );
-    const result = await handleResponse(response);
-    return result.data ?? result;
-  }
-};
-async function secureRequest(path, method = "GET", body, signal) {
-  const multipart = body instanceof FormData;
-  const response = await fetch(`${API_URL}${path}`, { method, signal, headers: { Accept: "application/json", ...!multipart ? { "Content-Type": "application/json" } : {}, Authorization: `Bearer ${getToken$1()}` }, body: body === void 0 ? void 0 : multipart ? body : JSON.stringify(body) });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    if (data.code === "PASSWORD_CHANGE_REQUIRED") window.location.assign("/change-temporary-password");
-    throw new Error(Object.values(data.errors ?? {}).flat().join(" ") || data.message || `Request failed (${response.status})`);
-  }
-  return data;
-}
 function DirectoryFilters({ course, section, onCourse, onSection }) {
   const query = useQuery({ queryKey: ["directory-options", getCurrentUserId()], queryFn: () => secureRequest("/directory/options"), staleTime: 0 });
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-wrap gap-3", children: [
@@ -14027,11 +14855,7 @@ function DirectoryFilters({ course, section, onCourse, onSection }) {
     query.error && /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "btn btn-secondary", onClick: () => query.refetch(), children: "Retry filters" })
   ] });
 }
-const localInput = (value) => {
-  if (!value) return "";
-  const d2 = new Date(value);
-  return new Date(d2.getTime() - d2.getTimezoneOffset() * 6e4).toISOString().slice(0, 16);
-};
+const localInput = phtInput;
 function ClassRecord({ classId }) {
   const [sessionPage, setSessionPage] = reactExports.useState(1);
   const params = useParams();
@@ -14050,7 +14874,7 @@ function ClassRecord({ classId }) {
     lock.current = true;
     setBusy(true);
     try {
-      await secureRequest(`/attendance/sessions/${sessionId}/manual`, "POST", { student_id: Number(student), status: mark, check_in_at: timeIn ? new Date(timeIn).toISOString() : null, check_out_at: timeOut ? new Date(timeOut).toISOString() : null, review_status: review, reason });
+      await secureRequest(`/attendance/sessions/${sessionId}/manual`, "POST", { student_id: Number(student), status: mark, check_in_at: timeIn ? phtInstant(timeIn) : null, check_out_at: timeOut ? phtInstant(timeOut) : null, review_status: review, reason });
       setMessage("Attendance saved. Audit history and credited hours updated.");
       setReason("");
       await query.refetch();
@@ -14062,9 +14886,9 @@ function ClassRecord({ classId }) {
     }
   }
   function csv() {
-    const rows = [["Student ID", "Name", "Course", "Section", "Time in", "Time out", "Status", "Review", "Hours"], ...logs.map((l2) => {
+    const rows = [["Student ID", "Name", "Course", "Section", "Time in (PHT)", "Time out (PHT)", "Status", "Review", "Hours"], ...logs.map((l2) => {
       const s2 = data.students.find((s22) => s22.id === l2.student_id);
-      return [s2.student_id, `${s2.user?.first_name ?? ""} ${s2.user?.last_name ?? ""}`, s2.course, s2.section, l2.check_in_at, l2.check_out_at, l2.attendance_mark || l2.status, l2.review_status, l2.credited_hours];
+      return [s2.student_id, `${s2.user?.first_name ?? ""} ${s2.user?.last_name ?? ""}`, s2.course, s2.section, phtTime(l2.check_in_at), phtTime(l2.check_out_at), l2.attendance_mark || l2.status, l2.review_status, l2.credited_hours];
     })];
     const content = rows.map((r) => r.map((v2) => '"' + String(v2 ?? "").replace(/^[=+@-]/, "'").replaceAll('"', '""') + '"').join(",")).join("\r\n");
     const url = URL.createObjectURL(new Blob([content], { type: "text/csv" }));
@@ -14096,7 +14920,9 @@ function ClassRecord({ classId }) {
             " · ",
             s2.description || s2.component,
             " · ",
-            s2.scheduled_start || s2.start_time,
+            phtTime(s2.scheduled_start || s2.start_time),
+            " → ",
+            phtTime(s2.scheduled_end || s2.end_time),
             " · ",
             s2.status
           ] }, s2.id))
@@ -14112,6 +14938,9 @@ function ClassRecord({ classId }) {
           setSessionPage((p2) => p2 + 1);
         }, children: "Older sessions" })
       ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx(SessionEditor, { session: current, onSaved: () => {
+        void query.refetch();
+      } }, sessionId),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-2", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-secondary", onClick: () => query.refetch(), children: "Refresh" }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-secondary", onClick: csv, disabled: !current, children: "Export filtered CSV" })
@@ -14120,8 +14949,8 @@ function ClassRecord({ classId }) {
         /* @__PURE__ */ jsxRuntimeExports.jsx("thead", { children: /* @__PURE__ */ jsxRuntimeExports.jsxs("tr", { children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Student" }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Course / section" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Time-in" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Time-out" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Time-in · PHT" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Time-out · PHT" }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Status / review" }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Hours" }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Action" })
@@ -14141,14 +14970,26 @@ function ClassRecord({ classId }) {
               " / ",
               s2?.section
             ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: l2.check_in_at ? new Date(l2.check_in_at).toLocaleString() : "—" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: l2.check_out_at ? new Date(l2.check_out_at).toLocaleString() : "—" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("td", { children: [
+              l2.check_in_at ? phtTime(l2.check_in_at) : "—",
+              l2.time_in_received_at && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-xs text-slate-500", children: [
+                "Received: ",
+                phtTime(l2.time_in_received_at)
+              ] })
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("td", { children: [
+              l2.check_out_at ? phtTime(l2.check_out_at) : "—",
+              l2.time_out_received_at && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-xs text-slate-500", children: [
+                "Received: ",
+                phtTime(l2.time_out_received_at)
+              ] })
+            ] }),
             /* @__PURE__ */ jsxRuntimeExports.jsxs("td", { children: [
               l2.attendance_mark || l2.status,
               " · ",
-              l2.review_status === "pending" ? "After session—pending approval" : l2.review_status
+              l2.review_status === "pending" ? "Pending faculty review" : l2.review_status
             ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: l2.credited_hours }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: l2.check_in_at && !l2.check_out_at ? "Waiting for time-out" : l2.credited_hours }),
             /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "btn btn-sm", onClick: () => {
               setStudent(String(l2.student_id));
               setMark(l2.attendance_mark || l2.status);
@@ -14268,237 +15109,6 @@ function ChangeTemporaryPassword() {
     }, children: "Sign out" })
   ] }) });
 }
-let e = { data: "" }, t = (t2) => {
-  if ("object" == typeof window) {
-    let e2 = (t2 ? t2.querySelector("#_goober") : window._goober) || Object.assign(document.createElement("style"), { innerHTML: " ", id: "_goober" });
-    return e2.nonce = window.__nonce__, e2.parentNode || (t2 || document.head).appendChild(e2), e2.firstChild;
-  }
-  return t2 || e;
-}, a = /(?:([\u0080-\uFFFF\w-%@]+) *:? *([^{;]+?);|([^;}{]*?) *{)|(}\s*)/g, l = /\/\*[^]*?\*\/|  +/g, n$1 = /\n+/g, o = (e2, t2) => {
-  let r = "", a2 = "", l2 = "";
-  for (let n2 in e2) {
-    let c2 = e2[n2];
-    "@" == n2[0] ? "i" == n2[1] ? r = n2 + " " + c2 + ";" : a2 += "f" == n2[1] ? o(c2, n2) : n2 + "{" + o(c2, "k" == n2[1] ? "" : t2) + "}" : "object" == typeof c2 ? a2 += o(c2, t2 ? t2.replace(/([^,])+/g, (e3) => n2.replace(/([^,]*:\S+\([^)]*\))|([^,])+/g, (t3) => /&/.test(t3) ? t3.replace(/&/g, e3) : e3 ? e3 + " " + t3 : t3)) : n2) : null != c2 && (n2 = "-" == n2[1] ? n2 : n2.replace(/[A-Z]/g, "-$&").toLowerCase(), l2 += o.p ? o.p(n2, c2) : n2 + ":" + c2 + ";");
-  }
-  return r + (t2 && l2 ? t2 + "{" + l2 + "}" : l2) + a2;
-}, c = {}, i = (e2) => {
-  if ("object" == typeof e2) {
-    let t2 = "";
-    for (let r in e2) t2 += r + i(e2[r]);
-    return t2;
-  }
-  return e2;
-}, s = (e2, t2, r, s2, p2) => {
-  let u2 = i(e2), d2 = c[u2] || (c[u2] = ((e3) => {
-    let t3 = 0, r2 = 11;
-    for (; t3 < e3.length; ) r2 = 101 * r2 + e3.charCodeAt(t3++) >>> 0;
-    return "go" + r2;
-  })(u2));
-  if (!c[d2]) {
-    let t3 = u2 !== e2 ? e2 : ((e3) => {
-      let t4, r2, o2 = [{}];
-      for (; t4 = a.exec(e3.replace(l, "")); ) t4[4] ? o2.shift() : t4[3] ? (r2 = t4[3].replace(n$1, " ").trim(), o2.unshift(o2[0][r2] = o2[0][r2] || {})) : o2[0][t4[1]] = t4[2].replace(n$1, " ").trim();
-      return o2[0];
-    })(e2);
-    c[d2] = o(p2 ? { ["@keyframes " + d2]: t3 } : t3, r ? "" : "." + d2);
-  }
-  let f2 = r && c.g;
-  return r && (c.g = c[d2]), ((e3, t3, r2, a2) => {
-    a2 ? t3.data = t3.data.replace(a2, e3) : -1 === t3.data.indexOf(e3) && (t3.data = r2 ? e3 + t3.data : t3.data + e3);
-  })(c[d2], t2, s2, f2), d2;
-}, p = (e2, t2, r) => e2.reduce((e3, a2, l2) => {
-  let n2 = t2[l2];
-  if (n2 && n2.call) {
-    let e4 = n2(r), t3 = e4 && e4.props && e4.props.className || /^go/.test(e4) && e4;
-    n2 = t3 ? "." + t3 : e4 && "object" == typeof e4 ? e4.props ? "" : o(e4, "") : false === e4 ? "" : e4;
-  }
-  return e3 + a2 + (null == n2 ? "" : n2);
-}, "");
-function u(e2) {
-  let r = this || {}, a2 = e2.call ? e2(r.p) : e2;
-  return s(a2.unshift ? a2.raw ? p(a2, [].slice.call(arguments, 1), r.p) : a2.reduce((e3, t2) => Object.assign(e3, t2 && t2.call ? t2(r.p) : t2), {}) : a2, t(r.target), r.g, r.o, r.k);
-}
-let d, f$2, g;
-u.bind({ g: 1 });
-let h$1 = u.bind({ k: 1 });
-function m(e2, t2, r, a2) {
-  o.p = t2, d = e2, f$2 = r, g = a2;
-}
-function w$1(e2, t2) {
-  let r = this || {};
-  return function() {
-    let a2 = arguments;
-    function l2(n2, o2) {
-      let c2 = Object.assign({}, n2), i2 = c2.className || l2.className;
-      r.p = Object.assign({ theme: f$2 && f$2() }, c2), r.o = /go\d/.test(i2), c2.className = u.apply(r, a2) + (i2 ? " " + i2 : "");
-      let s2 = e2;
-      return e2[0] && (s2 = c2.as || e2, delete c2.as), g && s2[0] && g(c2), d(s2, c2);
-    }
-    return l2;
-  };
-}
-var Z$1 = (e2) => typeof e2 == "function", h = (e2, t2) => Z$1(e2) ? e2(t2) : e2;
-var W$1 = /* @__PURE__ */ (() => {
-  let e2 = 0;
-  return () => (++e2).toString();
-})(), E = /* @__PURE__ */ (() => {
-  let e2;
-  return () => {
-    if (e2 === void 0 && typeof window < "u") {
-      let t2 = matchMedia("(prefers-reduced-motion: reduce)");
-      e2 = !t2 || t2.matches;
-    }
-    return e2;
-  };
-})();
-var re = 20, k = "default";
-var H$1 = (e2, t2) => {
-  let { toastLimit: o2 } = e2.settings;
-  switch (t2.type) {
-    case 0:
-      return { ...e2, toasts: [t2.toast, ...e2.toasts].slice(0, o2) };
-    case 1:
-      return { ...e2, toasts: e2.toasts.map((r) => r.id === t2.toast.id ? { ...r, ...t2.toast } : r) };
-    case 2:
-      let { toast: s2 } = t2;
-      return H$1(e2, { type: e2.toasts.find((r) => r.id === s2.id) ? 1 : 0, toast: s2 });
-    case 3:
-      let { toastId: a2 } = t2;
-      return { ...e2, toasts: e2.toasts.map((r) => r.id === a2 || a2 === void 0 ? { ...r, dismissed: true, visible: false } : r) };
-    case 4:
-      return t2.toastId === void 0 ? { ...e2, toasts: [] } : { ...e2, toasts: e2.toasts.filter((r) => r.id !== t2.toastId) };
-    case 5:
-      return { ...e2, pausedAt: t2.time };
-    case 6:
-      let i2 = t2.time - (e2.pausedAt || 0);
-      return { ...e2, pausedAt: void 0, toasts: e2.toasts.map((r) => ({ ...r, pauseDuration: r.pauseDuration + i2 })) };
-  }
-}, v = [], j$1 = { toasts: [], pausedAt: void 0, settings: { toastLimit: re } }, f$1 = {}, Y = (e2, t2 = k) => {
-  f$1[t2] = H$1(f$1[t2] || j$1, e2), v.forEach(([o2, s2]) => {
-    o2 === t2 && s2(f$1[t2]);
-  });
-}, _ = (e2) => Object.keys(f$1).forEach((t2) => Y(e2, t2)), Q$1 = (e2) => Object.keys(f$1).find((t2) => f$1[t2].toasts.some((o2) => o2.id === e2)), S = (e2 = k) => (t2) => {
-  Y(t2, e2);
-}, se = { blank: 4e3, error: 4e3, success: 2e3, loading: 1 / 0, custom: 4e3 }, V$1 = (e2 = {}, t2 = k) => {
-  let [o2, s2] = reactExports.useState(f$1[t2] || j$1), a2 = reactExports.useRef(f$1[t2]);
-  reactExports.useEffect(() => (a2.current !== f$1[t2] && s2(f$1[t2]), v.push([t2, s2]), () => {
-    let r = v.findIndex(([l2]) => l2 === t2);
-    r > -1 && v.splice(r, 1);
-  }), [t2]);
-  let i2 = o2.toasts.map((r) => {
-    var l2, g2, T;
-    return { ...e2, ...e2[r.type], ...r, removeDelay: r.removeDelay || ((l2 = e2[r.type]) == null ? void 0 : l2.removeDelay) || (e2 == null ? void 0 : e2.removeDelay), duration: r.duration || ((g2 = e2[r.type]) == null ? void 0 : g2.duration) || (e2 == null ? void 0 : e2.duration) || se[r.type], style: { ...e2.style, ...(T = e2[r.type]) == null ? void 0 : T.style, ...r.style } };
-  });
-  return { ...o2, toasts: i2 };
-};
-var ie = (e2, t2 = "blank", o2) => ({ createdAt: Date.now(), visible: true, dismissed: false, type: t2, ariaProps: { role: "status", "aria-live": "polite" }, message: e2, pauseDuration: 0, ...o2, id: (o2 == null ? void 0 : o2.id) || W$1() }), P$1 = (e2) => (t2, o2) => {
-  let s2 = ie(t2, e2, o2);
-  return S(s2.toasterId || Q$1(s2.id))({ type: 2, toast: s2 }), s2.id;
-}, n = (e2, t2) => P$1("blank")(e2, t2);
-n.error = P$1("error");
-n.success = P$1("success");
-n.loading = P$1("loading");
-n.custom = P$1("custom");
-n.dismiss = (e2, t2) => {
-  let o2 = { type: 3, toastId: e2 };
-  t2 ? S(t2)(o2) : _(o2);
-};
-n.dismissAll = (e2) => n.dismiss(void 0, e2);
-n.remove = (e2, t2) => {
-  let o2 = { type: 4, toastId: e2 };
-  t2 ? S(t2)(o2) : _(o2);
-};
-n.removeAll = (e2) => n.remove(void 0, e2);
-n.promise = (e2, t2, o2) => {
-  let s2 = n.loading(t2.loading, { ...o2, ...o2 == null ? void 0 : o2.loading });
-  return typeof e2 == "function" && (e2 = e2()), e2.then((a2) => {
-    let i2 = t2.success ? h(t2.success, a2) : void 0;
-    return i2 ? n.success(i2, { id: s2, ...o2, ...o2 == null ? void 0 : o2.success }) : n.dismiss(s2), a2;
-  }).catch((a2) => {
-    let i2 = t2.error ? h(t2.error, a2) : void 0;
-    i2 ? n.error(i2, { id: s2, ...o2, ...o2 == null ? void 0 : o2.error }) : n.dismiss(s2);
-  }), e2;
-};
-var ce = 1e3, w = (e2, t2 = "default") => {
-  let { toasts: o2, pausedAt: s2 } = V$1(e2, t2), a2 = reactExports.useRef(/* @__PURE__ */ new Map()).current, i2 = reactExports.useCallback((c2, m2 = ce) => {
-    if (a2.has(c2)) return;
-    let p2 = setTimeout(() => {
-      a2.delete(c2), r({ type: 4, toastId: c2 });
-    }, m2);
-    a2.set(c2, p2);
-  }, []);
-  reactExports.useEffect(() => {
-    if (s2) return;
-    let c2 = Date.now(), m2 = o2.map((p2) => {
-      if (p2.duration === 1 / 0) return;
-      let R = (p2.duration || 0) + p2.pauseDuration - (c2 - p2.createdAt);
-      if (R < 0) {
-        p2.visible && n.dismiss(p2.id);
-        return;
-      }
-      return setTimeout(() => n.dismiss(p2.id, t2), R);
-    });
-    return () => {
-      m2.forEach((p2) => p2 && clearTimeout(p2));
-    };
-  }, [o2, s2, t2]);
-  let r = reactExports.useCallback(S(t2), [t2]), l2 = reactExports.useCallback(() => {
-    r({ type: 5, time: Date.now() });
-  }, [r]), g2 = reactExports.useCallback((c2, m2) => {
-    r({ type: 1, toast: { id: c2, height: m2 } });
-  }, [r]), T = reactExports.useCallback(() => {
-    s2 && r({ type: 6, time: Date.now() });
-  }, [s2, r]), d2 = reactExports.useCallback((c2, m2) => {
-    let { reverseOrder: p2 = false, gutter: R = 8, defaultPosition: z2 } = m2 || {}, O2 = o2.filter((u2) => (u2.position || z2) === (c2.position || z2) && u2.height), K2 = O2.findIndex((u2) => u2.id === c2.id), B = O2.filter((u2, I) => I < K2 && u2.visible).length;
-    return O2.filter((u2) => u2.visible).slice(...p2 ? [B + 1] : [0, B]).reduce((u2, I) => u2 + (I.height || 0) + R, 0);
-  }, [o2]);
-  return reactExports.useEffect(() => {
-    o2.forEach((c2) => {
-      if (c2.dismissed) i2(c2.id, c2.removeDelay);
-      else {
-        let m2 = a2.get(c2.id);
-        m2 && (clearTimeout(m2), a2.delete(c2.id));
-      }
-    });
-  }, [o2, i2]), { toasts: o2, handlers: { updateHeight: g2, startPause: l2, endPause: T, calculateOffset: d2 } };
-};
-var de = h$1` from { transform: scale(0) rotate(45deg); opacity: 0; } to { transform: scale(1) rotate(45deg); opacity: 1; }`, me = h$1` from { transform: scale(0); opacity: 0; } to { transform: scale(1); opacity: 1; }`, le = h$1` from { transform: scale(0) rotate(90deg); opacity: 0; } to { transform: scale(1) rotate(90deg); opacity: 1; }`, C = w$1("div")` width: 20px; opacity: 0; height: 20px; border-radius: 10px; background: ${(e2) => e2.primary || "#ff4b4b"}; position: relative; transform: rotate(45deg); animation: ${de} 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; animation-delay: 100ms; &:after, &:before { content: ''; animation: ${me} 0.15s ease-out forwards; animation-delay: 150ms; position: absolute; border-radius: 3px; opacity: 0; background: ${(e2) => e2.secondary || "#fff"}; bottom: 9px; left: 4px; height: 2px; width: 12px; } &:before { animation: ${le} 0.15s ease-out forwards; animation-delay: 180ms; transform: rotate(90deg); } `;
-var Te = h$1` from { transform: rotate(0deg); } to { transform: rotate(360deg); } `, F = w$1("div")` width: 12px; height: 12px; box-sizing: border-box; border: 2px solid; border-radius: 100%; border-color: ${(e2) => e2.secondary || "#e0e0e0"}; border-right-color: ${(e2) => e2.primary || "#616161"}; animation: ${Te} 1s linear infinite; `;
-var ge = h$1` from { transform: scale(0) rotate(45deg); opacity: 0; } to { transform: scale(1) rotate(45deg); opacity: 1; }`, he = h$1` 0% { height: 0; width: 0; opacity: 0; } 40% { height: 0; width: 6px; opacity: 1; } 100% { opacity: 1; height: 10px; }`, L$2 = w$1("div")` width: 20px; opacity: 0; height: 20px; border-radius: 10px; background: ${(e2) => e2.primary || "#61d345"}; position: relative; transform: rotate(45deg); animation: ${ge} 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; animation-delay: 100ms; &:after { content: ''; box-sizing: border-box; animation: ${he} 0.2s ease-out forwards; opacity: 0; animation-delay: 200ms; position: absolute; border-right: 2px solid; border-bottom: 2px solid; border-color: ${(e2) => e2.secondary || "#fff"}; bottom: 6px; left: 6px; height: 10px; width: 6px; } `;
-var be = w$1("div")` position: absolute; `, Se = w$1("div")` position: relative; display: flex; justify-content: center; align-items: center; min-width: 20px; min-height: 20px; `, Ae = h$1` from { transform: scale(0.6); opacity: 0.4; } to { transform: scale(1); opacity: 1; }`, Pe = w$1("div")` position: relative; transform: scale(0.6); opacity: 0.4; min-width: 20px; animation: ${Ae} 0.3s 0.12s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; `, $$1 = ({ toast: e2 }) => {
-  let { icon: t2, type: o2, iconTheme: s2 } = e2;
-  return t2 !== void 0 ? typeof t2 == "string" ? reactExports.createElement(Pe, null, t2) : t2 : o2 === "blank" ? null : reactExports.createElement(Se, null, reactExports.createElement(F, { ...s2 }), o2 !== "loading" && reactExports.createElement(be, null, o2 === "error" ? reactExports.createElement(C, { ...s2 }) : reactExports.createElement(L$2, { ...s2 })));
-};
-var Re = (e2) => ` 0% {transform: translate3d(0,${e2 * -200}%,0) scale(.6); opacity:.5;} 100% {transform: translate3d(0,0,0) scale(1); opacity:1;} `, Ee = (e2) => ` 0% {transform: translate3d(0,0,-1px) scale(1); opacity:1;} 100% {transform: translate3d(0,${e2 * -150}%,-1px) scale(.6); opacity:0;} `, ve = "0%{opacity:0;} 100%{opacity:1;}", De = "0%{opacity:1;} 100%{opacity:0;}", Oe = w$1("div")` :where(&) { display: flex; align-items: center; background: #fff; color: #363636; line-height: 1.3; will-change: transform; box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1), 0 3px 3px rgba(0, 0, 0, 0.05); max-width: 350px; pointer-events: auto; padding: 8px 10px; border-radius: 8px; } `, Ie = w$1("div")` display: flex; justify-content: center; margin: 4px 10px; color: inherit; flex: 1 1 auto; white-space: pre-line; `, ke = (e2, t2) => {
-  let s2 = e2.includes("top") ? 1 : -1, [a2, i2] = E() ? [ve, De] : [Re(s2), Ee(s2)];
-  return { animation: t2 ? `${h$1(a2)} 0.35s cubic-bezier(.21,1.02,.73,1) forwards` : `${h$1(i2)} 0.4s forwards cubic-bezier(.06,.71,.55,1)` };
-}, N = reactExports.memo(({ toast: e2, position: t2, style: o2, children: s2 }) => {
-  let a2 = e2.height ? ke(e2.position || t2 || "top-center", e2.visible) : { opacity: 0 }, i2 = reactExports.createElement($$1, { toast: e2 }), r = reactExports.createElement(Ie, { ...e2.ariaProps }, h(e2.message, e2));
-  return reactExports.createElement(Oe, { className: e2.className, style: { ...a2, ...o2, ...e2.style } }, typeof s2 == "function" ? s2({ icon: i2, message: r }) : reactExports.createElement(reactExports.Fragment, null, i2, r));
-});
-m(reactExports.createElement);
-var we = ({ id: e2, className: t2, style: o2, onHeightUpdate: s2, children: a2 }) => {
-  let i2 = reactExports.useCallback((r) => {
-    if (r) {
-      let l2 = () => {
-        let g2 = r.getBoundingClientRect().height;
-        s2(e2, g2);
-      };
-      l2(), new MutationObserver(l2).observe(r, { subtree: true, childList: true, characterData: true });
-    }
-  }, [e2, s2]);
-  return reactExports.createElement("div", { ref: i2, className: t2, style: o2 }, a2);
-}, Me = (e2, t2) => {
-  let o2 = e2.includes("top"), s2 = o2 ? { top: 0 } : { bottom: 0 }, a2 = e2.includes("center") ? { justifyContent: "center" } : e2.includes("right") ? { justifyContent: "flex-end" } : {};
-  return { left: 0, right: 0, display: "flex", position: "absolute", transition: E() ? void 0 : "all 230ms cubic-bezier(.21,1.02,.73,1)", transform: `translateY(${t2 * (o2 ? 1 : -1)}px)`, ...s2, ...a2 };
-}, Ce = u` z-index: 9999; > * { pointer-events: auto; } `, D = 16, Fe = ({ reverseOrder: e2, position: t2 = "top-center", toastOptions: o2, gutter: s2, children: a2, toasterId: i2, containerStyle: r, containerClassName: l2 }) => {
-  let { toasts: g2, handlers: T } = w(o2, i2);
-  return reactExports.createElement("div", { "data-rht-toaster": i2 || "", style: { position: "fixed", zIndex: 9999, top: D, left: D, right: D, bottom: D, pointerEvents: "none", ...r }, className: l2, onMouseEnter: T.startPause, onMouseLeave: T.endPause }, g2.map((d2) => {
-    let c2 = d2.position || t2, m2 = T.calculateOffset(d2, { reverseOrder: e2, gutter: s2, defaultPosition: t2 }), p2 = Me(c2, m2);
-    return reactExports.createElement(we, { id: d2.id, key: d2.id, onHeightUpdate: T.updateHeight, className: d2.visible ? Ce : "", style: p2 }, d2.type === "custom" ? h(d2.message, d2) : a2 ? a2(d2) : reactExports.createElement(N, { toast: d2, position: c2 }));
-  }));
-};
-var zt = n;
 const RefreshButton = ({
   onRefresh,
   isLoading = false,
@@ -17952,531 +18562,6 @@ const FacultyClasses = () => {
     )
   ] });
 };
-const LocationPicker = ({
-  latitude,
-  longitude,
-  onLocationSelect,
-  venueName,
-  radius = 100,
-  onRadiusChange,
-  showRadiusCircle = true
-}) => {
-  const [searchQuery, setSearchQuery] = reactExports.useState("");
-  const [searching, setSearching] = reactExports.useState(false);
-  const [searchResults, setSearchResults] = reactExports.useState([]);
-  const [position, setPosition] = reactExports.useState(
-    latitude !== null && longitude !== null ? [latitude, longitude] : null
-  );
-  const [mapLoaded, setMapLoaded] = reactExports.useState(false);
-  const [mapError, setMapError] = reactExports.useState(null);
-  const [showSearchResults, setShowSearchResults] = reactExports.useState(false);
-  const searchRef = reactExports.useRef(null);
-  const mapContainerRef = reactExports.useRef(null);
-  const mapRef = reactExports.useRef(null);
-  const markerRef = reactExports.useRef(null);
-  const circleRef = reactExports.useRef(null);
-  const leafletRef = reactExports.useRef(null);
-  const isConfirmed = position !== null && latitude !== null && longitude !== null && Math.abs(position[0] - latitude) < 1e-7 && Math.abs(position[1] - longitude) < 1e-7;
-  reactExports.useEffect(() => {
-    let cancelled = false;
-    const initMap = async () => {
-      if (!mapContainerRef.current) return;
-      if (mapRef.current) return;
-      try {
-        const L2 = (await __vitePreload(async () => {
-          const { default: __vite_default__ } = await Promise.resolve().then(() => leafletSrc);
-          return { default: __vite_default__ };
-        }, true ? void 0 : void 0)).default;
-        delete L2.Icon.Default.prototype._getIconUrl;
-        L2.Icon.Default.mergeOptions({
-          iconUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png",
-          iconRetinaUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png",
-          shadowUrl: "https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png"
-        });
-        leafletRef.current = L2;
-        if (mapContainerRef.current._leaflet_id) {
-          mapContainerRef.current._leaflet_id = null;
-        }
-        const map = L2.map(mapContainerRef.current, {
-          center: [8.521826076323629, 124.57249491758405],
-          zoom: 17,
-          zoomControl: false,
-          maxZoom: 19,
-          minZoom: 12
-        });
-        if (cancelled) {
-          map.remove();
-          return;
-        }
-        L2.tileLayer(
-          "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-          {
-            attribution: '&copy; <a href="https://www.esri.com/">Esri</a>',
-            maxZoom: 19,
-            minZoom: 12
-          }
-        ).addTo(map);
-        L2.control.zoom({ position: "topright" }).addTo(map);
-        map.on("click", (e2) => {
-          const { lat, lng } = e2.latlng;
-          setPosition([lat, lng]);
-          updateMarker(L2, lat, lng);
-        });
-        if (position) {
-          updateMarker(L2, position[0], position[1]);
-        }
-        mapRef.current = map;
-        setTimeout(() => {
-          if (cancelled) return;
-          map.invalidateSize();
-          setMapLoaded(true);
-        }, 200);
-      } catch (err) {
-        console.error("Leaflet init error:", err);
-        if (!cancelled) {
-          setMapError(err?.message || "Failed to load map");
-          zt.error("Failed to load map. Check console for details.");
-        }
-      }
-    };
-    initMap();
-    return () => {
-      cancelled = true;
-      if (circleRef.current) {
-        try {
-          circleRef.current.remove();
-        } catch {
-        }
-        circleRef.current = null;
-      }
-      if (mapRef.current) {
-        try {
-          mapRef.current.remove();
-        } catch {
-        }
-        mapRef.current = null;
-      }
-      markerRef.current = null;
-      if (mapContainerRef.current) {
-        mapContainerRef.current._leaflet_id = null;
-      }
-    };
-  }, []);
-  reactExports.useEffect(() => {
-    if (!mapRef.current || !leafletRef.current) return;
-    if (latitude !== null && longitude !== null) {
-      updateMarker(leafletRef.current, latitude, longitude, true);
-      setPosition([latitude, longitude]);
-    }
-  }, [latitude, longitude]);
-  reactExports.useEffect(() => {
-    if (!mapRef.current || !leafletRef.current) return;
-    const L2 = leafletRef.current;
-    if (circleRef.current) {
-      circleRef.current.remove();
-      circleRef.current = null;
-    }
-    if (!showRadiusCircle) return;
-    if (!position || !radius || radius <= 0) return;
-    const circle = L2.circle(position, {
-      radius: Number(radius),
-      color: "#D4AF37",
-      fillColor: "#D4AF37",
-      fillOpacity: 0.12,
-      weight: 2,
-      dashArray: "6, 4"
-    }).addTo(mapRef.current);
-    circle.bindPopup(
-      `<div style="text-align:center">
-         <strong>Geofence Boundary</strong><br/>
-         <span style="font-size:11px;color:#666">Radius: ${radius}m</span>
-       </div>`
-    );
-    circleRef.current = circle;
-  }, [position, radius, showRadiusCircle]);
-  const updateMarker = (L2, lat, lng, panTo = false) => {
-    if (!mapRef.current) return;
-    if (markerRef.current) {
-      markerRef.current.setLatLng([lat, lng]);
-    } else {
-      const marker = L2.marker([lat, lng], { draggable: true }).addTo(
-        mapRef.current
-      );
-      marker.bindPopup(`
-        <div style="text-align:center">
-          <strong>${venueName || "Selected Location"}</strong><br/>
-          <span style="font-size:11px;color:#666">
-            ${lat.toFixed(6)}, ${lng.toFixed(6)}
-          </span>
-        </div>
-      `);
-      marker.on("dragend", (e2) => {
-        const pos = e2.target.getLatLng();
-        setPosition([pos.lat, pos.lng]);
-      });
-      markerRef.current = marker;
-    }
-    if (circleRef.current) {
-      circleRef.current.setLatLng([lat, lng]);
-    }
-    if (panTo) {
-      mapRef.current.setView([lat, lng], 17);
-    }
-  };
-  const searchLocation = async (query) => {
-    if (!query.trim()) {
-      setSearchResults([]);
-      setShowSearchResults(false);
-      return;
-    }
-    setSearching(true);
-    setShowSearchResults(true);
-    try {
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(
-          query
-        )}&limit=5&countrycodes=ph`
-      );
-      const data = await response.json();
-      setSearchResults(data);
-    } catch (error) {
-      console.error("Search error:", error);
-      zt.error("Failed to search location");
-    } finally {
-      setSearching(false);
-    }
-  };
-  const selectSearchResult = (result) => {
-    const lat = parseFloat(result.lat);
-    const lng = parseFloat(result.lon);
-    setPosition([lat, lng]);
-    setSearchResults([]);
-    setShowSearchResults(false);
-    setSearchQuery(result.display_name.split(",")[0]);
-    if (mapRef.current && leafletRef.current) {
-      updateMarker(leafletRef.current, lat, lng, true);
-    }
-    zt(
-      `Previewing ${result.display_name.split(",")[0]}. Click "Confirm Location" to use it.`,
-      { icon: "👁️" }
-    );
-  };
-  const getCurrentLocation = () => {
-    if (!navigator.geolocation) {
-      zt.error("Geolocation is not supported by your browser");
-      return;
-    }
-    zt.loading("Getting your location...");
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const { latitude: lat, longitude: lng } = pos.coords;
-        setPosition([lat, lng]);
-        if (mapRef.current && leafletRef.current) {
-          updateMarker(leafletRef.current, lat, lng, true);
-        }
-        zt.dismiss();
-        zt(`Previewing your location. Click "Confirm Location" to use it.`, {
-          icon: "👁️"
-        });
-      },
-      (error) => {
-        console.error(error);
-        zt.dismiss();
-        zt.error("Unable to get your location. Please try searching.");
-      },
-      { enableHighAccuracy: true }
-    );
-  };
-  reactExports.useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (searchRef.current && !searchRef.current.contains(event.target)) {
-        setShowSearchResults(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-  const quickVenues = [
-    {
-      label: "📍 OCC Main Campus",
-      lat: 8.52182,
-      lng: 124.57244
-    },
-    { label: "🏟️ OCC Gymnasium", lat: 8.5215, lng: 124.572294 },
-    { label: "🏟️ Taboc Opol Gymnasium", lat: 8.518316, lng: 124.576157 },
-    { label: "🏟️ Opol Boardwalk", lat: 8.521507, lng: 124.575593 }
-  ];
-  const previewQuickVenue = (venue) => {
-    if (mapRef.current && leafletRef.current) {
-      mapRef.current.setView([venue.lat, venue.lng], 18);
-      updateMarker(leafletRef.current, venue.lat, venue.lng);
-    }
-    setPosition([venue.lat, venue.lng]);
-    zt(`Previewing ${venue.label}. Click "Confirm Location" to use it.`, {
-      icon: "👁️"
-    });
-  };
-  const confirmCurrentPosition = () => {
-    if (position) {
-      onLocationSelect(position[0], position[1]);
-      zt.success("Location confirmed!");
-    } else {
-      zt.error("Click on the map first to pick a location");
-    }
-  };
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-3", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col sm:flex-row gap-2", ref: searchRef, children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex-1 relative", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx(
-          "input",
-          {
-            type: "text",
-            className: "input pr-10",
-            placeholder: "Search for a location in Opol, Misamis Oriental...",
-            value: searchQuery,
-            onChange: (e2) => {
-              setSearchQuery(e2.target.value);
-              if (e2.target.value.length > 2) {
-                searchLocation(e2.target.value);
-              } else {
-                setSearchResults([]);
-                setShowSearchResults(false);
-              }
-            },
-            onKeyDown: (e2) => {
-              if (e2.key === "Enter") {
-                e2.preventDefault();
-                searchLocation(searchQuery);
-              }
-            }
-          }
-        ),
-        /* @__PURE__ */ jsxRuntimeExports.jsx(
-          "button",
-          {
-            type: "button",
-            className: "absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600",
-            onClick: () => searchLocation(searchQuery),
-            disabled: searching,
-            children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-              "i",
-              {
-                className: `fas ${searching ? "fa-spinner fa-spin" : "fa-search"}`
-              }
-            )
-          }
-        )
-      ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs(
-        "button",
-        {
-          type: "button",
-          className: "btn btn-secondary btn-sm whitespace-nowrap",
-          onClick: getCurrentLocation,
-          children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-location-dot mr-1" }),
-            "Use My Location"
-          ]
-        }
-      )
-    ] }),
-    showSearchResults && searchResults.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "bg-white border border-slate-200 rounded-lg shadow-lg max-h-60 overflow-y-auto z-10 relative", children: searchResults.map((result, index) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
-      "button",
-      {
-        type: "button",
-        className: "w-full text-left px-4 py-2 hover:bg-slate-50 border-b border-slate-100 last:border-0 transition-colors flex items-start gap-2",
-        onClick: () => selectSearchResult(result),
-        children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-map-pin text-gold-500 mt-1" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-sm font-medium text-navy-900", children: result.display_name.split(",")[0] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "text-xs text-slate-500", children: result.display_name.split(",").slice(1).join(",").trim() })
-          ] })
-        ]
-      },
-      index
-    )) }),
-    onRadiusChange && showRadiusCircle && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-3 px-1", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "text-xs font-medium text-slate-600 whitespace-nowrap", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-circle-notch text-gold-500 mr-1" }),
-        "Geofence"
-      ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(
-        "input",
-        {
-          type: "range",
-          min: 10,
-          max: 500,
-          step: 10,
-          value: radius,
-          onChange: (e2) => onRadiusChange(parseInt(e2.target.value)),
-          className: "flex-1 accent-gold-500"
-        }
-      ),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-xs font-semibold text-navy-900 tabular-nums w-12 text-right", children: [
-        radius,
-        "m"
-      ] })
-    ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "relative", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx(
-        "div",
-        {
-          ref: mapContainerRef,
-          className: "h-[400px] rounded-xl overflow-hidden border border-slate-200 bg-slate-900",
-          style: { width: "100%", minHeight: 400 }
-        }
-      ),
-      !mapLoaded && !mapError && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute inset-0 flex items-center justify-center bg-slate-900/80 rounded-xl", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-center", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-spinner fa-spin text-3xl text-gold-500 mb-2" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-white/70", children: "Loading satellite map..." })
-      ] }) }),
-      mapError && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "absolute inset-0 flex items-center justify-center bg-slate-900/90 rounded-xl", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-center p-6", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-exclamation-triangle text-4xl text-red-400 mb-3" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-white font-medium mb-1", children: "Map failed to load" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-white/60 mb-3", children: mapError }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs(
-          "button",
-          {
-            type: "button",
-            className: "btn btn-primary btn-sm",
-            onClick: () => window.location.reload(),
-            children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-sync mr-1" }),
-              " Reload Page"
-            ]
-          }
-        )
-      ] }) }),
-      mapLoaded && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "absolute bottom-3 left-1/2 -translate-x-1/2 bg-black/70 backdrop-blur-sm px-4 py-2 rounded-lg shadow-md text-xs text-white/80 border border-white/10", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-hand-pointer text-gold-400 mr-1" }),
-        "Click on the map to set location • Drag marker to adjust"
-      ] }),
-      showRadiusCircle && position && radius > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "absolute top-3 left-3 bg-black/70 backdrop-blur-sm px-3 py-1.5 rounded-lg shadow-md text-xs text-white/90 border border-gold-500/30 flex items-center gap-2", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "inline-block w-3 h-3 rounded-full border-2 border-dashed border-gold-400" }),
-        "Geofence: ",
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "font-semibold text-gold-300", children: [
-          radius,
-          "m"
-        ] })
-      ] })
-    ] }),
-    position && /* @__PURE__ */ jsxRuntimeExports.jsx(
-      "div",
-      {
-        className: `rounded-lg p-3 border ${isConfirmed ? "bg-emerald-50 border-emerald-200" : "bg-amber-50 border-amber-200"}`,
-        children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsxs(
-              "p",
-              {
-                className: `text-sm font-medium ${isConfirmed ? "text-emerald-700" : "text-amber-700"}`,
-                children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx(
-                    "i",
-                    {
-                      className: `fas ${isConfirmed ? "fa-check-circle" : "fa-eye"} mr-1`
-                    }
-                  ),
-                  isConfirmed ? "Location saved" : "Preview — not saved yet"
-                ]
-              }
-            ),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs(
-              "p",
-              {
-                className: `text-xs ${isConfirmed ? "text-emerald-600" : "text-amber-600"}`,
-                children: [
-                  "Lat: ",
-                  position[0].toFixed(6),
-                  ", Lng: ",
-                  position[1].toFixed(6)
-                ]
-              }
-            ),
-            venueName && /* @__PURE__ */ jsxRuntimeExports.jsxs(
-              "p",
-              {
-                className: `text-xs ${isConfirmed ? "text-emerald-600" : "text-amber-600"}`,
-                children: [
-                  "Venue: ",
-                  venueName
-                ]
-              }
-            ),
-            showRadiusCircle && radius > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs(
-              "p",
-              {
-                className: `text-xs ${isConfirmed ? "text-emerald-600" : "text-amber-600"}`,
-                children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-circle-notch mr-1" }),
-                  "Geofence: ",
-                  radius,
-                  "m radius"
-                ]
-              }
-            ),
-            !isConfirmed && (latitude || longitude) && /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-xs text-amber-700 mt-1", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-exclamation-triangle mr-1" }),
-              "This differs from the saved location. Click",
-              " ",
-              /* @__PURE__ */ jsxRuntimeExports.jsx("strong", { children: "Confirm" }),
-              " to update."
-            ] })
-          ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-2", children: [
-            !isConfirmed && /* @__PURE__ */ jsxRuntimeExports.jsxs(
-              "button",
-              {
-                type: "button",
-                className: "btn btn-success btn-sm",
-                onClick: confirmCurrentPosition,
-                children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-check mr-1" }),
-                  "Confirm Location"
-                ]
-              }
-            ),
-            isConfirmed && /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-xs text-emerald-600 flex items-center", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-check-circle mr-1" }),
-              "Saved"
-            ] })
-          ] })
-        ] })
-      }
-    ),
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-wrap gap-2", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-slate-400 self-center", children: "📍 Quick preview:" }),
-      quickVenues.map((place, index) => /* @__PURE__ */ jsxRuntimeExports.jsx(
-        "button",
-        {
-          type: "button",
-          className: `px-3 py-1 rounded-full text-xs transition-colors ${position && position[0] === place.lat && position[1] === place.lng ? "bg-gold-500 text-white" : "bg-slate-100 hover:bg-slate-200 text-slate-600"}`,
-          onClick: () => previewQuickVenue(place),
-          children: place.label
-        },
-        index
-      ))
-    ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "bg-blue-50 rounded-lg p-3 border border-blue-200", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-start gap-2", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-info-circle text-blue-500 mt-0.5" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-blue-700 font-medium", children: "Opol Community College" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-blue-600", children: "Poblacion, Opol, Misamis Oriental, Philippines" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-xs text-blue-500 mt-1", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-lightbulb mr-1" }),
-          "Click on the map, drag the marker, or preview a quick place — then click ",
-          /* @__PURE__ */ jsxRuntimeExports.jsx("strong", { children: "Confirm Location" }),
-          " to save it. The",
-          " ",
-          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-gold-600 font-medium", children: "gold dashed circle" }),
-          " ",
-          "shows the geofence boundary."
-        ] })
-      ] })
-    ] }) })
-  ] });
-};
 const q = "printWindow";
 function V(e2) {
   const t2 = document.createElement("iframe");
@@ -19667,8 +19752,8 @@ const FacultyClassDetail = () => {
             /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "#" }),
             /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Session" }),
             /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Date" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Start Time" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "End Time" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Time-in starts (PHT)" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Time-out opens (PHT)" }),
             /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Component" }),
             /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Status" }),
             /* @__PURE__ */ jsxRuntimeExports.jsx("th", { className: "text-center", children: "Actions" })
@@ -50677,4 +50762,4 @@ startSyncEngine();
 ReactDOM.createRoot(document.getElementById("root")).render(
   /* @__PURE__ */ jsxRuntimeExports.jsx(React.StrictMode, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(App, {}) })
 );
-//# sourceMappingURL=main-eFLZeA2W.js.map
+//# sourceMappingURL=main-CGmqC0zR.js.map

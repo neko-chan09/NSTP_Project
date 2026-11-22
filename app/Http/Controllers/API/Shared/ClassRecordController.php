@@ -19,6 +19,7 @@ class ClassRecordController extends Controller {
             ->where('status','!=','cancelled')->whereHas('class.students',fn($q)=>$q->where('students.id',$student->id))
             ->where(function($q){$q->whereBetween('scheduled_start',[now()->subDays(7),now()])->orWhere(function($q){$q->whereNull('scheduled_start')->whereBetween('start_time',[now()->subDays(7),now()]);});})
             ->latest('id')->limit(50)->get();
+        $sessions->each(fn($s)=>$s->setAttribute('server_now',now()->toIso8601String()));
         return response()->json(['data'=>$sessions]);
     }
     public function manual(Request $request,int $sessionId,AttendanceLedger $ledger) {
@@ -27,6 +28,7 @@ class ClassRecordController extends Controller {
         abort_unless($session->class->allStudentsWithPivot()->where('students.id',$data['student_id'])->exists(),403,'Student is not enrolled in this class.');
         if(in_array($data['status'],['present','late'])) $request->validate(['check_in_at'=>'required|date|before_or_equal:now']);
         if($request->filled('check_out_at')) $request->validate(['check_in_at'=>'required|date','check_out_at'=>'date|before_or_equal:now']);
+        foreach(['check_in_at','check_out_at'] as $field)if(!empty($data[$field]))$data[$field]=Carbon::parse($data[$field])->setTimezone(config('app.timezone'));
         $log=DB::transaction(function()use($session,$data,$request,$ledger){
             $student=Student::whereKey($data['student_id'])->lockForUpdate()->firstOrFail();
             $log=AttendanceLog::firstOrNew(['session_id'=>$session->id,'student_id'=>$student->id]);
@@ -39,19 +41,22 @@ class ClassRecordController extends Controller {
         });
         return response()->json(['data'=>$log,'message'=>'Attendance saved with audit history.']);
     }
+    public function updateSession(Request $request,int $sessionId) {
+        $session=app(AttendanceAccess::class)->session($request->user(),$sessionId,true);
+        $data=$request->validate(['expected_version'=>'required|integer|min:1','scheduled_start'=>'required|date','scheduled_end'=>'required|date|after:scheduled_start','description'=>'nullable|string|max:500','grace_period_minutes'=>'required|integer|min:0|max:120','require_location'=>'required|boolean','latitude'=>'nullable|required_if:require_location,true|numeric|between:-90,90','longitude'=>'nullable|required_if:require_location,true|numeric|between:-180,180','geofence_radius'=>'required|integer|min:10|max:1000','reason'=>'required|string|min:3|max:500']);
+        $saved=DB::transaction(function()use($session,$request,$data){
+            $locked=AttendanceSession::whereKey($session->id)->lockForUpdate()->firstOrFail();
+            abort_if((int)$locked->rules_version!==(int)$data['expected_version'],409,'Another person edited this session. Refresh before saving.');
+            $rules=app(\App\Services\AttendanceSessionRules::class);$before=$rules->snapshot($locked);$rules->remember($locked);
+            foreach(['scheduled_start','scheduled_end'] as $field)$data[$field]=Carbon::parse($data[$field])->setTimezone(config('app.timezone'));
+            $locked->fill(collect($data)->except(['expected_version','reason'])->all());$locked->rules_version++;$locked->save();$rules->remember($locked);
+            AuditTrail::record($request->user()->id,'attendance.session_updated','attendance_session',$locked->id,$data['reason'],['before'=>$before,'after'=>$rules->snapshot($locked),'version'=>$locked->rules_version]);return $locked;
+        });
+        return response()->json(['data'=>$saved,'message'=>'Session updated. Phones must refresh their downloaded rules; older submissions need review.']);
+    }
     public function checkout(Request $request,int $sessionId,AttendanceLedger $ledger) {
         $session=app(AttendanceAccess::class)->session($request->user(),$sessionId);
-        $student=$request->user()->student;abort_unless($student,403);
-        $log=DB::transaction(function()use($request,$session,$student,$ledger){
-            $student=Student::whereKey($student->id)->lockForUpdate()->firstOrFail();
-            $log=AttendanceLog::where('session_id',$session->id)->where('student_id',$student->id)->firstOrFail();
-            abort_unless($log->check_in_at,422,'Time in before recording time out.');
-            if($log->check_out_at)return $log;
-            abort_if(now()->lt($log->check_in_at),422,'Time out cannot precede time in.');
-            $log->check_out_at=now();$log->save();$ledger->credit($log,$session,$student);
-            AuditTrail::record($request->user()->id,'attendance.checkout','attendance_log',$log->id);
-            return $log;
-        });
-        return response()->json(['data'=>$log,'message'=>'Time out saved. Pending records need faculty review before credit.']);
+        $request->merge(['event_type'=>'time_out','session_id'=>$sessionId,'class_id'=>$session->class_id]);
+        return app(AttendanceController::class)->checkin($request);
     }
 }

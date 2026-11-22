@@ -142,8 +142,8 @@ class AttendanceController extends Controller
             'faculty_id' => $user->role === 'faculty' ? $user->id : null,
             'class_id' => $class->id,
             'component' => $user->role === 'faculty' ? $user->nstp_component : $class->component_type,
-            'scheduled_start' => $request->scheduled_start,
-            'scheduled_end' => $request->scheduled_end,
+            'scheduled_start' => \Carbon\Carbon::parse($request->scheduled_start)->setTimezone(config('app.timezone')),
+            'scheduled_end' => \Carbon\Carbon::parse($request->scheduled_end)->setTimezone(config('app.timezone')),
             'start_time' => now(),
             'end_time' => now()->addHours(2),
             'grace_period_minutes' => $request->input('grace_period_minutes', 15),
@@ -313,6 +313,7 @@ class AttendanceController extends Controller
             ], 404);
         }
 
+        $session->setAttribute('server_now',now()->toIso8601String());
         return response()->json([
             'success' => true,
             'data' => $session,
@@ -447,6 +448,9 @@ class AttendanceController extends Controller
 
         $validator = Validator::make($request->all(), [
             'class_id' => 'required|integer|exists:classes,id',
+            'event_type'=>'sometimes|in:time_in,time_out',
+            'clock_suspect'=>'sometimes|boolean',
+            'session_version'=>'nullable|integer|min:1',
             'session_id' => 'required_if:offline,true|nullable|integer|exists:attendance_sessions,id',
             'offline' => 'sometimes|boolean',
             'captured_at' => 'required_if:offline,true|nullable|date',
@@ -482,15 +486,26 @@ class AttendanceController extends Controller
         });
         $session = $sessionQuery->latest('created_at')->first();
         if (!$session) return response()->json(['match' => false, 'message' => 'Attendance session not found for this class.'], 404);
+        $event=$request->input('event_type','time_in');
+        $latestSession=$session;
+        $session=app(\App\Services\AttendanceSessionRules::class)->capturePolicy($session,$request->filled('session_version')?(int)$request->session_version:null);
+        $rulesChanged=(int)($latestSession->rules_version??1)!==(int)$request->input('session_version',1);
         $capturedAt = app(\App\Services\AttendanceCaptureWindow::class)->time($session, $request->boolean('offline'), $request->input('captured_at'));
+        if($event==='time_out') {
+            $opens=$session->scheduled_end??$session->end_time;
+            if(!$opens||$capturedAt->lt($opens))return response()->json(['match'=>false,'message'=>'Time-out is locked until '.($opens?$opens->copy()->timezone('Asia/Manila')->format('M d, Y h:i A').' PHT':'the session end is configured').'.'],422);
+        }
+
 
         $existing = AttendanceLog::where('session_id', $session->id)
             ->where('student_id', $student->id)
             ->first();
-        if ($existing) {
+        if($event==='time_out'&&(!$existing||!$existing->check_in_at))return response()->json(['match'=>false,'message'=>'Time in first. Sync your time-in before time-out.'],422);
+        if($event==='time_out'&&$capturedAt->lt($existing->check_in_at))return response()->json(['match'=>false,'message'=>'Time-out cannot precede time-in. Check the device clock.'],422);
+        if ($existing && ($event==='time_in'||$existing->check_out_at)) {
             return response()->json([
                 'match' => true,
-                'message' => 'Already checked in',
+                'message' => $event==='time_out'?'Time-out already recorded':'Already checked in',
                 'confidence' => (float) ($existing->face_confidence ?? 1.0),
                 'data' => $existing->load('student.user'),
             ]);
@@ -633,17 +648,33 @@ class AttendanceController extends Controller
         // ============================================================
         // RECORD ATTENDANCE
         // ============================================================
-        $log = DB::transaction(function () use ($student, $session, $capturedAt, $status, $result, $latitude, $longitude, $minutesLate, $distanceFromVenue) {
+        $log = DB::transaction(function () use ($student, $session, $latestSession,$rulesChanged,$event,$request,$capturedAt, $status, $result, $latitude, $longitude, $minutesLate, $distanceFromVenue) {
+            $currentRules=AttendanceSession::findOrFail($latestSession->id);
+            abort_if($currentRules->status==='cancelled',422,'Session cancelled.');
+            $changed=$request->boolean('clock_suspect')||$rulesChanged||(int)$currentRules->rules_version!==(int)$latestSession->rules_version;
+
             $lockedStudent = Student::where('id', $student->id)->lockForUpdate()->firstOrFail();
             $existing = AttendanceLog::where('session_id', $session->id)->where('student_id', $student->id)->first();
+            if($event==='time_out') {
+                abort_unless($existing&&$existing->check_in_at,422,'Sync time-in before time-out.');
+                if($existing->check_out_at)return $existing;
+                abort_if($capturedAt->lt($existing->check_in_at),422,'Time-out cannot precede time-in.');
+                $existing->check_out_at=$capturedAt;
+                $existing->time_out_received_at=now();$existing->time_out_session_version=(int)$request->input('session_version',1);$existing->time_out_client_id=$request->client_id;
+                if($changed||($existing->time_in_session_version&&$existing->time_in_session_version!==(int)$currentRules->rules_version)){$existing->review_status='pending';$existing->remarks=trim(($existing->remarks??'').' | Session rules changed or offline clock needs review.');}
+                $existing->save();app(\App\Services\AttendanceLedger::class)->credit($existing,$currentRules,$lockedStudent);
+                \App\Services\AuditTrail::record($student->user_id,'attendance.timeout','attendance_log',$existing->id,null,['captured_at'=>$capturedAt->toIso8601String(),'received_at'=>now()->toIso8601String(),'offline'=>$request->boolean('offline')]);
+                return $existing->fresh();
+            }
             if ($existing) return $existing;
             $log = AttendanceLog::create([
             'session_id'       => $session->id,
             'student_id'       => $student->id,
             'check_in_at'      => $capturedAt,
+            'time_in_received_at'=>now(),'time_in_session_version'=>(int)$request->input('session_version',1),'time_in_client_id'=>$request->client_id,
             'status'           => $status,
             'attendance_mark' => $status,
-            'review_status' => app(\App\Services\AttendanceLedger::class)->afterEnd($session,$capturedAt) ? 'pending' : 'approved',
+            'review_status' => $changed || app(\App\Services\AttendanceLedger::class)->afterEnd($session,$capturedAt) ? 'pending' : 'approved',
             'face_confidence'  => $result['similarity'],
             'location_lat'     => $latitude !== null ? (float) $latitude : null,
             'location_lng'     => $longitude !== null ? (float) $longitude : null,
@@ -657,13 +688,14 @@ class AttendanceController extends Controller
             ),
         ]);
 
+            if($changed){$log->remarks=trim(($log->remarks??'').' | Session rules changed or offline clock needs review.');$log->save();}
             \App\Services\AuditTrail::record($student->user_id,'attendance.timein','attendance_log',$log->id);
             return $log;
         });
 
         return response()->json([
             'match' => true,
-            'message' => $log->review_status==='pending' ? 'After-session time in saved. Pending faculty approval.' : 'Time in saved. Record time out to calculate hours.',
+            'message' => $log->review_status==='pending' ? 'Saved. Pending faculty approval.' : ($event==='time_out'?'Time out saved.':'Time in saved. Time-out opens at the scheduled session end.'),
             'confidence' => $result['similarity'],
             'data' => $log->load('student.user'),
             'location_status' => $session->require_location

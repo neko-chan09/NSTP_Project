@@ -18,6 +18,6 @@ class AttendanceCaptureWindow
         if ($session->status === 'cancelled' || ($start && $time->lt($start))) {
             throw ValidationException::withMessages(['session_id' => 'The session is cancelled or has not started yet.']);
         }
-        return $time;
+        return $time->copy()->setTimezone(config('app.timezone'));
     }
 }

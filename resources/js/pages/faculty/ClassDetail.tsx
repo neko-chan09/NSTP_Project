@@ -1077,8 +1077,8 @@ const FacultyClassDetail: React.FC = () => {
                                         <th>#</th>
                                         <th>Session</th>
                                         <th>Date</th>
-                                        <th>Start Time</th>
-                                        <th>End Time</th>
+                                        <th>Time-in starts (PHT)</th>
+                                        <th>Time-out opens (PHT)</th>
                                         <th>Component</th>
                                         <th>Status</th>
                                         <th className="text-center">Actions</th>

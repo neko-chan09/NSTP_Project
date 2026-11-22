@@ -95,10 +95,10 @@ class ReliabilityUpgradeTest extends ProjectReviewRegressionTest {
         $this->getJson('/api/classes/'.$class.'/record')->assertForbidden();
         Sanctum::actingAs($teacher);$this->getJson('/api/classes/'.$class.'/record')->assertOk()->assertJsonCount(1,'data.students');
         foreach(['admin','super_admin'] as $role){Sanctum::actingAs($this->actor($role));$this->getJson('/api/classes/'.$class.'/record')->assertOk();}
-        Sanctum::actingAs($student);$this->postJson('/api/attendance/sessions/'.$session->id.'/checkout')->assertNotFound();
+        Sanctum::actingAs($student);$vector=array_merge([1.0],array_fill(0,191,0.0));$this->postJson('/api/student/face-embeddings',['embeddings'=>['front'=>$vector,'left'=>$vector,'right'=>$vector]])->assertOk();$this->postJson('/api/attendance/sessions/'.$session->id.'/checkout',['embedding'=>$vector,'session_version'=>1])->assertUnprocessable();
         $log=AttendanceLog::create(['session_id'=>$session->id,'student_id'=>$student->student->id,'check_in_at'=>now()->subMinutes(90),'status'=>'late','attendance_mark'=>'late','review_status'=>'approved']);
-        $this->postJson('/api/attendance/sessions/'.$session->id.'/checkout')->assertOk()->assertJsonPath('data.credited_hours',0.5);
-        $this->postJson('/api/attendance/sessions/'.$session->id.'/checkout')->assertOk();$this->assertEquals(.5,$student->student->fresh()->completed_training_hours);
+        $this->postJson('/api/attendance/sessions/'.$session->id.'/checkout',['embedding'=>$vector,'session_version'=>1])->assertOk()->assertJsonPath('data.credited_hours',0.5);
+        $this->postJson('/api/attendance/sessions/'.$session->id.'/checkout',['embedding'=>$vector,'session_version'=>1])->assertOk();$this->assertEquals(.5,$student->student->fresh()->completed_training_hours);
         $this->getJson('/api/student/attendance/records')->assertOk()->assertJsonCount(1,'data');
     }
     public function test_after_session_face_checkin_is_pending_and_has_no_automatic_credit():void {

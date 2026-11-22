@@ -14,6 +14,7 @@ class AttendanceSession extends Model
     protected $table = 'attendance_sessions';
 
     protected $fillable = [
+        'rules_version',
         'faculty_id',
         'class_id',
         'component',
@@ -37,6 +38,7 @@ class AttendanceSession extends Model
     ];
 
     protected $casts = [
+        'rules_version'=>'integer',
         'start_time' => 'datetime',
         'end_time' => 'datetime',
         'scheduled_start' => 'datetime',
