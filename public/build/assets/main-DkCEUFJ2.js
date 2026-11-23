@@ -7423,7 +7423,7 @@ async function mutateWithQueue(url, method, options = {}) {
       }
       if (res.ok) return res.json().catch(() => ({}));
       const error = await res.json().catch(() => ({}));
-      throw new Error(error.message || `HTTP ${res.status}`);
+      throw new Error(Object.values(error.errors ?? {}).flat().join(" ") || error.message || `HTTP ${res.status}`);
     } catch (err) {
       const isNetworkError = err instanceof TypeError || /network|fetch/i.test(err?.message || "");
       if (!isNetworkError) throw err;
@@ -19018,6 +19018,7 @@ const FacultyClassDetail = () => {
   });
   const createMut = useCreateAttendanceSession();
   const [isSubmitting, setIsSubmitting] = reactExports.useState(false);
+  const [sessionError, setSessionError] = reactExports.useState("");
   const [isGettingLocation, setIsGettingLocation] = reactExports.useState(false);
   const [sessionFormData, setSessionFormData] = reactExports.useState({
     component: classData?.component_type || "",
@@ -19038,8 +19039,8 @@ const FacultyClassDetail = () => {
         ...prev,
         component: classData.component_type || "",
         section: sectionName || "",
-        scheduled_start: new Date(Date.now() + 15 * 6e4).toISOString().slice(0, 16),
-        scheduled_end: new Date(Date.now() + 60 * 6e4).toISOString().slice(0, 16)
+        scheduled_start: phtInput(new Date(Date.now() + 15 * 6e4).toISOString()),
+        scheduled_end: phtInput(new Date(Date.now() + 60 * 6e4).toISOString())
       }));
     }
   }, [classData]);
@@ -19055,34 +19056,49 @@ const FacultyClassDetail = () => {
     documentTitle: `Class_List_${classData?.name?.replace(/\s+/g, "_") || "Class"}_${(/* @__PURE__ */ new Date()).toISOString().slice(0, 10)}`
   });
   const applyDurationPreset = (minutes) => {
-    const start = sessionFormData.scheduled_start ? new Date(sessionFormData.scheduled_start) : /* @__PURE__ */ new Date();
+    const start = sessionFormData.scheduled_start ? new Date(phtInstant(sessionFormData.scheduled_start)) : /* @__PURE__ */ new Date();
     if (isNaN(start.getTime())) {
       zt.error("Please set a valid start time first");
       return;
     }
     const end = new Date(start.getTime() + minutes * 6e4);
-    const pad2 = (n2) => String(n2).padStart(2, "0");
-    const formatted = `${end.getFullYear()}-${pad2(end.getMonth() + 1)}-${pad2(
-      end.getDate()
-    )}T${pad2(end.getHours())}:${pad2(end.getMinutes())}`;
+    const formatted = phtInput(end.toISOString());
     setSessionFormData((prev) => ({ ...prev, scheduled_end: formatted }));
     const label = minutes < 60 ? `${minutes} min` : minutes % 60 === 0 ? `${minutes / 60} hr` : `${Math.floor(minutes / 60)} hr ${minutes % 60} min`;
     zt.success(`End time set to +${label}`);
   };
   const handleSessionSubmit = async (e2) => {
     e2.preventDefault();
+    if (isSubmitting) return;
+    setSessionError("");
     if (!sessionFormData.component || !sessionFormData.section) {
       zt.error("Component and Section are required");
       return;
     }
+    if (!sessionFormData.scheduled_start || !sessionFormData.scheduled_end) {
+      setSessionError("Enter both time-in and time-out dates and times.");
+      return;
+    }
+    const starts = phtInstant(sessionFormData.scheduled_start);
+    const ends = phtInstant(sessionFormData.scheduled_end);
+    if (Date.parse(ends) <= Date.parse(starts)) {
+      setSessionError("Time-out must be later than time-in. For an overnight session, choose the next date for time-out.");
+      return;
+    }
+    if (sessionFormData.require_location && (sessionFormData.latitude == null || sessionFormData.longitude == null)) {
+      setSessionError("Confirm the attendance location on the map first.");
+      return;
+    }
     setIsSubmitting(true);
     try {
-      const payload = { class_id: parseInt(id), ...sessionFormData };
+      const payload = { class_id: parseInt(id), ...sessionFormData, scheduled_start: starts, scheduled_end: ends };
       await createMut.mutateAsync(payload);
       zt.success("Attendance session scheduled successfully!");
       refetchSessions();
     } catch (err) {
-      zt.error(err.message || "Failed to schedule attendance session");
+      const message = err.message || "Failed to schedule attendance session";
+      setSessionError(message);
+      zt.error(message);
     } finally {
       setIsSubmitting(false);
     }
@@ -19893,6 +19909,7 @@ const FacultyClassDetail = () => {
           ] })
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("form", { onSubmit: handleSessionSubmit, className: "space-y-4", children: [
+          sessionError && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "alert alert-danger", role: "alert", children: sessionError }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid grid-cols-2 gap-4", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
               /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "label", children: [
@@ -50863,4 +50880,4 @@ startSyncEngine();
 ReactDOM.createRoot(document.getElementById("root")).render(
   /* @__PURE__ */ jsxRuntimeExports.jsx(React.StrictMode, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(App, {}) })
 );
-//# sourceMappingURL=main-Kd6CLTdN.js.map
+//# sourceMappingURL=main-DkCEUFJ2.js.map

@@ -82,7 +82,7 @@ class AttendanceController extends Controller
         ]);
 
         if ($validator->fails()) {
-            return response()->json(['errors' => $validator->errors()], 422);
+            return response()->json(['message' => $validator->errors()->first(), 'errors' => $validator->errors()], 422);
         }
 
         $user = $request->user();
@@ -144,8 +144,8 @@ class AttendanceController extends Controller
             'component' => $user->role === 'faculty' ? $user->nstp_component : $class->component_type,
             'scheduled_start' => \Carbon\Carbon::parse($request->scheduled_start)->setTimezone(config('app.timezone')),
             'scheduled_end' => \Carbon\Carbon::parse($request->scheduled_end)->setTimezone(config('app.timezone')),
-            'start_time' => now(),
-            'end_time' => now()->addHours(2),
+            'start_time' => \Carbon\Carbon::parse($request->scheduled_start)->setTimezone(config('app.timezone')),
+            'end_time' => \Carbon\Carbon::parse($request->scheduled_end)->setTimezone(config('app.timezone')),
             'grace_period_minutes' => $request->input('grace_period_minutes', 15),
             'is_scheduled' => true,
             'status' => 'active',

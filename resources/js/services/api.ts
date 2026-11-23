@@ -120,7 +120,7 @@ async function mutateWithQueue(
       }
       if (res.ok) return res.json().catch(() => ({}));
       const error = await res.json().catch(() => ({}));
-      throw new Error(error.message || `HTTP ${res.status}`);
+      throw new Error(Object.values(error.errors ?? {}).flat().join(" ") || error.message || `HTTP ${res.status}`);
     } catch (err: any) {
       const isNetworkError =
         err instanceof TypeError || /network|fetch/i.test(err?.message || "");

@@ -1,3 +1,4 @@
+import {phtInput, phtInstant} from "../../utils/attendanceTime";
 import ClassRecord from "../shared/ClassRecord";
 // resources/js/pages/faculty/ClassDetail.tsx
 
@@ -127,6 +128,7 @@ const FacultyClassDetail: React.FC = () => {
     const createMut = useCreateAttendanceSession();
 
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [sessionError,setSessionError] = useState("");
     const [isGettingLocation, setIsGettingLocation] = useState(false);
 
     const [sessionFormData, setSessionFormData] = useState<AttendanceFormData>({
@@ -154,12 +156,8 @@ const FacultyClassDetail: React.FC = () => {
                 ...prev,
                 component: classData.component_type || "",
                 section: sectionName || "",
-                scheduled_start: new Date(Date.now() + 15 * 60000)
-                    .toISOString()
-                    .slice(0, 16),
-                scheduled_end: new Date(Date.now() + 60 * 60000)
-                    .toISOString()
-                    .slice(0, 16),
+                scheduled_start: phtInput(new Date(Date.now() + 15 * 60000).toISOString()),
+                scheduled_end: phtInput(new Date(Date.now() + 60 * 60000).toISOString()),
             }));
         }
     }, [classData]);
@@ -182,17 +180,14 @@ const FacultyClassDetail: React.FC = () => {
 
     const applyDurationPreset = (minutes: number) => {
         const start = sessionFormData.scheduled_start
-            ? new Date(sessionFormData.scheduled_start)
+            ? new Date(phtInstant(sessionFormData.scheduled_start))
             : new Date();
         if (isNaN(start.getTime())) {
             toast.error("Please set a valid start time first");
             return;
         }
         const end = new Date(start.getTime() + minutes * 60_000);
-        const pad = (n: number) => String(n).padStart(2, "0");
-        const formatted = `${end.getFullYear()}-${pad(end.getMonth() + 1)}-${pad(
-            end.getDate(),
-        )}T${pad(end.getHours())}:${pad(end.getMinutes())}`;
+        const formatted = phtInput(end.toISOString());
         setSessionFormData((prev) => ({ ...prev, scheduled_end: formatted }));
         const label =
             minutes < 60
@@ -205,18 +200,27 @@ const FacultyClassDetail: React.FC = () => {
 
     const handleSessionSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (isSubmitting) return;
+        setSessionError("");
         if (!sessionFormData.component || !sessionFormData.section) {
             toast.error("Component and Section are required");
             return;
         }
+        if (!sessionFormData.scheduled_start || !sessionFormData.scheduled_end) {setSessionError("Enter both time-in and time-out dates and times.");return;}
+        const starts = phtInstant(sessionFormData.scheduled_start);
+        const ends = phtInstant(sessionFormData.scheduled_end);
+        if (Date.parse(ends) <= Date.parse(starts)) {setSessionError("Time-out must be later than time-in. For an overnight session, choose the next date for time-out.");return;}
+        if (sessionFormData.require_location && (sessionFormData.latitude == null || sessionFormData.longitude == null)) {setSessionError("Confirm the attendance location on the map first.");return;}
         setIsSubmitting(true);
         try {
-            const payload = { class_id: parseInt(id!), ...sessionFormData };
+            const payload = { class_id: parseInt(id!), ...sessionFormData, scheduled_start: starts, scheduled_end: ends };
             await createMut.mutateAsync(payload);
             toast.success("Attendance session scheduled successfully!");
             refetchSessions();
         } catch (err: any) {
-            toast.error(err.message || "Failed to schedule attendance session");
+            const message = err.message || "Failed to schedule attendance session";
+            setSessionError(message);
+            toast.error(message);
         } finally {
             setIsSubmitting(false);
         }
@@ -1244,6 +1248,7 @@ const FacultyClassDetail: React.FC = () => {
                     </div>
 
                     <form onSubmit={handleSessionSubmit} className="space-y-4">
+                        {sessionError && <div className="alert alert-danger" role="alert">{sessionError}</div>}
                         <div className="grid grid-cols-2 gap-4">
                             <div>
                                 <label className="label">
