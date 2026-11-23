@@ -3,6 +3,7 @@ import L from "leaflet";
 export interface LocationPoint {
   latitude: number | null; longitude: number | null;
   student_name: string; student_id: string;
+  is_tracking?:boolean;location_state?:string;
   accuracy?: number | null; location_recorded_at?: string | null; location_source?: string;
   distance_from_venue: number | null;
 }
@@ -21,6 +22,12 @@ export function monitorFreshness(recorded:string|null|undefined,source?:string,n
  const time=recorded?Date.parse(recorded):NaN;
  if(!Number.isFinite(time)||time>now+30000)return 'Location time unknown';
  return now-time>60000?'Stale - awaiting student connection':'Recent GPS fix';
+}
+export function monitorLabel(point:LocationPoint,radius:number):string {
+ if(!validCoordinates(point.latitude,point.longitude))return point.is_tracking?'Waiting for first GPS fix':'Not sharing - no GPS received';
+ if(point.is_tracking===false)return 'Sharing stopped - last known position';
+ const fresh=monitorFreshness(point.location_recorded_at,point.location_source);
+ return fresh==='Recent GPS fix'?locationStatus(point.distance_from_venue,point.accuracy,radius):fresh;
 }
 export function fitGeofence(map: L.Map, lat: number, lng: number, radius: number, people: LocationPoint[], venueOnly = false) {
   const bounds = L.latLng(lat, lng).toBounds(radius * 2);
@@ -51,9 +58,9 @@ export function drawGeofence(map: L.Map, lat: number, lng: number, radius: numbe
     if(!validCoordinates(p.latitude,p.longitude))return;
     present.add(p.student_id);
     const position:L.LatLngExpression=[Number(p.latitude),Number(p.longitude)];
-    const distance=map.distance([lat,lng],position),freshness=monitorFreshness(p.location_recorded_at,p.location_source);
-    const status=freshness==='Recent GPS fix'?locationStatus(distance,p.accuracy,radius):freshness;
-    const color=freshness!=='Recent GPS fix'?'#64748b':status.startsWith('Near')?'#b77900':distance<=radius?'#00855a':'#d12e45';
+    const distance=map.distance([lat,lng],position);
+    const status=monitorLabel({...p,distance_from_venue:distance},radius);
+    const color=(!status.startsWith('Inside')&&!status.startsWith('Outside')&&!status.startsWith('Near'))?'#64748b':status.startsWith('Near')?'#b77900':distance<=radius?'#00855a':'#d12e45';
     let item=state!.people.get(p.student_id);
     if(!item){item={marker:L.marker(position).addTo(map)};state!.people.set(p.student_id,item)}
     item.marker.setLatLng(position);

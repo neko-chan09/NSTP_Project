@@ -12,6 +12,7 @@ class CertificateController extends Controller
     public function myCertificates(Request $request)
     {
         $student = $request->user()->student;
+        abort_unless($student, 403, 'Student profile required.');
         $certificates = Certificate::where('student_id', $student->id)
             ->orderBy('issued_at', 'desc')
             ->get();
@@ -27,15 +28,9 @@ class CertificateController extends Controller
 
         $student = $request->user()->student;
         
-        if ($certificate->student_id !== $student->id) {
-            return response()->json(['message' => 'Unauthorized'], 403);
-        }
-        
-        if (!Storage::disk('public')->exists($certificate->file_path)) {
-            return response()->json(['message' => 'File not found'], 404);
-        }
-        
-        return Storage::disk('public')->download($certificate->file_path, $certificate->certificate_number . '.pdf');
+        abort_unless($student && (int)$certificate->student_id === (int)$student->id, 403);
+        return app(\App\Services\CertificateFileService::class)->download($certificate);
+
     }
 
     // Public verification – no auth required

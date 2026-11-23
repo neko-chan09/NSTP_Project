@@ -85,27 +85,34 @@ class LocationTrackingController extends Controller
                 ], 403);
             }
 
-            // ===== FIX 1: Read latitude & longitude from the request body first =====
-            $latitude = $request->input('latitude');
-            $longitude = $request->input('longitude');
-
-            // Fallback: Check latestLocation if request payload has no coordinates
-            if (is_null($latitude) || is_null($longitude)) {
-                $latestLocation = StudentLocation::where('student_id', $student->id)
-                    ->where('activity_id', $activityId)
-                    ->orderBy('tracked_at', 'desc')
-                    ->first();
-
-                if ($latestLocation) {
-                    $latitude = $latestLocation->latitude;
-                    $longitude = $latestLocation->longitude;
-                }
+            $validator = Validator::make($request->all(), [
+                'latitude' => 'required|numeric|between:-90,90',
+                'longitude' => 'required|numeric|between:-180,180',
+                'accuracy' => 'required|numeric|min:0|max:25',
+                'captured_at' => 'required_without:timestamp|date',
+                'timestamp' => 'nullable|numeric|min:1',
+            ]);
+            if ($validator->fails()) {
+                return response()->json(['success' => false, 'message' => 'A fresh precise GPS fix is required before location sharing starts.', 'errors' => $validator->errors()], 422);
+            }
+            $capturedAt = $request->filled('captured_at')
+                ? Carbon::parse($request->captured_at)
+                : Carbon::createFromTimestampMs((float)$request->timestamp);
+            if ($capturedAt->lt(now()->subSeconds(30)) || $capturedAt->gt(now()->addSeconds(2))) {
+                return response()->json(['success' => false, 'message' => 'GPS reading expired. Get a fresh fix and retry.'], 422);
+            }
+            // Eloquent stores a timezone-less datetime; keep it in the application's DB timezone.
+            $capturedAt->setTimezone(config('app.timezone'));
+            $latitude = (float)$request->latitude;
+            $longitude = (float)$request->longitude;
+            if (in_array($activity->status, ['cancelled', 'completed'])) {
+                return response()->json(['success' => false, 'message' => 'This activity is not accepting location sharing.'], 403);
             }
 
             $distanceFromVenue = null;
             $isWithinGeofence = null; // Default to null instead of false if coordinates missing
 
-            if (!is_null($latitude) && !is_null($longitude) && $activity->latitude && $activity->longitude) {
+            if (!is_null($latitude) && !is_null($longitude) && $activity->latitude !== null && $activity->longitude !== null) {
                 $distanceFromVenue = $this->calculateDistance(
                     (float)$latitude,
                     (float)$longitude,
@@ -124,7 +131,7 @@ class LocationTrackingController extends Controller
                     'distance_from_venue' => $distanceFromVenue,
                     'is_within_geofence' => $isWithinGeofence,
                     'location_source' => $request->input('location_source', 'gps'),
-                    'tracked_at' => now(),
+                    'tracked_at' => $capturedAt,
                 ]);
             }
 
@@ -132,14 +139,14 @@ class LocationTrackingController extends Controller
             $participation->update([
                 'is_tracking_location' => true,
                 'tracking_started_at' => $participation->tracking_started_at ?? now(),
-                'check_in_at' => $participation->check_in_at ?? now(),
-                'checkin_latitude' => $latitude,
-                'checkin_longitude' => $longitude,
+                'check_in_at' => $participation->check_in_at ?? $capturedAt,
+                'checkin_latitude' => $participation->check_in_at ? $participation->checkin_latitude : $latitude,
+                'checkin_longitude' => $participation->check_in_at ? $participation->checkin_longitude : $longitude,
                 'latitude' => $latitude,       // Sync second column
                 'longitude' => $longitude,     // Sync second column
                 'is_within_geofence' => $isWithinGeofence ?? false,
                 'distance_from_venue' => $distanceFromVenue,
-                'attendance_status' => 'present',
+                'attendance_status' => $participation->check_in_at ? $participation->attendance_status : 'present',
             ]);
 
             Log::info('Location tracking started for student: ' . $student->id . ' activity: ' . $activityId);
@@ -272,6 +279,7 @@ class LocationTrackingController extends Controller
             if ($capturedAt->lt(now()->subMinutes(2)) || $capturedAt->gt(now()->addSeconds(30))) {
                 return response()->json(['success'=>false, 'message'=>'GPS reading expired. Get a fresh location and retry.'],422);
             }
+            $capturedAt=$capturedAt->setTimezone(config('app.timezone'));
             $activityId = $request->activity_id;
             $latitude = $request->latitude;
             $longitude = $request->longitude;
@@ -331,14 +339,14 @@ class LocationTrackingController extends Controller
 
             // ===== FIX 3: Update BOTH coordinate column pairs in activity_participations =====
             $participation->update([
-                'checkin_latitude' => $latitude,
-                'checkin_longitude' => $longitude,
+                'checkin_latitude' => $participation->check_in_at ? $participation->checkin_latitude : $latitude,
+                'checkin_longitude' => $participation->check_in_at ? $participation->checkin_longitude : $longitude,
                 'latitude' => $latitude,           // Sync secondary column
                 'longitude' => $longitude,         // Sync secondary column
                 'is_within_geofence' => $isWithinGeofence,
                 'distance_from_venue' => $distanceFromVenue,
-                'attendance_status' => 'present',
-                'check_in_at' => $participation->check_in_at ?? now(),
+                'attendance_status' => $participation->check_in_at ? $participation->attendance_status : 'present',
+                'check_in_at' => $participation->check_in_at ?? $capturedAt,
             ]);
 
                 return $saved;

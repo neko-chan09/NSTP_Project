@@ -282,6 +282,8 @@ Route::middleware(['auth:sanctum', \App\Http\Middleware\RequireActiveUser::class
         Route::post('/certificates/design/{type}/preview', [\App\Http\Controllers\API\Web\Admin\CertificateDesignController::class, 'preview']);
 
         // ---------- CERTIFICATES ----------
+        Route::get('/certificates/{id}/download', [AdminCertificateController::class, 'download'])->whereNumber('id');
+        Route::get('/certificates/{id}/qr', [AdminCertificateController::class, 'qr'])->whereNumber('id');
         Route::get('/certificates', [AdminCertificateController::class, 'index']);
         Route::get('/certificates/eligible-students', [AdminCertificateController::class, 'getEligibleStudents']);
         Route::post('/certificates/generate', [AdminCertificateController::class, 'generate']);

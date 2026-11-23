@@ -1,11 +1,12 @@
 // src/pages/admin/Certificates/Issued.tsx
 import React, { useState, useMemo } from "react";
 import { useCertificates } from "../../hooks/useCertificates";
-import { API_URL } from "../../../services/api";
+import { adminApi } from "../../../services/api";
 import RefreshButton from "../../components/common/RefreshButton";
 
 const IssuedCertificates: React.FC = () => {
-  const api_url = API_URL;
+  const [busyId, setBusyId] = useState<number | null>(null);
+  const [fileError, setFileError] = useState("");
   const {
     data: certificates = [],
     isLoading,
@@ -105,8 +106,30 @@ const IssuedCertificates: React.FC = () => {
     return true;
   });
 
-  const handleDownload = async (id: number) => {
-    window.open(`${api_url}/student/certificates/${id}/download`, "_blank");
+  const handleFile = async (id: number, number: string, preview = false, qr = false) => {
+    if (busyId !== null) return;
+    const tab = preview ? window.open("", "_blank") : null;
+    if (tab) tab.opener = null;
+    setBusyId(id);
+    setFileError("");
+    try {
+      const file = await adminApi.getCertificateFile(id, qr);
+      const url = URL.createObjectURL(file);
+      const name = number.replace(/[^a-zA-Z0-9_-]/g, "_") || "certificate";
+      if (tab) tab.location.replace(url);
+      else {
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `${name}${qr ? "-qr.png" : ".pdf"}`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      }
+      window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+    } catch (error) {
+      tab?.close();
+      setFileError(error instanceof Error ? error.message : "Unable to open this certificate.");
+    } finally { setBusyId(null); }
   };
 
   const clearFilters = () => {
@@ -160,6 +183,7 @@ const IssuedCertificates: React.FC = () => {
         <RefreshButton onRefresh={refresh} isLoading={isRefreshing} />
       </div>
 
+      {fileError && <div role="alert" className="alert alert-danger">{fileError}</div>}
       {/* Filters */}
       <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -349,12 +373,8 @@ const IssuedCertificates: React.FC = () => {
                       {cert.qr_code_path ? (
                         <button
                           className="btn btn-info btn-sm"
-                          onClick={() =>
-                            window.open(
-                              `${api_url}/storage/${cert.qr_code_path}`,
-                              "_blank",
-                            )
-                          }
+                          disabled={busyId !== null}
+                          onClick={() => handleFile(cert.id, cert.certificate_number, true, true)}
                           title="View QR Code"
                         >
                           <i className="fas fa-qrcode" />
@@ -365,8 +385,16 @@ const IssuedCertificates: React.FC = () => {
                     </td>
                     <td>
                       <button
+                        className="btn btn-info btn-sm mr-2"
+                        disabled={busyId !== null}
+                        title="View certificate PDF"
+                        onClick={() => handleFile(cert.id, cert.certificate_number, true)}
+                      ><i className="fas fa-eye" /></button>
+                      <button
                         className="btn btn-info btn-sm"
-                        onClick={() => handleDownload(cert.id)}
+                        disabled={busyId !== null}
+                        title="Download certificate PDF"
+                        onClick={() => handleFile(cert.id, cert.certificate_number)}
                       >
                         <i className="fas fa-download" />
                       </button>

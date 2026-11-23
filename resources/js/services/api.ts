@@ -1293,6 +1293,15 @@ export const adminApi = {
     return result.data ?? result;
   },
 
+  getCertificateFile: async (id: number, qr = false): Promise<Blob> => {
+    const response = await fetch(`${API_URL}/admin/certificates/${id}/${qr ? "qr" : "download"}`, { headers: headers() });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.message || `Certificate request failed (${response.status})`);
+    }
+    return response.blob();
+  },
+
   getEligibleStudents: async (search?: string): Promise<any[]> => {
     const query = search ? `?search=${encodeURIComponent(search)}` : "";
     const response = await fetch(

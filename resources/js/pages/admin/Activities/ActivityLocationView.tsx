@@ -7,7 +7,7 @@ import { useAuth } from "../../hooks/useAuth";
 import { adminApi } from "../../../services/api";
 import toast from "react-hot-toast";
 import L from "leaflet";
-import { drawGeofence, fitGeofence, validCoordinates, locationStatus, monitorFreshness } from "../../../utils/activityGeofenceMap";
+import { drawGeofence, fitGeofence, validCoordinates, locationStatus, monitorFreshness, monitorLabel } from "../../../utils/activityGeofenceMap";
 import "leaflet/dist/leaflet.css";
 
 // Fix Leaflet default icon issues in Vite/React builds
@@ -45,6 +45,8 @@ interface ParticipantLocation {
   is_within_geofence: boolean | null;
   distance_from_venue: number | null;
   profile_photo: string | null;
+  is_tracking?:boolean;
+  location_state?:string;
   accuracy?: number | null;
   location_recorded_at?: string | null;
   location_source?: string;
@@ -283,6 +285,7 @@ const ActivityLocationView: React.FC = () => {
       </div>
 
       <p className="text-sm text-slate-600" role="status">{isError ? 'Connection interrupted - showing last received positions.' : `Monitor refreshed: ${dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString() : 'waiting'}. Updates about every 5 seconds while visible.`}</p>
+      <p className="text-sm text-slate-600" role="status">{participants.filter(p=>!validCoordinates(p.latitude,p.longitude)).length} registered student(s) have no received GPS position. They cannot appear on the map until their phone sends a valid fix.</p>
       {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-white p-4 rounded-xl shadow-sm border-l-4 border-slate-600">
@@ -354,7 +357,7 @@ const ActivityLocationView: React.FC = () => {
               <div>
                 <div className="font-semibold text-slate-800 flex items-center gap-2">
                   📍 Venue Location
-                  <span className="badge bg-amber-100 text-amber-900">Near boundary / uncertain</span>
+                  
             <span className="badge badge-gold text-xs">Click to Zoom</span>
                 </div>
                 <div className="text-sm text-slate-600">
@@ -418,10 +421,10 @@ const ActivityLocationView: React.FC = () => {
                     <td className="p-3">
                       <span
                         className={`px-2.5 py-1 rounded-full text-xs font-semibold ${
-                          monitorFreshness(participant.location_recorded_at, participant.location_source) !== "Recent GPS fix" ? "bg-slate-100 text-slate-700" : (monitorFreshness(participant.location_recorded_at, participant.location_source) !== "Recent GPS fix" ? monitorFreshness(participant.location_recorded_at, participant.location_source) : locationStatus(participant.distance_from_venue, participant.accuracy, Number(activity.geofence_radius) || 100)).startsWith("Near") ? "bg-amber-100 text-amber-900" : participant.is_within_geofence === true ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-700"
+                          monitorFreshness(participant.location_recorded_at, participant.location_source) !== "Recent GPS fix" ? "bg-slate-100 text-slate-700" : (monitorLabel(participant,Number(activity.geofence_radius)||100)).startsWith("Near") ? "bg-amber-100 text-amber-900" : participant.is_within_geofence === true ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-700"
                         }`}
                       >
-                        {monitorFreshness(participant.location_recorded_at, participant.location_source) !== "Recent GPS fix" ? monitorFreshness(participant.location_recorded_at, participant.location_source) : locationStatus(participant.distance_from_venue, participant.accuracy, Number(activity.geofence_radius) || 100)}
+                        {monitorLabel(participant,Number(activity.geofence_radius)||100)}
                       </span>
                     </td>
                     <td className="p-3 text-sm text-slate-600 font-mono">
@@ -431,7 +434,7 @@ const ActivityLocationView: React.FC = () => {
                     <td className="p-3">
                       <span
                         className={`font-medium ${
-                          (participant.distance_from_venue || 0) <= (activity.geofence_radius || 100)
+                          participant.distance_from_venue == null ? "text-slate-500" : participant.distance_from_venue <= (activity.geofence_radius || 100)
                             ? "text-emerald-600"
                             : "text-red-600"
                         }`}
@@ -446,7 +449,8 @@ const ActivityLocationView: React.FC = () => {
                     </td>
                     <td className="p-3">
                       <button
-                        className="btn btn-sm bg-blue-50 text-blue-600 hover:bg-blue-100"
+                        className="btn btn-sm bg-blue-50 text-blue-600 hover:bg-blue-100 disabled:opacity-40"
+                        disabled={!validCoordinates(participant.latitude,participant.longitude)}
                         onClick={() => {
                           if (mapInstanceRef.current && validCoordinates(participant.latitude, participant.longitude)) {
                             mapInstanceRef.current.flyTo([Number(participant.latitude), Number(participant.longitude)], 18, {
@@ -496,7 +500,7 @@ const ActivityLocationView: React.FC = () => {
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={showAccuracy} onChange={e => setShowAccuracy(e.target.checked)} />Show GPS uncertainty</label>
           <button type="button" className="btn btn-sm" onClick={fitLocations}>Fit boundary + students</button>
           <button type="button" className="btn btn-sm" onClick={() => { if (mapInstanceRef.current && validCoordinates(activity.latitude, activity.longitude)) fitGeofence(mapInstanceRef.current, Number(activity.latitude), Number(activity.longitude), Number(activity.geofence_radius) || 100, [], true); }}>Focus boundary</button>
-          <span className="text-xs text-slate-500">Near-live monitor · refreshes every 5 seconds while visible. Phone uploads need internet and active activity tracking.</span>
+          <span className="text-xs text-slate-500">Refreshes every 5 seconds. Registered students must open this activity on mobile and start attendance/location sharing while online. Class face attendance alone does not start activity tracking.</span>
         </div>
         <div className="relative">
           <div ref={mapContainerRef} className="h-[500px] w-full bg-slate-100" style={{ minHeight: "500px" }} />

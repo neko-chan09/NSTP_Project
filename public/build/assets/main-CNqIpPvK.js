@@ -8383,6 +8383,14 @@ const adminApi = {
     const result = await handleResponse(response);
     return result.data ?? result;
   },
+  getCertificateFile: async (id, qr = false) => {
+    const response = await fetch(`${API_URL}/admin/certificates/${id}/${qr ? "qr" : "download"}`, { headers: headers() });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.message || `Certificate request failed (${response.status})`);
+    }
+    return response.blob();
+  },
   getEligibleStudents: async (search) => {
     const query = search ? `?search=${encodeURIComponent(search)}` : "";
     const response = await fetch(
@@ -29800,6 +29808,12 @@ function monitorFreshness(recorded, source, now = Date.now()) {
   if (!Number.isFinite(time) || time > now + 3e4) return "Location time unknown";
   return now - time > 6e4 ? "Stale - awaiting student connection" : "Recent GPS fix";
 }
+function monitorLabel(point, radius) {
+  if (!validCoordinates(point.latitude, point.longitude)) return point.is_tracking ? "Waiting for first GPS fix" : "Not sharing - no GPS received";
+  if (point.is_tracking === false) return "Sharing stopped - last known position";
+  const fresh = monitorFreshness(point.location_recorded_at, point.location_source);
+  return fresh === "Recent GPS fix" ? locationStatus(point.distance_from_venue, point.accuracy, radius) : fresh;
+}
 function fitGeofence(map, lat, lng, radius, people, venueOnly = false) {
   const bounds = L$1.latLng(lat, lng).toBounds(radius * 2);
   if (!venueOnly) people.forEach((p2) => {
@@ -29829,9 +29843,9 @@ function drawGeofence(map, lat, lng, radius, people, showAccuracy, venue) {
     if (!validCoordinates(p2.latitude, p2.longitude)) return;
     present.add(p2.student_id);
     const position = [Number(p2.latitude), Number(p2.longitude)];
-    const distance = map.distance([lat, lng], position), freshness = monitorFreshness(p2.location_recorded_at, p2.location_source);
-    const status = freshness === "Recent GPS fix" ? locationStatus(distance, p2.accuracy, radius) : freshness;
-    const color = freshness !== "Recent GPS fix" ? "#64748b" : status.startsWith("Near") ? "#b77900" : distance <= radius ? "#00855a" : "#d12e45";
+    const distance = map.distance([lat, lng], position);
+    const status = monitorLabel({ ...p2, distance_from_venue: distance }, radius);
+    const color = !status.startsWith("Inside") && !status.startsWith("Outside") && !status.startsWith("Near") ? "#64748b" : status.startsWith("Near") ? "#b77900" : distance <= radius ? "#00855a" : "#d12e45";
     let item = state.people.get(p2.student_id);
     if (!item) {
       item = { marker: L$1.marker(position).addTo(map) };
@@ -30053,6 +30067,10 @@ const FacultyActivityLocationView = () => {
       ] }) })
     ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-slate-600", role: "status", children: isError ? "Connection interrupted - showing last received positions." : `Monitor refreshed: ${dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString() : "waiting"}. Updates about every 5 seconds while visible.` }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-sm text-slate-600", role: "status", children: [
+      participants.filter((p2) => !validCoordinates(p2.latitude, p2.longitude)).length,
+      " registered student(s) have no received GPS position. They cannot appear on the map until their phone sends a valid fix."
+    ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid grid-cols-2 md:grid-cols-4 gap-4", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-white p-4 rounded-xl shadow-sm border-l-4 border-slate-600", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "block text-xs text-slate-500", children: "Total Participants" }),
@@ -30123,7 +30141,6 @@ const FacultyActivityLocationView = () => {
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
             /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "font-semibold text-slate-800 flex items-center gap-2", children: [
               "📍 Venue Location",
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "badge bg-amber-100 text-amber-900", children: "Near boundary / uncertain" }),
               /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "badge badge-gold text-xs", children: "Click to Zoom" })
             ] }),
             /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-sm text-slate-600", children: [
@@ -30164,8 +30181,8 @@ const FacultyActivityLocationView = () => {
               /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "p-3", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                 "span",
                 {
-                  className: `px-2.5 py-1 rounded-full text-xs font-semibold ${monitorFreshness(participant.location_recorded_at, participant.location_source) !== "Recent GPS fix" ? "bg-slate-100 text-slate-700" : (monitorFreshness(participant.location_recorded_at, participant.location_source) !== "Recent GPS fix" ? monitorFreshness(participant.location_recorded_at, participant.location_source) : locationStatus(participant.distance_from_venue, participant.accuracy, Number(activity.geofence_radius) || 100)).startsWith("Near") ? "bg-amber-100 text-amber-900" : participant.is_within_geofence === true ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-700"}`,
-                  children: monitorFreshness(participant.location_recorded_at, participant.location_source) !== "Recent GPS fix" ? monitorFreshness(participant.location_recorded_at, participant.location_source) : locationStatus(participant.distance_from_venue, participant.accuracy, Number(activity.geofence_radius) || 100)
+                  className: `px-2.5 py-1 rounded-full text-xs font-semibold ${monitorFreshness(participant.location_recorded_at, participant.location_source) !== "Recent GPS fix" ? "bg-slate-100 text-slate-700" : monitorLabel(participant, Number(activity.geofence_radius) || 100).startsWith("Near") ? "bg-amber-100 text-amber-900" : participant.is_within_geofence === true ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-700"}`,
+                  children: monitorLabel(participant, Number(activity.geofence_radius) || 100)
                 }
               ) }),
               /* @__PURE__ */ jsxRuntimeExports.jsxs("td", { className: "p-3 text-sm text-slate-600 font-mono", children: [
@@ -30177,7 +30194,7 @@ const FacultyActivityLocationView = () => {
               /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "p-3", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                 "span",
                 {
-                  className: `font-medium ${(participant.distance_from_venue || 0) <= (activity.geofence_radius || 100) ? "text-emerald-600" : "text-red-600"}`,
+                  className: `font-medium ${participant.distance_from_venue == null ? "text-slate-500" : participant.distance_from_venue <= (activity.geofence_radius || 100) ? "text-emerald-600" : "text-red-600"}`,
                   children: participant.distance_from_venue != null ? `${Number(participant.distance_from_venue).toFixed(1)} m` : "Unknown"
                 }
               ) }),
@@ -30189,7 +30206,8 @@ const FacultyActivityLocationView = () => {
               /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "p-3", children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
                 "button",
                 {
-                  className: "btn btn-sm bg-blue-50 text-blue-600 hover:bg-blue-100",
+                  className: "btn btn-sm bg-blue-50 text-blue-600 hover:bg-blue-100 disabled:opacity-40",
+                  disabled: !validCoordinates(participant.latitude, participant.longitude),
                   onClick: () => {
                     if (mapInstanceRef.current && validCoordinates(participant.latitude, participant.longitude)) {
                       mapInstanceRef.current.flyTo([Number(participant.latitude), Number(participant.longitude)], 18, {
@@ -30249,7 +30267,7 @@ const FacultyActivityLocationView = () => {
         /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "btn btn-sm", onClick: () => {
           if (mapInstanceRef.current && validCoordinates(activity.latitude, activity.longitude)) fitGeofence(mapInstanceRef.current, Number(activity.latitude), Number(activity.longitude), Number(activity.geofence_radius) || 100, [], true);
         }, children: "Focus boundary" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-slate-500", children: "Near-live monitor · refreshes every 5 seconds while visible. Phone uploads need internet and active activity tracking." })
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-slate-500", children: "Refreshes every 5 seconds. Registered students must open this activity on mobile and start attendance/location sharing while online. Class face attendance alone does not start activity tracking." })
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "relative", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", { ref: mapContainerRef, className: "h-[500px] w-full bg-slate-100", style: { minHeight: "500px" } }),
@@ -38232,7 +38250,8 @@ function CertificateDesigner() {
   ] });
 }
 const IssuedCertificates = () => {
-  const api_url = API_URL;
+  const [busyId, setBusyId] = reactExports.useState(null);
+  const [fileError, setFileError] = reactExports.useState("");
   const {
     data: certificates = [],
     isLoading,
@@ -38301,8 +38320,32 @@ const IssuedCertificates = () => {
     }
     return true;
   });
-  const handleDownload = async (id) => {
-    window.open(`${api_url}/student/certificates/${id}/download`, "_blank");
+  const handleFile = async (id, number, preview = false, qr = false) => {
+    if (busyId !== null) return;
+    const tab = preview ? window.open("", "_blank") : null;
+    if (tab) tab.opener = null;
+    setBusyId(id);
+    setFileError("");
+    try {
+      const file = await adminApi.getCertificateFile(id, qr);
+      const url = URL.createObjectURL(file);
+      const name = number.replace(/[^a-zA-Z0-9_-]/g, "_") || "certificate";
+      if (tab) tab.location.replace(url);
+      else {
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `${name}${qr ? "-qr.png" : ".pdf"}`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+      }
+      window.setTimeout(() => URL.revokeObjectURL(url), 6e4);
+    } catch (error2) {
+      tab?.close();
+      setFileError(error2 instanceof Error ? error2.message : "Unable to open this certificate.");
+    } finally {
+      setBusyId(null);
+    }
   };
   const clearFilters = () => {
     setSearchTerm("");
@@ -38341,6 +38384,7 @@ const IssuedCertificates = () => {
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsx(RefreshButton, { onRefresh: refresh, isLoading: isRefreshing })
     ] }),
+    fileError && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { role: "alert", className: "alert alert-danger", children: fileError }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-white p-4 rounded-xl shadow-sm border border-slate-200", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid grid-cols-1 md:grid-cols-3 gap-3", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "search-box", children: [
@@ -38486,22 +38530,34 @@ const IssuedCertificates = () => {
           "button",
           {
             className: "btn btn-info btn-sm",
-            onClick: () => window.open(
-              `${api_url}/storage/${cert.qr_code_path}`,
-              "_blank"
-            ),
+            disabled: busyId !== null,
+            onClick: () => handleFile(cert.id, cert.certificate_number, true, true),
             title: "View QR Code",
             children: /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-qrcode" })
           }
         ) : "-" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-          "button",
-          {
-            className: "btn btn-info btn-sm",
-            onClick: () => handleDownload(cert.id),
-            children: /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-download" })
-          }
-        ) })
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("td", { children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "button",
+            {
+              className: "btn btn-info btn-sm mr-2",
+              disabled: busyId !== null,
+              title: "View certificate PDF",
+              onClick: () => handleFile(cert.id, cert.certificate_number, true),
+              children: /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-eye" })
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsx(
+            "button",
+            {
+              className: "btn btn-info btn-sm",
+              disabled: busyId !== null,
+              title: "Download certificate PDF",
+              onClick: () => handleFile(cert.id, cert.certificate_number),
+              children: /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-download" })
+            }
+          )
+        ] })
       ] }, cert.id)) })
     ] }) }) })
   ] });
@@ -46345,6 +46401,10 @@ const ActivityLocationView = () => {
       ] }) })
     ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-slate-600", role: "status", children: isError ? "Connection interrupted - showing last received positions." : `Monitor refreshed: ${dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString() : "waiting"}. Updates about every 5 seconds while visible.` }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-sm text-slate-600", role: "status", children: [
+      participants.filter((p2) => !validCoordinates(p2.latitude, p2.longitude)).length,
+      " registered student(s) have no received GPS position. They cannot appear on the map until their phone sends a valid fix."
+    ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid grid-cols-2 md:grid-cols-4 gap-4", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-white p-4 rounded-xl shadow-sm border-l-4 border-slate-600", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "block text-xs text-slate-500", children: "Total Participants" }),
@@ -46415,7 +46475,6 @@ const ActivityLocationView = () => {
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
             /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "font-semibold text-slate-800 flex items-center gap-2", children: [
               "📍 Venue Location",
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "badge bg-amber-100 text-amber-900", children: "Near boundary / uncertain" }),
               /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "badge badge-gold text-xs", children: "Click to Zoom" })
             ] }),
             /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-sm text-slate-600", children: [
@@ -46456,8 +46515,8 @@ const ActivityLocationView = () => {
               /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "p-3", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                 "span",
                 {
-                  className: `px-2.5 py-1 rounded-full text-xs font-semibold ${monitorFreshness(participant.location_recorded_at, participant.location_source) !== "Recent GPS fix" ? "bg-slate-100 text-slate-700" : (monitorFreshness(participant.location_recorded_at, participant.location_source) !== "Recent GPS fix" ? monitorFreshness(participant.location_recorded_at, participant.location_source) : locationStatus(participant.distance_from_venue, participant.accuracy, Number(activity.geofence_radius) || 100)).startsWith("Near") ? "bg-amber-100 text-amber-900" : participant.is_within_geofence === true ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-700"}`,
-                  children: monitorFreshness(participant.location_recorded_at, participant.location_source) !== "Recent GPS fix" ? monitorFreshness(participant.location_recorded_at, participant.location_source) : locationStatus(participant.distance_from_venue, participant.accuracy, Number(activity.geofence_radius) || 100)
+                  className: `px-2.5 py-1 rounded-full text-xs font-semibold ${monitorFreshness(participant.location_recorded_at, participant.location_source) !== "Recent GPS fix" ? "bg-slate-100 text-slate-700" : monitorLabel(participant, Number(activity.geofence_radius) || 100).startsWith("Near") ? "bg-amber-100 text-amber-900" : participant.is_within_geofence === true ? "bg-emerald-100 text-emerald-800" : "bg-slate-100 text-slate-700"}`,
+                  children: monitorLabel(participant, Number(activity.geofence_radius) || 100)
                 }
               ) }),
               /* @__PURE__ */ jsxRuntimeExports.jsxs("td", { className: "p-3 text-sm text-slate-600 font-mono", children: [
@@ -46469,7 +46528,7 @@ const ActivityLocationView = () => {
               /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "p-3", children: /* @__PURE__ */ jsxRuntimeExports.jsx(
                 "span",
                 {
-                  className: `font-medium ${(participant.distance_from_venue || 0) <= (activity.geofence_radius || 100) ? "text-emerald-600" : "text-red-600"}`,
+                  className: `font-medium ${participant.distance_from_venue == null ? "text-slate-500" : participant.distance_from_venue <= (activity.geofence_radius || 100) ? "text-emerald-600" : "text-red-600"}`,
                   children: participant.distance_from_venue != null ? `${Number(participant.distance_from_venue).toFixed(1)} m` : "Unknown"
                 }
               ) }),
@@ -46481,7 +46540,8 @@ const ActivityLocationView = () => {
               /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "p-3", children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
                 "button",
                 {
-                  className: "btn btn-sm bg-blue-50 text-blue-600 hover:bg-blue-100",
+                  className: "btn btn-sm bg-blue-50 text-blue-600 hover:bg-blue-100 disabled:opacity-40",
+                  disabled: !validCoordinates(participant.latitude, participant.longitude),
                   onClick: () => {
                     if (mapInstanceRef.current && validCoordinates(participant.latitude, participant.longitude)) {
                       mapInstanceRef.current.flyTo([Number(participant.latitude), Number(participant.longitude)], 18, {
@@ -46541,7 +46601,7 @@ const ActivityLocationView = () => {
         /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "btn btn-sm", onClick: () => {
           if (mapInstanceRef.current && validCoordinates(activity.latitude, activity.longitude)) fitGeofence(mapInstanceRef.current, Number(activity.latitude), Number(activity.longitude), Number(activity.geofence_radius) || 100, [], true);
         }, children: "Focus boundary" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-slate-500", children: "Near-live monitor · refreshes every 5 seconds while visible. Phone uploads need internet and active activity tracking." })
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-slate-500", children: "Refreshes every 5 seconds. Registered students must open this activity on mobile and start attendance/location sharing while online. Class face attendance alone does not start activity tracking." })
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "relative", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", { ref: mapContainerRef, className: "h-[500px] w-full bg-slate-100", style: { minHeight: "500px" } }),
@@ -50762,4 +50822,4 @@ startSyncEngine();
 ReactDOM.createRoot(document.getElementById("root")).render(
   /* @__PURE__ */ jsxRuntimeExports.jsx(React.StrictMode, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(App, {}) })
 );
-//# sourceMappingURL=main-CGmqC0zR.js.map
+//# sourceMappingURL=main-CNqIpPvK.js.map

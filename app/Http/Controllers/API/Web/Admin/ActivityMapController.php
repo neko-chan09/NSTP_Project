@@ -38,7 +38,7 @@ class ActivityMapController extends Controller
             $allParticipations = $activity->participations;
             // One scoped query: each student's latest recorded fix, including its own accuracy/time.
             $latestLocations = StudentLocation::where('activity_id', $activity->id)
-                ->whereIn('id', StudentLocation::selectRaw('MAX(id)')->where('activity_id', $activity->id)->groupBy('student_id'))
+                ->whereNotExists(function($q){$q->selectRaw('1')->from('student_locations as newer')->whereColumn('newer.activity_id','student_locations.activity_id')->whereColumn('newer.student_id','student_locations.student_id')->where(function($q){$q->whereColumn('newer.tracked_at','>','student_locations.tracked_at')->orWhere(function($q){$q->whereColumn('newer.tracked_at','student_locations.tracked_at')->whereColumn('newer.id','>','student_locations.id');});});})
                 ->get()->keyBy('student_id');
 
             $participants = $allParticipations->map(function ($participation) use ($activity, $latestLocations) {
@@ -65,7 +65,7 @@ class ActivityMapController extends Controller
 
                 // FIX 2: Only calculate geofence status if valid coordinates exist
                 $isWithin = null;
-                if ($hasCheckIn && $fix && $fix->tracked_at && $fix->tracked_at->gte(now()->subSeconds(60)) && $fix->tracked_at->lte(now()->addSeconds(30)) && $fix->accuracy !== null) {
+                if ($participation->is_tracking_location && $hasCheckIn && $fix && $fix->tracked_at && $fix->tracked_at->gte(now()->subSeconds(60)) && $fix->tracked_at->lte(now()->addSeconds(30)) && $fix->accuracy !== null) {
                     $geofenceRadius = $activity->geofence_radius ?? 100;
                     if ($distance !== null && $fix->accuracy >= 0) {
                         if ($distance + $fix->accuracy <= $geofenceRadius) $isWithin = true;
@@ -79,7 +79,10 @@ class ActivityMapController extends Controller
                     'student_name' => $user ? ($user->first_name . ' ' . $user->last_name) : 'Unknown Student',
                     'latitude' => $hasCheckIn ? (float)$lat : null,
                     'longitude' => $hasCheckIn ? (float)$lng : null,
-                    'has_checked_in' => $hasCheckIn,
+                    'has_checked_in' => (bool)($participation->check_in_at ?? $participation->attended_at),
+                    'has_location'=>$hasCheckIn,
+                    'is_tracking'=>(bool)$participation->is_tracking_location,
+                    'location_state'=>!$hasCheckIn?($participation->is_tracking_location?'waiting_gps':'not_sharing'):(!$participation->is_tracking_location?'stopped':($fix?'received':'checkin_only')),
                     'accuracy' => $fix && $fix->accuracy !== null ? (float)$fix->accuracy : null,
                     'location_source' => $fix ? $fix->location_source : 'checkin',
                     'location_recorded_at' => $fix ? $fix->tracked_at : ($participation->check_in_at ?? $participation->attended_at),
@@ -92,7 +95,7 @@ class ActivityMapController extends Controller
             });
 
             // FIX 3: Count checked-in vs registered accurately
-            $checkedInParticipants = $participants->filter(fn($p) => $p['has_checked_in'] === true);
+            $checkedInParticipants = $participants->filter(fn($p) => $p['has_location'] === true);
             $withinGeofence = $checkedInParticipants->filter(fn($p) => $p['is_within_geofence'] === true)->count();
             $outsideGeofence = $checkedInParticipants->filter(fn($p) => $p['is_within_geofence'] === false)->count();
 
@@ -109,12 +112,13 @@ class ActivityMapController extends Controller
                 'end_datetime' => $activity->end_datetime,
                 'component_type' => $activity->component_type,
                 'total_participants' => $participants->count(),
-                'checked_in_participants' => $checkedInParticipants->count(),
+                'checked_in_participants' => $participants->where('has_checked_in',true)->count(),
             ];
 
             $stats = [
                 'total_registrations' => $participants->count(),
                 'checked_in_with_location' => $checkedInParticipants->count(),
+                'waiting_for_location'=>$participants->count()-$checkedInParticipants->count(),
                 'within_geofence' => $withinGeofence,
                 'outside_geofence' => $outsideGeofence,
                 'pending_checkin' => $participants->count() - $checkedInParticipants->count(),

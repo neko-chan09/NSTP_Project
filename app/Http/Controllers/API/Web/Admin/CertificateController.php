@@ -29,6 +29,18 @@ class CertificateController extends Controller
         return response()->json(['success' => true, 'data' => $certificates]);
     }
 
+    public function download(Request $request, $id)
+    {
+        $this->authorizeAdmin($request);
+        return app(\App\Services\CertificateFileService::class)->download(Certificate::findOrFail($id));
+    }
+
+    public function qr(Request $request, $id)
+    {
+        $this->authorizeAdmin($request);
+        return app(\App\Services\CertificateFileService::class)->download(Certificate::findOrFail($id), true);
+    }
+
     // ── INSERTED HERE ──
     public function getEligibleStudents(Request $request)
     {
