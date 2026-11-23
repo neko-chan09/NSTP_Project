@@ -65,7 +65,7 @@ class ActivityMapController extends Controller
 
                 // FIX 2: Only calculate geofence status if valid coordinates exist
                 $isWithin = null;
-                if ($participation->is_tracking_location && $hasCheckIn && $fix && $fix->tracked_at && $fix->tracked_at->gte(now()->subSeconds(60)) && $fix->tracked_at->lte(now()->addSeconds(30)) && $fix->accuracy !== null) {
+                if ($activity->status !== 'completed' && $participation->is_tracking_location && $hasCheckIn && $fix && $fix->tracked_at && $fix->tracked_at->gte(now()->subSeconds(60)) && $fix->tracked_at->lte(now()->addSeconds(30)) && $fix->accuracy !== null) {
                     $geofenceRadius = $activity->geofence_radius ?? 100;
                     if ($distance !== null && $fix->accuracy >= 0) {
                         if ($distance + $fix->accuracy <= $geofenceRadius) $isWithin = true;
@@ -81,7 +81,8 @@ class ActivityMapController extends Controller
                     'longitude' => $hasCheckIn ? (float)$lng : null,
                     'has_checked_in' => (bool)($participation->check_in_at ?? $participation->attended_at),
                     'has_location'=>$hasCheckIn,
-                    'is_tracking'=>(bool)$participation->is_tracking_location,
+                    'is_tracking'=>$activity->status !== 'completed' && (bool)$participation->is_tracking_location,
+                    'historical'=>$activity->status === 'completed',
                     'location_state'=>!$hasCheckIn?($participation->is_tracking_location?'waiting_gps':'not_sharing'):(!$participation->is_tracking_location?'stopped':($fix?'received':'checkin_only')),
                     'accuracy' => $fix && $fix->accuracy !== null ? (float)$fix->accuracy : null,
                     'location_source' => $fix ? $fix->location_source : 'checkin',
@@ -169,6 +170,7 @@ class ActivityMapController extends Controller
 
 
 
+            $activity->assertEditable();
             $activity->update([
                 'latitude' => $request->latitude,
                 'longitude' => $request->longitude,
@@ -181,6 +183,8 @@ class ActivityMapController extends Controller
                 'data' => $activity
             ]);
 
+        } catch (\Symfony\Component\HttpKernel\Exception\HttpException $e) {
+            throw $e;
         } catch (\Exception $e) {
             Log::error('Update Location Error: ' . $e->getMessage());
             return response()->json([
@@ -210,9 +214,7 @@ class ActivityMapController extends Controller
             }
 
             // Filter by status
-            if ($request->has('status') && $request->status !== 'all') {
-                $query->where('status', $request->status);
-            }
+
 
             // Filter by component
             if ($request->has('component') && $request->component !== 'all') {
@@ -227,7 +229,8 @@ class ActivityMapController extends Controller
                 $query->whereDate('end_datetime', '<=', $request->end_date);
             }
 
-            $activities = $query->orderBy('start_datetime', 'desc')->get();
+            $activities = $query->orderBy('start_datetime', 'desc')->get()
+                ->filter(fn($activity) => !$request->filled('status') || $request->status === 'all' || $activity->status === $request->status)->values();
 
             return response()->json([
                 'success' => true,

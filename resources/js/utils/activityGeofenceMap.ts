@@ -3,7 +3,7 @@ import L from "leaflet";
 export interface LocationPoint {
   latitude: number | null; longitude: number | null;
   student_name: string; student_id: string;
-  is_tracking?:boolean;location_state?:string;
+  historical?:boolean;is_tracking?:boolean;location_state?:string;
   accuracy?: number | null; location_recorded_at?: string | null; location_source?: string;
   distance_from_venue: number | null;
 }
@@ -25,6 +25,7 @@ export function monitorFreshness(recorded:string|null|undefined,source?:string,n
 }
 export function monitorLabel(point:LocationPoint,radius:number):string {
  if(!validCoordinates(point.latitude,point.longitude))return point.is_tracking?'Waiting for first GPS fix':'Not sharing - no GPS received';
+ if(point.historical)return 'Historical position - completed activity';
  if(point.is_tracking===false)return 'Sharing stopped - last known position';
  const fresh=monitorFreshness(point.location_recorded_at,point.location_source);
  return fresh==='Recent GPS fix'?locationStatus(point.distance_from_venue,point.accuracy,radius):fresh;

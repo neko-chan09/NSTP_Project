@@ -29827,6 +29827,7 @@ function monitorFreshness(recorded, source, now = Date.now()) {
 }
 function monitorLabel(point, radius) {
   if (!validCoordinates(point.latitude, point.longitude)) return point.is_tracking ? "Waiting for first GPS fix" : "Not sharing - no GPS received";
+  if (point.historical) return "Historical position - completed activity";
   if (point.is_tracking === false) return "Sharing stopped - last known position";
   const fresh = monitorFreshness(point.location_recorded_at, point.location_source);
   return fresh === "Recent GPS fix" ? locationStatus(point.distance_from_venue, point.accuracy, radius) : fresh;
@@ -29928,7 +29929,7 @@ const FacultyActivityLocationView = () => {
     },
     enabled: !!id && !isNaN(parseInt(id)),
     staleTime: 5e3,
-    refetchInterval: 5e3,
+    refetchInterval: (query) => query.state.data?.activity?.status === "completed" ? false : 5e3,
     refetchIntervalInBackground: false,
     retry: 1
   });
@@ -30083,7 +30084,7 @@ const FacultyActivityLocationView = () => {
         " Refresh"
       ] }) })
     ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-slate-600", role: "status", children: isError ? "Connection interrupted - showing last received positions." : `Monitor refreshed: ${dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString() : "waiting"}. Updates about every 5 seconds while visible.` }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-slate-600", role: "status", children: activity.status === "completed" ? "Archived activity - historical positions only. Live tracking has ended." : isError ? "Connection interrupted - showing last received positions." : `Monitor refreshed: ${dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString() : "waiting"}. Updates about every 5 seconds while visible.` }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-sm text-slate-600", role: "status", children: [
       participants.filter((p2) => !validCoordinates(p2.latitude, p2.longitude)).length,
       " registered student(s) have no received GPS position. They cannot appear on the map until their phone sends a valid fix."
@@ -30284,7 +30285,7 @@ const FacultyActivityLocationView = () => {
         /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "btn btn-sm", onClick: () => {
           if (mapInstanceRef.current && validCoordinates(activity.latitude, activity.longitude)) fitGeofence(mapInstanceRef.current, Number(activity.latitude), Number(activity.longitude), Number(activity.geofence_radius) || 100, [], true);
         }, children: "Focus boundary" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-slate-500", children: "Refreshes every 5 seconds. Registered students must open this activity on mobile and start attendance/location sharing while online. Class face attendance alone does not start activity tracking." })
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-slate-500", children: activity.status === "completed" ? "Archive: saved locations remain viewable. Editing and live tracking are locked." : "Refreshes every 5 seconds while visible. Student location sharing requires internet." })
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "relative", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", { ref: mapContainerRef, className: "h-[500px] w-full bg-slate-100", style: { minHeight: "500px" } }),
@@ -41620,6 +41621,7 @@ const FacultyStudents = () => {
 const ActivityMap = () => {
   const navigate = useNavigate();
   const queryClient2 = useQueryClient();
+  const [archiveView, setArchiveView] = reactExports.useState(false);
   const [filterStatus, setFilterStatus] = reactExports.useState("all");
   const [filterComponent, setFilterComponent] = reactExports.useState("all");
   const [searchTerm, setSearchTerm] = reactExports.useState("");
@@ -41637,11 +41639,12 @@ const ActivityMap = () => {
       status: filterStatus === "all" ? void 0 : filterStatus,
       component: filterComponent === "all" ? void 0 : filterComponent
     }),
-    staleTime: 3e4
+    staleTime: 3e4,
+    refetchInterval: 3e4
   });
   const activities = activitiesData?.data || [];
   const filteredActivities = reactExports.useMemo(() => {
-    let list = activities;
+    let list = activities.filter((a2) => a2.status === "completed" === archiveView);
     if (searchTerm.trim()) {
       const q2 = searchTerm.toLowerCase();
       list = list.filter(
@@ -41649,7 +41652,7 @@ const ActivityMap = () => {
       );
     }
     return list;
-  }, [activities, searchTerm]);
+  }, [activities, archiveView, searchTerm]);
   const updateLocationMutation = useMutation({
     mutationFn: ({
       id,
@@ -41670,6 +41673,10 @@ const ActivityMap = () => {
     navigate(`/admin/activities/location/${activityId}`);
   };
   const handleEditLocation = (activity) => {
+    if (!["upcoming", "ongoing"].includes(activity.status)) {
+      zt.error("This activity is view-only.");
+      return;
+    }
     setEditingActivity(activity);
     setShowEditLocationModal(true);
   };
@@ -41745,6 +41752,17 @@ const ActivityMap = () => {
     ] });
   }
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-5", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-wrap gap-2 mb-4", role: "group", "aria-label": "Location monitor records", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", "aria-pressed": !archiveView, className: `btn ${!archiveView ? "btn-primary" : "btn-secondary"}`, onClick: () => {
+        setArchiveView(false);
+        setFilterStatus("all");
+      }, children: "Current activities" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", "aria-pressed": archiveView, className: `btn ${archiveView ? "btn-primary" : "btn-secondary"}`, onClick: () => {
+        setArchiveView(true);
+        setFilterStatus("all");
+      }, children: "Archive" })
+    ] }),
+    archiveView && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-slate-600 mb-4", children: "Completed activities · historical locations · view only" }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("h2", { className: "text-2xl font-bold text-navy-900", children: [
@@ -41795,7 +41813,7 @@ const ActivityMap = () => {
               /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "all", children: "All Status" }),
               /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "upcoming", children: "Upcoming" }),
               /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "ongoing", children: "Ongoing" }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "completed", children: "Completed" })
+              archiveView && /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "completed", children: "Completed" })
             ]
           }
         ),
@@ -42031,8 +42049,10 @@ const ActivityMap = () => {
                   /* @__PURE__ */ jsxRuntimeExports.jsx(
                     "button",
                     {
+                      style: { display: ["upcoming", "ongoing"].includes(activity.status) ? void 0 : "none" },
                       type: "button",
                       className: "btn btn-secondary btn-sm",
+                      disabled: !["upcoming", "ongoing"].includes(activity.status),
                       onClick: () => handleEditLocation(activity),
                       title: "Edit Location",
                       children: /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-edit" })
@@ -42041,8 +42061,10 @@ const ActivityMap = () => {
                 ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs(
                   "button",
                   {
+                    style: { display: ["upcoming", "ongoing"].includes(activity.status) ? void 0 : "none" },
                     type: "button",
                     className: "btn btn-primary btn-sm",
+                    disabled: !["upcoming", "ongoing"].includes(activity.status),
                     onClick: () => handleEditLocation(activity),
                     title: "Set Location",
                     children: [
@@ -42126,6 +42148,7 @@ const ActivityMap = () => {
                   !hasLocation && /* @__PURE__ */ jsxRuntimeExports.jsxs(
                     "button",
                     {
+                      style: { display: ["upcoming", "ongoing"].includes(activity.status) ? void 0 : "none" },
                       type: "button",
                       className: "btn btn-primary btn-sm",
                       onClick: (e2) => {
@@ -42869,7 +42892,9 @@ function useActivities() {
   const query = useQuery({
     queryKey: ACTIVITIES_KEY,
     queryFn: () => adminApi.getActivities(),
-    staleTime: 6e4
+    staleTime: 3e4,
+    refetchInterval: 3e4,
+    refetchOnWindowFocus: true
   });
   const refresh = () => {
     queryClient2.invalidateQueries({ queryKey: ACTIVITIES_KEY });
@@ -42918,7 +42943,7 @@ const ActivityParticipants = ({
   const [removingParticipant, setRemovingParticipant] = reactExports.useState(
     null
   );
-  const canEdit = !isSuperAdmin && isAdmin || isFaculty && activity.created_by === user?.id;
+  const canEdit = ["upcoming", "ongoing"].includes(activity.status) && (!isSuperAdmin && isAdmin || isFaculty && activity.created_by === user?.id);
   const fetchParticipants = async () => {
     try {
       setLoading(true);
@@ -43136,126 +43161,138 @@ const ActivityParticipants = ({
         /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "modal-close", onClick: onClose, children: "×" })
       ] })
     ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "modal-body", children: loading ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-center py-12", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "spinner" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "ml-3 text-slate-500", children: "Loading participants..." })
-    ] }) : error ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-center", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-exclamation-circle mr-2" }),
-      error,
-      /* @__PURE__ */ jsxRuntimeExports.jsx(
-        "button",
-        {
-          className: "ml-3 text-red-700 underline hover:text-red-900",
-          onClick: fetchParticipants,
-          children: "Retry"
-        }
-      )
-    ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-wrap gap-3 mb-4", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "search-box flex-1 min-w-[200px]", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-search" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "input",
-            {
-              type: "text",
-              placeholder: "Search by name, ID, or email...",
-              value: searchTerm,
-              onChange: (e2) => setSearchTerm(e2.target.value)
-            }
-          ),
-          searchTerm && /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "button",
-            {
-              className: "text-slate-400 hover:text-slate-600 px-2",
-              onClick: () => setSearchTerm(""),
-              children: /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-times" })
-            }
-          )
-        ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs(
-          "select",
-          {
-            className: "px-3 py-2 border border-slate-200 rounded-lg bg-white text-sm focus:outline-none focus:ring-2 focus:ring-gold-500",
-            value: filterStatus,
-            onChange: (e2) => setFilterStatus(e2.target.value),
-            children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "all", children: "All Status" }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "registered", children: "Registered" }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "present", children: "Present" }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "absent", children: "Absent" }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "excused", children: "Excused" })
-            ]
-          }
-        ),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-sm text-slate-500 self-center", children: [
-          filteredParticipants.length,
-          " of ",
-          participants.length,
-          " ",
-          "participants"
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "modal-body", children: [
+      activity.status === "completed" && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "mb-4 text-sm text-slate-700", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "font-semibold", children: "Archived activity · View only" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "whitespace-pre-wrap", children: activity.description }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { children: [
+          "Ended: ",
+          new Date(activity.end_datetime).toLocaleString(),
+          " · Training hours: ",
+          activity.training_hours
         ] })
       ] }),
-      filteredParticipants.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "empty-state", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-user-slash" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: searchTerm || filterStatus !== "all" ? "No matching participants found" : "No participants registered yet" })
-      ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "overflow-x-auto", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("table", { className: "data-table", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("thead", { children: /* @__PURE__ */ jsxRuntimeExports.jsxs("tr", { children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Student ID" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Name" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Email" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Course" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Section" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Status" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Hours" }),
-          canEdit && /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Actions" })
-        ] }) }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("tbody", { children: filteredParticipants.map((participant) => /* @__PURE__ */ jsxRuntimeExports.jsxs("tr", { children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "font-bold text-navy-900", children: participant.student_id }),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("td", { children: [
-            participant.user.first_name,
-            " ",
-            participant.user.last_name
-          ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: participant.user.email }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: participant.course || "-" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: participant.section || "-" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("td", { children: [
-            canEdit ? /* @__PURE__ */ jsxRuntimeExports.jsxs(
-              "select",
+      loading ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-center py-12", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "spinner" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "ml-3 text-slate-500", children: "Loading participants..." })
+      ] }) : error ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-center", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-exclamation-circle mr-2" }),
+        error,
+        /* @__PURE__ */ jsxRuntimeExports.jsx(
+          "button",
+          {
+            className: "ml-3 text-red-700 underline hover:text-red-900",
+            onClick: fetchParticipants,
+            children: "Retry"
+          }
+        )
+      ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-wrap gap-3 mb-4", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "search-box flex-1 min-w-[200px]", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-search" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "input",
               {
-                className: `px-2 py-1 rounded text-xs font-semibold border-0 ${getStatusColor2(participant.attendance_status)} text-white`,
-                value: participant.attendance_status,
-                onChange: (e2) => updateStatus(participant.id, e2.target.value),
-                disabled: updatingStatus === participant.id,
-                children: [
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "registered", children: "Registered" }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "present", children: "Present" }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "absent", children: "Absent" }),
-                  /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "excused", children: "Excused" })
-                ]
-              }
-            ) : /* @__PURE__ */ jsxRuntimeExports.jsx(
-              "span",
-              {
-                className: `badge ${getStatusColor2(participant.attendance_status)} text-white`,
-                children: getStatusLabel2(participant.attendance_status)
+                type: "text",
+                placeholder: "Search by name, ID, or email...",
+                value: searchTerm,
+                onChange: (e2) => setSearchTerm(e2.target.value)
               }
             ),
-            updatingStatus === participant.id && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "ml-1 text-xs text-slate-400", children: /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-spinner fa-spin" }) })
+            searchTerm && /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "button",
+              {
+                className: "text-slate-400 hover:text-slate-600 px-2",
+                onClick: () => setSearchTerm(""),
+                children: /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-times" })
+              }
+            )
           ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: participant.hours_earned || 0 }),
-          canEdit && /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx(
-            "button",
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "select",
             {
-              className: "btn btn-danger btn-sm",
-              onClick: () => removeParticipant(participant.id),
-              disabled: removingParticipant === participant.id,
-              children: removingParticipant === participant.id ? /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-spinner fa-spin" }) : /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-user-minus" })
+              className: "px-3 py-2 border border-slate-200 rounded-lg bg-white text-sm focus:outline-none focus:ring-2 focus:ring-gold-500",
+              value: filterStatus,
+              onChange: (e2) => setFilterStatus(e2.target.value),
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "all", children: "All Status" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "registered", children: "Registered" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "present", children: "Present" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "absent", children: "Absent" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "excused", children: "Excused" })
+              ]
             }
-          ) })
-        ] }, participant.id)) })
-      ] }) })
-    ] }) }),
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-sm text-slate-500 self-center", children: [
+            filteredParticipants.length,
+            " of ",
+            participants.length,
+            " ",
+            "participants"
+          ] })
+        ] }),
+        filteredParticipants.length === 0 ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "empty-state", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-user-slash" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: searchTerm || filterStatus !== "all" ? "No matching participants found" : "No participants registered yet" })
+        ] }) : /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "overflow-x-auto", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("table", { className: "data-table", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("thead", { children: /* @__PURE__ */ jsxRuntimeExports.jsxs("tr", { children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Student ID" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Name" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Email" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Course" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Section" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Status" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Hours" }),
+            canEdit && /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Actions" })
+          ] }) }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("tbody", { children: filteredParticipants.map((participant) => /* @__PURE__ */ jsxRuntimeExports.jsxs("tr", { children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "font-bold text-navy-900", children: participant.student_id }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("td", { children: [
+              participant.user.first_name,
+              " ",
+              participant.user.last_name
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: participant.user.email }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: participant.course || "-" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: participant.section || "-" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("td", { children: [
+              canEdit ? /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                "select",
+                {
+                  className: `px-2 py-1 rounded text-xs font-semibold border-0 ${getStatusColor2(participant.attendance_status)} text-white`,
+                  value: participant.attendance_status,
+                  onChange: (e2) => updateStatus(participant.id, e2.target.value),
+                  disabled: updatingStatus === participant.id,
+                  children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "registered", children: "Registered" }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "present", children: "Present" }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "absent", children: "Absent" }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "excused", children: "Excused" })
+                  ]
+                }
+              ) : /* @__PURE__ */ jsxRuntimeExports.jsx(
+                "span",
+                {
+                  className: `badge ${getStatusColor2(participant.attendance_status)} text-white`,
+                  children: getStatusLabel2(participant.attendance_status)
+                }
+              ),
+              updatingStatus === participant.id && /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "ml-1 text-xs text-slate-400", children: /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-spinner fa-spin" }) })
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: participant.hours_earned || 0 }),
+            canEdit && /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx(
+              "button",
+              {
+                className: "btn btn-danger btn-sm",
+                onClick: () => removeParticipant(participant.id),
+                disabled: removingParticipant === participant.id,
+                children: removingParticipant === participant.id ? /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-spinner fa-spin" }) : /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-user-minus" })
+              }
+            ) })
+          ] }, participant.id)) })
+        ] }) })
+      ] })
+    ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "modal-footer", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-4 text-sm text-slate-500 mr-auto", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
@@ -43331,6 +43368,7 @@ const buildMonthGrid$1 = (month) => {
 };
 const Activities = () => {
   const { isAdmin, isSuperAdmin, isFaculty, user } = useAuth();
+  const [archiveView, setArchiveView] = reactExports.useState(false);
   const canManage = !isSuperAdmin && (isAdmin || isFaculty);
   const facultyComponent = isFaculty ? user?.nstp_component : void 0;
   const defaultComponent = facultyComponent || "cwts";
@@ -43359,6 +43397,7 @@ const Activities = () => {
   const [touched, setTouched] = reactExports.useState({});
   const [calendarMonth, setCalendarMonth] = reactExports.useState(/* @__PURE__ */ new Date());
   const canEditActivity = (activity) => {
+    if (!["upcoming", "ongoing"].includes(activity.status)) return false;
     if (isSuperAdmin) return false;
     if (isAdmin) return true;
     if (isFaculty) return activity.created_by === user?.id;
@@ -43552,7 +43591,7 @@ const Activities = () => {
     return badges[type] || "bg-slate-100 text-slate-800";
   };
   const filteredActivities = reactExports.useMemo(() => {
-    let list = activities;
+    let list = activities.filter((a2) => archiveView ? a2.status === "completed" : a2.status !== "completed");
     if (filterComponent !== "all") {
       list = list.filter((a2) => a2.component_type === filterComponent);
     }
@@ -43566,7 +43605,7 @@ const Activities = () => {
       );
     }
     return list;
-  }, [activities, filterComponent, filterStatus, searchTerm]);
+  }, [activities, archiveView, filterComponent, filterStatus, searchTerm]);
   const handleActivityClick = (activity) => {
     setSelectedActivity(activity);
     setShowParticipantsModal(true);
@@ -43683,12 +43722,31 @@ const Activities = () => {
             className: "btn-sm"
           }
         ),
-        canManage && /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { className: "btn btn-primary btn-sm", onClick: openCreate, children: [
+        canManage && !archiveView && /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { className: "btn btn-primary btn-sm", onClick: openCreate, children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-plus" }),
           " New Activity"
         ] })
       ] })
     ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-wrap gap-2", role: "group", "aria-label": "Activity records", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { type: "button", "aria-pressed": !archiveView, className: `btn ${!archiveView ? "btn-primary" : "btn-secondary"}`, onClick: () => {
+        setArchiveView(false);
+        setFilterStatus("all");
+      }, children: [
+        "Current activities (",
+        activities.filter((a2) => a2.status !== "completed").length,
+        ")"
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { type: "button", "aria-pressed": archiveView, className: `btn ${archiveView ? "btn-primary" : "btn-secondary"}`, onClick: () => {
+        setArchiveView(true);
+        setFilterStatus("all");
+      }, children: [
+        "Archive (",
+        completedCount,
+        ")"
+      ] })
+    ] }),
+    archiveView && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-slate-600", children: "Completed activities are archived automatically. View activity details and participants; editing, deletion, and attendance changes are locked." }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-white p-4 rounded-xl shadow-sm border border-slate-200", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-wrap items-center gap-3", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "search-box flex-1 min-w-[220px]", children: [
@@ -43735,7 +43793,7 @@ const Activities = () => {
               /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "all", children: "All Status" }),
               /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "upcoming", children: "Upcoming" }),
               /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "ongoing", children: "Ongoing" }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "completed", children: "Completed" }),
+              archiveView && /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "completed", children: "Completed" }),
               /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "cancelled", children: "Cancelled" })
             ]
           }
@@ -44195,7 +44253,7 @@ const Activities = () => {
     showParticipantsModal && selectedActivity && /* @__PURE__ */ jsxRuntimeExports.jsx(
       ActivityParticipants,
       {
-        activity: selectedActivity,
+        activity: activities.find((a2) => a2.id === selectedActivity.id) || selectedActivity,
         onClose: () => setShowParticipantsModal(false),
         onRefresh: refresh
       }
@@ -46263,7 +46321,7 @@ const ActivityLocationView = () => {
     },
     enabled: !!id && !isNaN(parseInt(id)),
     staleTime: 5e3,
-    refetchInterval: 5e3,
+    refetchInterval: (query) => query.state.data?.activity?.status === "completed" ? false : 5e3,
     refetchIntervalInBackground: false,
     retry: 1
   });
@@ -46417,7 +46475,7 @@ const ActivityLocationView = () => {
         " Refresh"
       ] }) })
     ] }),
-    /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-slate-600", role: "status", children: isError ? "Connection interrupted - showing last received positions." : `Monitor refreshed: ${dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString() : "waiting"}. Updates about every 5 seconds while visible.` }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-slate-600", role: "status", children: activity.status === "completed" ? "Archived activity - historical positions only. Live tracking has ended." : isError ? "Connection interrupted - showing last received positions." : `Monitor refreshed: ${dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString() : "waiting"}. Updates about every 5 seconds while visible.` }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-sm text-slate-600", role: "status", children: [
       participants.filter((p2) => !validCoordinates(p2.latitude, p2.longitude)).length,
       " registered student(s) have no received GPS position. They cannot appear on the map until their phone sends a valid fix."
@@ -46618,7 +46676,7 @@ const ActivityLocationView = () => {
         /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "btn btn-sm", onClick: () => {
           if (mapInstanceRef.current && validCoordinates(activity.latitude, activity.longitude)) fitGeofence(mapInstanceRef.current, Number(activity.latitude), Number(activity.longitude), Number(activity.geofence_radius) || 100, [], true);
         }, children: "Focus boundary" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-slate-500", children: "Refreshes every 5 seconds. Registered students must open this activity on mobile and start attendance/location sharing while online. Class face attendance alone does not start activity tracking." })
+        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-slate-500", children: activity.status === "completed" ? "Archive: saved locations remain viewable. Editing and live tracking are locked." : "Refreshes every 5 seconds while visible. Student location sharing requires internet." })
       ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "relative", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("div", { ref: mapContainerRef, className: "h-[500px] w-full bg-slate-100", style: { minHeight: "500px" } }),
@@ -46653,9 +46711,175 @@ const ActivityLocationView = () => {
     ] })
   ] });
 };
+function ImportBackup({ onClose, backupId }) {
+  const [file, setFile] = reactExports.useState(null);
+  const [backup, setBackup] = reactExports.useState(null);
+  const [busy, setBusy] = reactExports.useState(false);
+  const [message, setMessage] = reactExports.useState("");
+  const [confirm, setConfirm] = reactExports.useState("");
+  const [password, setPassword] = reactExports.useState("");
+  const [understand, setUnderstand] = reactExports.useState(false);
+  const [restored, setRestored] = reactExports.useState(false);
+  const lock = reactExports.useRef(false);
+  const [history, setHistory] = reactExports.useState([]);
+  async function signInAgain() {
+    if ("caches" in window) await caches.delete("nstp-api-get").catch(() => false);
+    for (const key of ["token", "nstp_token", "user", "nstp_user"]) localStorage.removeItem(key);
+    window.location.assign("/login");
+  }
+  reactExports.useEffect(() => {
+    let mounted = true;
+    secureRequest("/superadmin/backups/imports").then((result) => {
+      if (mounted) setHistory(result.data || []);
+    }).catch(() => {
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+  reactExports.useEffect(() => {
+    if (!backupId) return;
+    let mounted = true;
+    lock.current = true;
+    setBusy(true);
+    secureRequest(`/superadmin/backups/${backupId}/prepare-import`, "POST").then((result) => {
+      if (mounted) {
+        setBackup(result.data);
+        setMessage(result.message);
+      }
+    }).catch((error) => {
+      if (mounted) setMessage(error.message);
+    }).finally(() => {
+      lock.current = false;
+      if (mounted) setBusy(false);
+    });
+    return () => {
+      mounted = false;
+    };
+  }, [backupId]);
+  async function run(kind) {
+    if (lock.current) return;
+    if (kind === "upload" && (!file || !file.name.toLowerCase().endsWith(".zip") || file.size > 100 * 1024 * 1024)) {
+      setMessage("Choose a ZIP file up to 100 MB.");
+      return;
+    }
+    if (kind === "restore" && (!understand || confirm !== "RESTORE" || !password)) {
+      setMessage("Confirm replacement, type RESTORE, and enter your Super Admin password.");
+      return;
+    }
+    lock.current = true;
+    setBusy(true);
+    setMessage("");
+    try {
+      if (kind === "upload") {
+        const body = new FormData();
+        body.append("backup", file);
+        const result = await secureRequest("/superadmin/backups/imports", "POST", body);
+        setBackup(result.data);
+        setMessage(result.message);
+      } else if (backup) {
+        if (kind === "test") {
+          const result = await secureRequest(`/superadmin/backups/imports/${backup.id}/test`, "POST");
+          setBackup(result.data);
+          setMessage(result.message);
+        } else {
+          const result = await secureRequest(`/superadmin/backups/imports/${backup.id}/restore`, "POST", { confirmation: confirm, password });
+          setPassword("");
+          setRestored(true);
+          setMessage(result.message);
+        }
+      }
+    } catch (error) {
+      setMessage(error.message || "Recovery request failed.");
+    } finally {
+      lock.current = false;
+      setBusy(false);
+    }
+  }
+  return /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "modal-overlay", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "modal modal-lg", role: "dialog", "aria-modal": "true", "aria-labelledby": "import-backup-heading", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { className: "modal-header", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("h3", { id: "import-backup-heading", children: "Import backup · Super Admin" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", disabled: busy, className: "modal-close", "aria-label": "Close import backup", onClick: onClose, children: "×" })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "modal-body space-y-4", children: [
+      !restored && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "Upload an NSTP database-and-storage ZIP. Uploading does not change your current data." }),
+        history.length > 0 && /* @__PURE__ */ jsxRuntimeExports.jsxs("details", { children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("summary", { children: "Previous imports and recovery history" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("ul", { className: "space-y-2", children: history.map((row) => /* @__PURE__ */ jsxRuntimeExports.jsx("li", { children: /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { className: "btn btn-secondary btn-sm", disabled: busy || !!row.restored_at, onClick: () => {
+            setBackup(row);
+            setConfirm("");
+            setPassword("");
+            setUnderstand(false);
+          }, children: [
+            row.filename,
+            " · ",
+            row.restored_at ? "Restored" : row.tested ? "Tested" : "Imported"
+          ] }) }, row.id)) })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "block", children: [
+          "Backup ZIP (maximum 100 MB)",
+          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "file", accept: ".zip,application/zip", disabled: busy, className: "input", onChange: (e2) => {
+            setFile(e2.target.files?.[0] ?? null);
+            setBackup(null);
+            setMessage("");
+            setConfirm("");
+            setUnderstand(false);
+            setPassword("");
+          } })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "btn btn-primary", disabled: busy || !file, onClick: () => run("upload"), children: "Upload and verify" }),
+        backup && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "border rounded-lg p-4 space-y-2", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "font-semibold", children: backup.filename }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { children: [
+              "Backup date: ",
+              backup.backup_date ? new Date(backup.backup_date).toLocaleString() : "Not recorded in this older backup"
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { children: [
+              backup.files,
+              " files · Database: ",
+              backup.driver
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: backup.legacy ? "text-amber-700" : "text-emerald-700", children: backup.legacy ? "Older backup: original integrity cannot be fully verified. Recovery testing is required." : "Archive checksums verified. Only restore backups you trust." }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "btn btn-secondary", disabled: busy, onClick: () => run("test"), children: "Test recovery in separate database" })
+          ] }),
+          backup.tested && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "border border-amber-300 rounded-lg p-4 space-y-3", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { children: [
+              "Recovery test passed · ",
+              backup.test_tables,
+              " tables checked. Test expires: ",
+              new Date(backup.test_expires_at).toLocaleTimeString(),
+              "."
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "font-semibold", children: "Full restore replaces database records and uploaded files. Records newer than this backup may be lost. A safety backup is created first." }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "flex gap-2", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "checkbox", checked: understand, disabled: busy, onChange: (e2) => setUnderstand(e2.target.checked) }),
+              "I understand that current data will be replaced."
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "block", children: [
+              "Type RESTORE",
+              /* @__PURE__ */ jsxRuntimeExports.jsx("input", { className: "input", disabled: busy, value: confirm, onChange: (e2) => setConfirm(e2.target.value) })
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "block", children: [
+              "Your Super Admin password",
+              /* @__PURE__ */ jsxRuntimeExports.jsx("input", { className: "input", type: "password", autoComplete: "current-password", disabled: busy, value: password, onChange: (e2) => setPassword(e2.target.value) })
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "btn btn-danger", disabled: busy || !understand || confirm !== "RESTORE" || !password, onClick: () => run("restore"), children: "Create safety backup and restore" })
+          ] })
+        ] })
+      ] }),
+      busy && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { role: "status", children: confirm === "RESTORE" ? "Recovery operation running. Do not refresh or submit again." : "Checking backup. Please wait…" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { role: "status", className: "whitespace-pre-wrap", children: message }),
+      restored && /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "btn btn-primary", onClick: signInAgain, children: "Sign in again" })
+    ] })
+  ] }) });
+}
 const BackupPage = () => {
   const queryClient2 = useQueryClient();
   const [notes, setNotes] = reactExports.useState("");
+  const [showImport, setShowImport] = reactExports.useState(false);
+  const [reviewBackupId, setReviewBackupId] = reactExports.useState();
   const [showCreateModal, setShowCreateModal] = reactExports.useState(false);
   const {
     data: backups = [],
@@ -46696,16 +46920,6 @@ const BackupPage = () => {
       zt.error(error.message || "Failed to delete backup");
     }
   });
-  const restoreMut = useMutation({
-    mutationFn: (id) => superAdminApi.restoreBackup(id),
-    onSuccess: () => {
-      zt.success("Restore completed — refreshing data");
-      queryClient2.invalidateQueries();
-    },
-    onError: (error) => {
-      zt.error(error.message || "Restore failed");
-    }
-  });
   const handleDownload = async (id, name) => {
     try {
       const blob = await superAdminApi.downloadBackup(id);
@@ -46727,11 +46941,8 @@ const BackupPage = () => {
     deleteMut.mutate(id);
   };
   const handleRestore = (id) => {
-    if (!window.confirm(
-      "⚠️ WARNING: Restoring will OVERWRITE all current data (database + storage).\n\nDo you want to continue?"
-    ))
-      return;
-    restoreMut.mutate(id);
+    setReviewBackupId(id);
+    setShowImport(true);
   };
   const getStatusBadge2 = (status) => {
     const map = {
@@ -46743,6 +46954,7 @@ const BackupPage = () => {
     return map[status] || "badge-secondary";
   };
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-5", children: [
+    showImport && /* @__PURE__ */ jsxRuntimeExports.jsx(ImportBackup, { backupId: reviewBackupId, onClose: () => setShowImport(false) }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("h2", { className: "text-2xl font-bold text-navy-900", children: [
@@ -46751,7 +46963,11 @@ const BackupPage = () => {
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-slate-500", children: "Create, download, and restore full system backups (database + storage)" })
       ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-2", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-wrap gap-2", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "btn btn-secondary btn-sm", onClick: () => {
+          setReviewBackupId(void 0);
+          setShowImport(true);
+        }, children: "Import Backup" }),
         /* @__PURE__ */ jsxRuntimeExports.jsx(
           RefreshButton,
           {
@@ -46868,9 +47084,8 @@ const BackupPage = () => {
               {
                 className: "btn btn-warning btn-sm",
                 onClick: () => handleRestore(b.id),
-                disabled: restoreMut.isPending,
-                title: "Restore",
-                children: restoreMut.isPending ? /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-spinner fa-spin" }) : /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-undo" })
+                title: "Review recovery",
+                children: /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-undo" })
               }
             )
           ] }),
@@ -47783,6 +47998,7 @@ const FacultyActivityMap = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { id: urlId } = useParams();
+  const [archiveView, setArchiveView] = reactExports.useState(false);
   const [filterStatus, setFilterStatus] = reactExports.useState("all");
   const [filterComponent, setFilterComponent] = reactExports.useState("all");
   const [searchTerm, setSearchTerm] = reactExports.useState("");
@@ -47795,12 +48011,14 @@ const FacultyActivityMap = () => {
   } = useQuery({
     queryKey: ["faculty-activities"],
     queryFn: () => adminApi.getActivities(),
-    staleTime: 6e4
+    staleTime: 3e4,
+    refetchInterval: 3e4
   });
   const facultyComponent = user?.nstp_component;
   const allActivities = Array.isArray(activitiesData) ? activitiesData : [];
   const filteredActivities = reactExports.useMemo(() => {
     return allActivities.filter((activity) => {
+      if (activity.status === "completed" !== archiveView) return false;
       if (activity.created_by !== user?.id) return false;
       if (facultyComponent && activity.component_type !== facultyComponent && activity.component_type !== "all") {
         return false;
@@ -47817,6 +48035,7 @@ const FacultyActivityMap = () => {
     });
   }, [
     allActivities,
+    archiveView,
     facultyComponent,
     user?.id,
     filterStatus,
@@ -47854,6 +48073,17 @@ const FacultyActivityMap = () => {
   }
   activities.length > 0;
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-5", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-wrap gap-2 mb-4", role: "group", "aria-label": "Location monitor records", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", "aria-pressed": !archiveView, className: `btn ${!archiveView ? "btn-primary" : "btn-secondary"}`, onClick: () => {
+        setArchiveView(false);
+        setFilterStatus("all");
+      }, children: "Current activities" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", "aria-pressed": archiveView, className: `btn ${archiveView ? "btn-primary" : "btn-secondary"}`, onClick: () => {
+        setArchiveView(true);
+        setFilterStatus("all");
+      }, children: "Archive" })
+    ] }),
+    archiveView && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-slate-600 mb-4", children: "Completed activities · historical locations · view only" }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
         /* @__PURE__ */ jsxRuntimeExports.jsxs("h2", { className: "text-2xl font-bold text-navy-900", children: [
@@ -47904,7 +48134,7 @@ const FacultyActivityMap = () => {
               /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "all", children: "All Status" }),
               /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "upcoming", children: "Upcoming" }),
               /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "ongoing", children: "Ongoing" }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "completed", children: "Completed" }),
+              archiveView && /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "completed", children: "Completed" }),
               /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "cancelled", children: "Cancelled" })
             ]
           }
@@ -50880,4 +51110,4 @@ startSyncEngine();
 ReactDOM.createRoot(document.getElementById("root")).render(
   /* @__PURE__ */ jsxRuntimeExports.jsx(React.StrictMode, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(App, {}) })
 );
-//# sourceMappingURL=main-DkCEUFJ2.js.map
+//# sourceMappingURL=main-BGZv43dy.js.map

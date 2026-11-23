@@ -54,6 +54,10 @@ export default defineConfig({
                 ],
                 runtimeCaching: [
                     {
+                        urlPattern: ({ url, request }) => request.method === 'GET' && /\/api\/activities(?:\/\d+)?$/.test(url.pathname),
+                        handler: 'NetworkOnly',
+                    },
+                    {
                         urlPattern: ({ url, request }) => request.method === 'GET' && /\/api\/attendance\/(?:sessions|session(?:\/\d+)?)$/.test(url.pathname),
                         handler: 'NetworkOnly',
                     },

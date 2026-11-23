@@ -166,41 +166,7 @@ class BackupController extends Controller
 
     public function restore(Request $request, $id)
     {
-        try {
-            $backup = SystemBackup::find($id);
-
-            if (!$backup) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Backup not found',
-                ], 404);
-            }
-
-            if ($backup->status !== 'completed') {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Cannot restore from an incomplete backup',
-                ], 422);
-            }
-
-            // Verify before creating a safety backup or touching live data.
-            $this->service->verifyBackup($backup);
-            $safety=$this->service->createBackup('manual',$request->user()->id);
-            $safety->update(['notes'=>'Automatic safety backup before restoring backup #'.$backup->id]);
-            $this->service->restoreBackup($backup);
-            \App\Services\AuditTrail::record($request->user()->id,'backup.restored','backup',$backup->id,'Explicit restore confirmation',['safety_backup_id'=>$safety->id]);
-
-            return response()->json([
-                'success' => true,
-                'message' => 'Restore completed successfully',
-            ]);
-        } catch (\Throwable $e) {
-            Log::error('Backup restore error: ' . $e->getMessage());
-            return response()->json([
-                'success' => false,
-                'message' => 'Restore failed: ' . $e->getMessage(),
-            ], 500);
-        }
+        return response()->json(['message'=>'Use the backup recovery review: prepare the backup, run the separate-database test, and confirm with your Super Admin password.'],409);
     }
 
     public function stats()

@@ -380,6 +380,11 @@ Route::middleware(['auth:sanctum', \App\Http\Middleware\RequireActiveUser::class
 
         // ---------- BACKUPS ----------
         Route::prefix('backups')->group(function () {
+            Route::get('/imports', [\App\Http\Controllers\API\Web\SuperAdmin\BackupImportController::class, 'index']);
+            Route::post('/{id}/prepare-import', [\App\Http\Controllers\API\Web\SuperAdmin\BackupImportController::class, 'prepare'])->whereNumber('id')->middleware('throttle:5,1');
+            Route::post('/imports', [\App\Http\Controllers\API\Web\SuperAdmin\BackupImportController::class, 'upload'])->middleware('throttle:5,1');
+            Route::post('/imports/{id}/test', [\App\Http\Controllers\API\Web\SuperAdmin\BackupImportController::class, 'test'])->middleware('throttle:2,1');
+            Route::post('/imports/{id}/restore', [\App\Http\Controllers\API\Web\SuperAdmin\BackupImportController::class, 'restore'])->middleware('throttle:2,1');
             // Manual backups
             Route::get('/', [BackupController::class, 'index']);
             Route::post('/', [BackupController::class, 'store']);

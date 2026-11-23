@@ -10,7 +10,9 @@ export function useActivities() {
   const query = useQuery<Activity[]>({
     queryKey: ACTIVITIES_KEY,
     queryFn: () => adminApi.getActivities(),
-    staleTime: 60000,
+    staleTime: 30000,
+    refetchInterval: 30000,
+    refetchOnWindowFocus: true,
   });
 
   const refresh = () => {

@@ -67,6 +67,7 @@ public function show($id)
         return response()->json(['message' => 'Activity not found'], 404);
     }
 
+    $activity->assertEditable();
     $student = $request->user()->student;
     
     $exists = ActivityParticipation::where('activity_id', $id)

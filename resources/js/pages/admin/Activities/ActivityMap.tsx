@@ -30,6 +30,7 @@ const ActivityMap: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
+  const [archiveView, setArchiveView] = useState(false);
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [filterComponent, setFilterComponent] = useState<string>("all");
   const [searchTerm, setSearchTerm] = useState("");
@@ -53,6 +54,7 @@ const ActivityMap: React.FC = () => {
         component: filterComponent === "all" ? undefined : filterComponent,
       }),
     staleTime: 30000,
+    refetchInterval: 30000,
   });
 
   const activities: ActivityLocation[] = activitiesData?.data || [];
@@ -61,7 +63,7 @@ const ActivityMap: React.FC = () => {
   // Filter
   // ============================================================
   const filteredActivities = useMemo(() => {
-    let list = activities;
+    let list = activities.filter(a => (a.status === "completed") === archiveView);
     if (searchTerm.trim()) {
       const q = searchTerm.toLowerCase();
       list = list.filter(
@@ -72,7 +74,7 @@ const ActivityMap: React.FC = () => {
       );
     }
     return list;
-  }, [activities, searchTerm]);
+  }, [activities, archiveView, searchTerm]);
 
   // ============================================================
   // Mutations
@@ -109,6 +111,7 @@ const ActivityMap: React.FC = () => {
   };
 
   const handleEditLocation = (activity: ActivityLocation) => {
+    if (!["upcoming", "ongoing"].includes(activity.status)) { toast.error("This activity is view-only."); return; }
     setEditingActivity(activity);
     setShowEditLocationModal(true);
   };
@@ -199,6 +202,12 @@ const ActivityMap: React.FC = () => {
 
   return (
     <div className="space-y-5">
+      <div className="flex flex-wrap gap-2 mb-4" role="group" aria-label="Location monitor records">
+        <button type="button" aria-pressed={!archiveView} className={`btn ${!archiveView ? "btn-primary" : "btn-secondary"}`} onClick={() => {setArchiveView(false);setFilterStatus("all");}}>Current activities</button>
+        <button type="button" aria-pressed={archiveView} className={`btn ${archiveView ? "btn-primary" : "btn-secondary"}`} onClick={() => {setArchiveView(true);setFilterStatus("all");}}>Archive</button>
+      </div>
+      {archiveView && <p className="text-sm text-slate-600 mb-4">Completed activities · historical locations · view only</p>}
+
       {/* HEADER */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <div>
@@ -247,7 +256,7 @@ const ActivityMap: React.FC = () => {
             <option value="all">All Status</option>
             <option value="upcoming">Upcoming</option>
             <option value="ongoing">Ongoing</option>
-            <option value="completed">Completed</option>
+            {archiveView && <option value="completed">Completed</option>}
           </select>
 
           <select
@@ -515,9 +524,10 @@ const ActivityMap: React.FC = () => {
                               >
                                 <i className="fas fa-map-marked-alt" />
                               </button>
-                              <button
+                              <button style={{display: ["upcoming", "ongoing"].includes(activity.status) ? undefined : "none"}}
                                 type="button"
                                 className="btn btn-secondary btn-sm"
+                                disabled={!["upcoming", "ongoing"].includes(activity.status)}
                                 onClick={() => handleEditLocation(activity)}
                                 title="Edit Location"
                               >
@@ -525,10 +535,11 @@ const ActivityMap: React.FC = () => {
                               </button>
                             </>
                           ) : (
-                            <button
+                            <button style={{display: ["upcoming", "ongoing"].includes(activity.status) ? undefined : "none"}}
                               type="button"
                               className="btn btn-primary btn-sm"
-                              onClick={() => handleEditLocation(activity)}
+                              disabled={!["upcoming", "ongoing"].includes(activity.status)}
+                                onClick={() => handleEditLocation(activity)}
                               title="Set Location"
                             >
                               <i className="fas fa-plus mr-1" /> Set Location
@@ -617,7 +628,7 @@ const ActivityMap: React.FC = () => {
                   </div>
                   <div className="flex gap-2">
                     {!hasLocation && (
-                      <button
+                      <button style={{display: ["upcoming", "ongoing"].includes(activity.status) ? undefined : "none"}}
                         type="button"
                         className="btn btn-primary btn-sm"
                         onClick={(e) => {

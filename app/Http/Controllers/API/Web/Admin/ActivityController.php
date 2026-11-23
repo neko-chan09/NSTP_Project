@@ -96,6 +96,8 @@ class ActivityController extends Controller
             return response()->json(['success' => false, 'message' => 'Not found'], 404);
         }
 
+        $activity->assertEditable();
+
         $user = $request->user();
 
         if ($user->role === 'faculty') {
@@ -119,6 +121,7 @@ class ActivityController extends Controller
 
         $validator = Validator::make($request->all(), [
             'title' => 'sometimes|string|max:255',
+            'status' => 'sometimes|in:upcoming,ongoing,completed,cancelled',
             'description' => 'sometimes|string',
             // ✅ No "all" on update either
             'component_type' => 'sometimes|in:cwts,rotc,lts',
@@ -169,6 +172,8 @@ class ActivityController extends Controller
         if (!$activity) {
             return response()->json(['success' => false, 'message' => 'Not found'], 404);
         }
+
+        $activity->assertEditable();
 
         $user = $request->user();
 
@@ -240,6 +245,8 @@ class ActivityController extends Controller
             return response()->json(['success' => false, 'message' => 'Activity not found'], 404);
         }
 
+        $activity->assertEditable();
+
         $user = $request->user();
 
         if ($user->role === 'faculty' && $activity->created_by !== $user->id) {
@@ -275,6 +282,8 @@ class ActivityController extends Controller
         if (!$activity) {
             return response()->json(['success' => false, 'message' => 'Activity not found'], 404);
         }
+
+        $activity->assertEditable();
 
         $user = $request->user();
 

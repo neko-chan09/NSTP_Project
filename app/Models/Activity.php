@@ -61,6 +61,8 @@ class Activity extends Model
             return 'cancelled';
         }
 
+        if ($value === 'completed') return 'completed';
+
         $now = now();
 
         if ($this->end_datetime && $now->gte($this->end_datetime)) {
@@ -72,6 +74,11 @@ class Activity extends Model
         }
 
         return 'upcoming';
+    }
+
+    public function assertEditable(): void
+    {
+        abort_unless(in_array($this->status, ['upcoming', 'ongoing'], true), 409, 'Only upcoming or ongoing activities can be changed. Completed activities are archived and view-only.');
     }
 
     public function isWithinGeofence($lat, $lng)

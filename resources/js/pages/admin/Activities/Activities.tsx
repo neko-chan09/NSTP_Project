@@ -97,6 +97,7 @@ const Activities: React.FC = () => {
   const { isAdmin, isSuperAdmin, isFaculty, user } = useAuth();
 
   // Super Admin cannot create/edit/delete activities.
+  const [archiveView, setArchiveView] = useState(false);
   const canManage = !isSuperAdmin && (isAdmin || isFaculty);
 
   const facultyComponent = isFaculty ? user?.nstp_component : undefined;
@@ -133,6 +134,7 @@ const Activities: React.FC = () => {
   const [calendarMonth, setCalendarMonth] = useState<Date>(new Date());
 
   const canEditActivity = (activity: any) => {
+    if (!["upcoming", "ongoing"].includes(activity.status)) return false;
     if (isSuperAdmin) return false;
     if (isAdmin) return true;
     if (isFaculty) return activity.created_by === user?.id;
@@ -387,7 +389,7 @@ const Activities: React.FC = () => {
   // Filtering
   // ============================================================
   const filteredActivities = useMemo(() => {
-    let list = activities;
+    let list = activities.filter((a) => archiveView ? a.status === "completed" : a.status !== "completed");
 
     if (filterComponent !== "all") {
       list = list.filter((a) => a.component_type === filterComponent);
@@ -408,7 +410,7 @@ const Activities: React.FC = () => {
     }
 
     return list;
-  }, [activities, filterComponent, filterStatus, searchTerm]);
+  }, [activities, archiveView, filterComponent, filterStatus, searchTerm]);
 
   const handleActivityClick = (activity: any) => {
     setSelectedActivity(activity);
@@ -540,13 +542,19 @@ const Activities: React.FC = () => {
             label=""
             className="btn-sm"
           />
-          {canManage && (
+          {canManage && !archiveView && (
             <button className="btn btn-primary btn-sm" onClick={openCreate}>
               <i className="fas fa-plus" /> New Activity
             </button>
           )}
         </div>
       </div>
+
+      <div className="flex flex-wrap gap-2" role="group" aria-label="Activity records">
+        <button type="button" aria-pressed={!archiveView} className={`btn ${!archiveView ? "btn-primary" : "btn-secondary"}`} onClick={() => { setArchiveView(false); setFilterStatus("all"); }}>Current activities ({activities.filter(a => a.status !== "completed").length})</button>
+        <button type="button" aria-pressed={archiveView} className={`btn ${archiveView ? "btn-primary" : "btn-secondary"}`} onClick={() => { setArchiveView(true); setFilterStatus("all"); }}>Archive ({completedCount})</button>
+      </div>
+      {archiveView && <p className="text-sm text-slate-600">Completed activities are archived automatically. View activity details and participants; editing, deletion, and attendance changes are locked.</p>}
 
       {/* ============================================================
           FILTERS + VIEW TOGGLE
@@ -590,7 +598,7 @@ const Activities: React.FC = () => {
             <option value="all">All Status</option>
             <option value="upcoming">Upcoming</option>
             <option value="ongoing">Ongoing</option>
-            <option value="completed">Completed</option>
+            {archiveView && <option value="completed">Completed</option>}
             <option value="cancelled">Cancelled</option>
           </select>
 
@@ -1134,7 +1142,7 @@ const Activities: React.FC = () => {
          ============================================================ */}
       {showParticipantsModal && selectedActivity && (
         <ActivityParticipants
-          activity={selectedActivity}
+          activity={activities.find(a => a.id === selectedActivity.id) || selectedActivity}
           onClose={() => setShowParticipantsModal(false)}
           onRefresh={refresh}
         />

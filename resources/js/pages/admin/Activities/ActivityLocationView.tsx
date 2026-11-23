@@ -97,7 +97,7 @@ const ActivityLocationView: React.FC = () => {
     },
     enabled: !!id && !isNaN(parseInt(id)),
     staleTime: 5000,
-    refetchInterval: 5000,
+    refetchInterval: query => query.state.data?.activity?.status === "completed" ? false : 5000,
     refetchIntervalInBackground: false,
     retry: 1,
   });
@@ -284,7 +284,7 @@ const ActivityLocationView: React.FC = () => {
         </div>
       </div>
 
-      <p className="text-sm text-slate-600" role="status">{isError ? 'Connection interrupted - showing last received positions.' : `Monitor refreshed: ${dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString() : 'waiting'}. Updates about every 5 seconds while visible.`}</p>
+      <p className="text-sm text-slate-600" role="status">{activity.status === 'completed' ? 'Archived activity - historical positions only. Live tracking has ended.' : isError ? 'Connection interrupted - showing last received positions.' : `Monitor refreshed: ${dataUpdatedAt ? new Date(dataUpdatedAt).toLocaleTimeString() : 'waiting'}. Updates about every 5 seconds while visible.`}</p>
       <p className="text-sm text-slate-600" role="status">{participants.filter(p=>!validCoordinates(p.latitude,p.longitude)).length} registered student(s) have no received GPS position. They cannot appear on the map until their phone sends a valid fix.</p>
       {/* Stats Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -500,7 +500,7 @@ const ActivityLocationView: React.FC = () => {
           <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={showAccuracy} onChange={e => setShowAccuracy(e.target.checked)} />Show GPS uncertainty</label>
           <button type="button" className="btn btn-sm" onClick={fitLocations}>Fit boundary + students</button>
           <button type="button" className="btn btn-sm" onClick={() => { if (mapInstanceRef.current && validCoordinates(activity.latitude, activity.longitude)) fitGeofence(mapInstanceRef.current, Number(activity.latitude), Number(activity.longitude), Number(activity.geofence_radius) || 100, [], true); }}>Focus boundary</button>
-          <span className="text-xs text-slate-500">Refreshes every 5 seconds. Registered students must open this activity on mobile and start attendance/location sharing while online. Class face attendance alone does not start activity tracking.</span>
+          <span className="text-xs text-slate-500">{activity.status === 'completed' ? 'Archive: saved locations remain viewable. Editing and live tracking are locked.' : 'Refreshes every 5 seconds while visible. Student location sharing requires internet.'}</span>
         </div>
         <div className="relative">
           <div ref={mapContainerRef} className="h-[500px] w-full bg-slate-100" style={{ minHeight: "500px" }} />

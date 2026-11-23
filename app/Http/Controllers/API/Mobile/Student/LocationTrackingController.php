@@ -303,7 +303,7 @@ class LocationTrackingController extends Controller
             $distanceFromVenue = null;
             $isWithinGeofence = false;
 
-            if ($participation->is_tracking_location === false || ($activity?->end_datetime && now()->gt(\Carbon\Carbon::parse($activity->end_datetime)))) {
+            if ($activity?->status === 'completed' || $participation->is_tracking_location === false || ($activity?->end_datetime && now()->gt(\Carbon\Carbon::parse($activity->end_datetime)))) {
                 return response()->json(['success'=>false,'code'=>'TRACKING_ENDED','message'=>'Activity tracking is stopped or has ended.'],410);
             }
             if ($activity?->start_datetime && now()->lt(\Carbon\Carbon::parse($activity->start_datetime))) {

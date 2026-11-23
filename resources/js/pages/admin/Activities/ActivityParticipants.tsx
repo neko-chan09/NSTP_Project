@@ -46,8 +46,8 @@ const ActivityParticipants: React.FC<ActivityParticipantsProps> = ({
   // Check if user can edit this activity (Admin/Super Admin, or Faculty who created it)
   // ✅ Super Admin gets view-only access to participants
   const canEdit =
-    (!isSuperAdmin && isAdmin) ||
-    (isFaculty && activity.created_by === user?.id);
+    ["upcoming", "ongoing"].includes(activity.status) && ((!isSuperAdmin && isAdmin) ||
+    (isFaculty && activity.created_by === user?.id));
 
   const fetchParticipants = async () => {
     try {
@@ -290,6 +290,7 @@ const ActivityParticipants: React.FC<ActivityParticipantsProps> = ({
         </div>
 
         <div className="modal-body">
+          {activity.status === "completed" && <div className="mb-4 text-sm text-slate-700"><p className="font-semibold">Archived activity · View only</p><p className="whitespace-pre-wrap">{activity.description}</p><p>Ended: {new Date(activity.end_datetime).toLocaleString()} · Training hours: {activity.training_hours}</p></div>}
           {loading ? (
             <div className="flex items-center justify-center py-12">
               <div className="spinner" />

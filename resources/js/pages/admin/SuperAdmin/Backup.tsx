@@ -1,3 +1,4 @@
+import ImportBackup from "./ImportBackup";
 import {secureRequest} from "../../../services/secureRequest";
 // src/pages/admin/SuperAdmin/Backup.tsx
 
@@ -29,6 +30,8 @@ interface Backup {
 const BackupPage: React.FC = () => {
   const queryClient = useQueryClient();
   const [notes, setNotes] = useState("");
+  const [showImport, setShowImport] = useState(false);
+  const [reviewBackupId,setReviewBackupId]=useState<number|undefined>();
   const [showCreateModal, setShowCreateModal] = useState(false);
 
   const {
@@ -74,17 +77,6 @@ const BackupPage: React.FC = () => {
     },
   });
 
-  const restoreMut = useMutation({
-    mutationFn: (id: number) => superAdminApi.restoreBackup(id),
-    onSuccess: () => {
-      toast.success("Restore completed — refreshing data");
-      queryClient.invalidateQueries();
-    },
-    onError: (error: any) => {
-      toast.error(error.message || "Restore failed");
-    },
-  });
-
   const handleDownload = async (id: number, name: string) => {
     try {
       const blob = await superAdminApi.downloadBackup(id);
@@ -107,15 +99,7 @@ const BackupPage: React.FC = () => {
     deleteMut.mutate(id);
   };
 
-  const handleRestore = (id: number) => {
-    if (
-      !window.confirm(
-        "⚠️ WARNING: Restoring will OVERWRITE all current data (database + storage).\n\nDo you want to continue?",
-      )
-    )
-      return;
-    restoreMut.mutate(id);
-  };
+  const handleRestore = (id: number) => { setReviewBackupId(id); setShowImport(true); };
 
   const getStatusBadge = (status: string) => {
     const map: Record<string, string> = {
@@ -129,6 +113,7 @@ const BackupPage: React.FC = () => {
 
   return (
     <div className="space-y-5">
+      {showImport && <ImportBackup backupId={reviewBackupId} onClose={()=>setShowImport(false)}/>}
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <div>
@@ -141,7 +126,8 @@ const BackupPage: React.FC = () => {
             storage)
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <button type="button" className="btn btn-secondary btn-sm" onClick={()=>{setReviewBackupId(undefined);setShowImport(true);}}>Import Backup</button>
           <RefreshButton
             onRefresh={refetch}
             isLoading={isFetching}
@@ -287,14 +273,9 @@ const BackupPage: React.FC = () => {
                             <button
                               className="btn btn-warning btn-sm"
                               onClick={() => handleRestore(b.id)}
-                              disabled={restoreMut.isPending}
-                              title="Restore"
+                              title="Review recovery"
                             >
-                              {restoreMut.isPending ? (
-                                <i className="fas fa-spinner fa-spin" />
-                              ) : (
-                                <i className="fas fa-undo" />
-                              )}
+                              <i className="fas fa-undo" />
                             </button>
                           </>
                         )}

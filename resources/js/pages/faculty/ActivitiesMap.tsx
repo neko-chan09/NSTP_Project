@@ -30,6 +30,7 @@ const FacultyActivityMap: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { id: urlId } = useParams<{ id: string }>();
+  const [archiveView, setArchiveView] = useState(false);
   const [filterStatus, setFilterStatus] = useState("all");
   const [filterComponent, setFilterComponent] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
@@ -44,7 +45,8 @@ const FacultyActivityMap: React.FC = () => {
   } = useQuery({
     queryKey: ["faculty-activities"],
     queryFn: () => adminApi.getActivities(),
-    staleTime: 60000,
+    staleTime: 30000,
+    refetchInterval: 30000,
   });
 
   // Faculty component from user profile
@@ -56,6 +58,7 @@ const FacultyActivityMap: React.FC = () => {
   // Filter activities: only those created by faculty AND matching their component
   const filteredActivities = useMemo(() => {
     return allActivities.filter((activity: any) => {
+      if ((activity.status === "completed") !== archiveView) return false;
       if (activity.created_by !== user?.id) return false;
       if (
         facultyComponent &&
@@ -78,6 +81,7 @@ const FacultyActivityMap: React.FC = () => {
     });
   }, [
     allActivities,
+    archiveView,
     facultyComponent,
     user?.id,
     filterStatus,
@@ -130,6 +134,12 @@ const FacultyActivityMap: React.FC = () => {
 
   return (
     <div className="space-y-5">
+      <div className="flex flex-wrap gap-2 mb-4" role="group" aria-label="Location monitor records">
+        <button type="button" aria-pressed={!archiveView} className={`btn ${!archiveView ? "btn-primary" : "btn-secondary"}`} onClick={() => {setArchiveView(false);setFilterStatus("all");}}>Current activities</button>
+        <button type="button" aria-pressed={archiveView} className={`btn ${archiveView ? "btn-primary" : "btn-secondary"}`} onClick={() => {setArchiveView(true);setFilterStatus("all");}}>Archive</button>
+      </div>
+      {archiveView && <p className="text-sm text-slate-600 mb-4">Completed activities · historical locations · view only</p>}
+
       {/* HEADER */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <div>
@@ -179,7 +189,7 @@ const FacultyActivityMap: React.FC = () => {
             <option value="all">All Status</option>
             <option value="upcoming">Upcoming</option>
             <option value="ongoing">Ongoing</option>
-            <option value="completed">Completed</option>
+            {archiveView && <option value="completed">Completed</option>}
             <option value="cancelled">Cancelled</option>
           </select>
 
