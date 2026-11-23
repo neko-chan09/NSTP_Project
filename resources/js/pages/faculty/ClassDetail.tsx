@@ -1146,7 +1146,7 @@ const FacultyClassDetail: React.FC = () => {
                                                                 : "badge-secondary"
                                                         }`}
                                                     >
-                                                        {session.status}
+                                                        {session.status === "closed" ? "Inactive" : session.status}
                                                     </span>
                                                 </td>
                                                 <td className="text-center">
@@ -1522,7 +1522,7 @@ const FacultyClassDetail: React.FC = () => {
                                                 : "badge-secondary"
                                         }`}
                                     >
-                                        {selectedSession.status?.toUpperCase()}
+                                        {selectedSession.status === "closed" ? "INACTIVE" : selectedSession.status?.toUpperCase()}
                                     </span>
                                 </div>
                             </div>

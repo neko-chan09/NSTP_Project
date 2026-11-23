@@ -14,6 +14,10 @@ class AttendanceCaptureWindow
         if ($offline && (!$capturedAt || $time->gt(now()->addMinutes(2)) || $time->lt(now()->subDays(7)))) {
             throw ValidationException::withMessages(['captured_at' => 'Capture time must be within the last seven days.']);
         }
+        $deadline = $session->inactiveAt();
+        if ($deadline && $time->gte($deadline)) {
+            throw ValidationException::withMessages(['session_id' => 'This session is inactive because its scheduled day has passed.']);
+        }
         $start = $session->scheduled_start ?? $session->start_time;
         if ($session->status === 'cancelled' || ($start && $time->lt($start))) {
             throw ValidationException::withMessages(['session_id' => 'The session is cancelled or has not started yet.']);

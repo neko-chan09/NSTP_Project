@@ -86,6 +86,21 @@ class AttendanceSession extends Model
     // STATUS HELPERS
     // ============================================================
 
+    /** A session becomes inactive at midnight PHT after its final scheduled day. */
+    public function inactiveAt(): ?Carbon
+    {
+        $lastTime = $this->scheduled_end ?? $this->end_time ?? $this->scheduled_start ?? $this->start_time ?? $this->created_at;
+        return $lastTime ? $lastTime->copy()->timezone('Asia/Manila')->startOfDay()->addDay() : null;
+    }
+
+    public function getStatusAttribute($value)
+    {
+        if ($value !== 'active') return $value;
+        $deadline = $this->inactiveAt();
+        // Keep the existing API status vocabulary so installed mobile apps remain compatible.
+        return $deadline && now()->gte($deadline) ? 'closed' : $value;
+    }
+
     public function isActive()
     {
         return $this->status === 'active';
@@ -250,7 +265,7 @@ class AttendanceSession extends Model
 
     public function scopeActive($query)
     {
-        return $query->where('status', 'active');
+        return $query->where('status', 'active')->whereRaw('COALESCE(scheduled_end, end_time, scheduled_start, start_time, created_at) >= ?', [now()->timezone('Asia/Manila')->startOfDay()->timezone(config('app.timezone'))->format('Y-m-d H:i:s')]);
     }
 
     public function scopeClosed($query)

@@ -1,15 +1,18 @@
 // resources/js/pages/auth/Login.tsx
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { authApi } from "../../services/api";
 import NstpLogo from "../components/common/NstpLogo";
 import toast from "react-hot-toast";
+import {loginErrorMessage, validLoginEmail} from "../../utils/loginFeedback";
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loginError, setLoginError] = useState("");
+  const submitting = useRef(false);
   const [showPassword, setShowPassword] = useState(false);
   const [isChecking, setIsChecking] = useState(true);
 
@@ -47,10 +50,15 @@ const Login: React.FC = () => {
   // ============================================================
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submitting.current) return;
+    setLoginError("");
+    if (!validLoginEmail(email)) { setLoginError("Enter a valid email address."); return; }
+    if (!password) { setLoginError("Enter your password."); return; }
+    submitting.current = true;
     setLoading(true);
 
     try {
-      const response = await authApi.adminLogin(email, password);
+      const response = await authApi.adminLogin(email.trim(), password);
       const token = response.access_token || response.token;
 
       if (token) {
@@ -74,9 +82,9 @@ const Login: React.FC = () => {
         throw new Error("No token returned from server");
       }
     } catch (err: any) {
-      toast.error(
-        err.message || "Login failed. Please check your credentials.",
-      );
+      setLoginError(loginErrorMessage(err));
+    } finally {
+      submitting.current = false;
       setLoading(false);
     }
   };
@@ -182,7 +190,8 @@ const Login: React.FC = () => {
             {/* ============================================================ */}
             {/* LOGIN FORM */}
             {/* ============================================================ */}
-            <form onSubmit={handleSubmit} className="space-y-5">
+            <form noValidate onSubmit={handleSubmit} className="space-y-5">
+              {loginError && <div role="alert" className="alert alert-danger">{loginError}</div>}
               <div>
                 <label className="label">
                   <i className="fas fa-envelope text-slate-400 mr-2" />
@@ -191,7 +200,7 @@ const Login: React.FC = () => {
                 <input
                   type="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {setEmail(e.target.value); setLoginError("");}}
                   placeholder="Enter your email"
                   className="input"
                   autoComplete="email"
@@ -208,7 +217,7 @@ const Login: React.FC = () => {
                   <input
                     type={showPassword ? "text" : "password"}
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={(e) => {setPassword(e.target.value); setLoginError("");}}
                     placeholder="Enter your password"
                     className="input pr-12"
                     autoComplete="current-password"

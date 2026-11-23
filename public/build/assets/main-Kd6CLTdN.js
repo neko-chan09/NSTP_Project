@@ -7570,7 +7570,7 @@ const authApi = {
       body: JSON.stringify({ email, password })
     });
     const data = await response.json();
-    if (!response.ok) throw new Error(data.message || "Login failed");
+    if (!response.ok) throw Object.assign(new Error(data.message || "Login failed"), { status: response.status, data });
     if (data.access_token || data.token) {
       const token = data.access_token || data.token;
       setToken(token);
@@ -14932,7 +14932,7 @@ function ClassRecord({ classId }) {
             " → ",
             phtTime(s2.scheduled_end || s2.end_time),
             " · ",
-            s2.status
+            s2.status === "closed" ? "Inactive" : s2.status
           ] }, s2.id))
         ] })
       ] }),
@@ -19803,7 +19803,7 @@ const FacultyClassDetail = () => {
                     "span",
                     {
                       className: `badge ${session.status === "active" ? "badge-success" : "badge-secondary"}`,
-                      children: session.status
+                      children: session.status === "closed" ? "Inactive" : session.status
                     }
                   ) }),
                   /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "text-center", children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
@@ -20157,7 +20157,7 @@ const FacultyClassDetail = () => {
                       "span",
                       {
                         className: `badge ${selectedSession.status === "active" ? "badge-success" : "badge-secondary"}`,
-                        children: selectedSession.status?.toUpperCase()
+                        children: selectedSession.status === "closed" ? "INACTIVE" : selectedSession.status?.toUpperCase()
                       }
                     )
                   ] })
@@ -50154,11 +50154,34 @@ const PasswordField = ({
     error
   ] }) : hint ? /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-slate-400 mt-1.5", children: hint }) : null
 ] });
+const validLoginEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+function loginErrorMessage(error, student = false) {
+  const status = error?.response?.status ?? error?.status;
+  const data = error?.response?.data ?? error?.data;
+  if (status === 401) return student ? "Invalid credentials. Check your Student ID and password." : "Invalid credentials. Check your email and password.";
+  if (status === 429) return "Too many sign-in attempts. Please wait a moment before trying again.";
+  if (status >= 500) return "The server is temporarily unavailable. Please try again later.";
+  if (status === 422) {
+    const fields = data?.errors;
+    if (fields && typeof fields === "object") {
+      const first = Object.values(fields).flat().find((value) => typeof value === "string");
+      if (typeof first === "string") return first;
+    }
+    return "Please check the required login details.";
+  }
+  if (error instanceof TypeError || error?.code === "ERR_NETWORK" || error?.code === "ECONNABORTED" || /network|failed to fetch|timeout/i.test(error?.message || "")) {
+    return "Unable to connect. Check your internet connection and try again.";
+  }
+  if (status === 403) return data?.message || "This account cannot sign in here. Check your selected account type.";
+  return "We couldn't sign you in. Please try again.";
+}
 const Login = () => {
   const navigate = useNavigate();
   const [email, setEmail] = reactExports.useState("");
   const [password, setPassword] = reactExports.useState("");
   const [loading, setLoading] = reactExports.useState(false);
+  const [loginError, setLoginError] = reactExports.useState("");
+  const submitting = reactExports.useRef(false);
   const [showPassword, setShowPassword] = reactExports.useState(false);
   const [isChecking, setIsChecking] = reactExports.useState(true);
   reactExports.useEffect(() => {
@@ -50190,9 +50213,20 @@ const Login = () => {
   }, [navigate]);
   const handleSubmit = async (e2) => {
     e2.preventDefault();
+    if (submitting.current) return;
+    setLoginError("");
+    if (!validLoginEmail(email)) {
+      setLoginError("Enter a valid email address.");
+      return;
+    }
+    if (!password) {
+      setLoginError("Enter your password.");
+      return;
+    }
+    submitting.current = true;
     setLoading(true);
     try {
-      const response = await authApi.adminLogin(email, password);
+      const response = await authApi.adminLogin(email.trim(), password);
       const token = response.access_token || response.token;
       if (token) {
         localStorage.setItem("token", token);
@@ -50216,9 +50250,9 @@ const Login = () => {
         throw new Error("No token returned from server");
       }
     } catch (err) {
-      zt.error(
-        err.message || "Login failed. Please check your credentials."
-      );
+      setLoginError(loginErrorMessage(err));
+    } finally {
+      submitting.current = false;
       setLoading(false);
     }
   };
@@ -50282,7 +50316,8 @@ const Login = () => {
           /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "text-2xl font-bold text-navy-900", children: "Welcome Back" }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-slate-500", children: "Sign in to your account to continue" })
         ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("form", { onSubmit: handleSubmit, className: "space-y-5", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("form", { noValidate: true, onSubmit: handleSubmit, className: "space-y-5", children: [
+          loginError && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { role: "alert", className: "alert alert-danger", children: loginError }),
           /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
             /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "label", children: [
               /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-envelope text-slate-400 mr-2" }),
@@ -50293,7 +50328,10 @@ const Login = () => {
               {
                 type: "email",
                 value: email,
-                onChange: (e2) => setEmail(e2.target.value),
+                onChange: (e2) => {
+                  setEmail(e2.target.value);
+                  setLoginError("");
+                },
                 placeholder: "Enter your email",
                 className: "input",
                 autoComplete: "email",
@@ -50312,7 +50350,10 @@ const Login = () => {
                 {
                   type: showPassword ? "text" : "password",
                   value: password,
-                  onChange: (e2) => setPassword(e2.target.value),
+                  onChange: (e2) => {
+                    setPassword(e2.target.value);
+                    setLoginError("");
+                  },
                   placeholder: "Enter your password",
                   className: "input pr-12",
                   autoComplete: "current-password",
@@ -50822,4 +50863,4 @@ startSyncEngine();
 ReactDOM.createRoot(document.getElementById("root")).render(
   /* @__PURE__ */ jsxRuntimeExports.jsx(React.StrictMode, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(App, {}) })
 );
-//# sourceMappingURL=main-CNqIpPvK.js.map
+//# sourceMappingURL=main-Kd6CLTdN.js.map

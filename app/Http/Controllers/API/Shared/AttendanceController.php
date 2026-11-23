@@ -184,7 +184,7 @@ class AttendanceController extends Controller
             $now = now();
 
             $activeSession = AttendanceSession::where('class_id', $classId)
-                ->where('status', 'active')
+                ->active()
                 ->where(function ($query) use ($now) {
                     $query->where(function ($q) use ($now) {
                         $q->where('is_scheduled', true)
@@ -270,7 +270,7 @@ class AttendanceController extends Controller
             }
 
             $session = AttendanceSession::where('id', $request->session_id)
-                ->where('status', 'active')
+                ->active()
                 ->first();
 
             if (!$session) {
@@ -481,7 +481,7 @@ class AttendanceController extends Controller
         app(\App\Services\AttendanceAccess::class)->class($request->user(), (int) $request->class_id);
         $sessionQuery = AttendanceSession::where('class_id', $request->class_id);
         if ($request->filled('session_id')) $sessionQuery->where('id', $request->session_id);
-        else $sessionQuery->where('status', 'active')->where(function ($q) {
+        else $sessionQuery->active()->where(function ($q) {
             $q->where('is_scheduled', false)->orWhere(fn($q2) => $q2->where('scheduled_start', '<=', now())->where('scheduled_end', '>=', now()));
         });
         $session = $sessionQuery->latest('created_at')->first();

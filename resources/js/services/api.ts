@@ -311,7 +311,7 @@ export const authApi = {
       body: JSON.stringify({ email, password }),
     });
     const data = await response.json();
-    if (!response.ok) throw new Error(data.message || "Login failed");
+    if (!response.ok) throw Object.assign(new Error(data.message || "Login failed"), {status: response.status, data});
     if (data.access_token || data.token) {
       const token = data.access_token || data.token;
       setToken(token);
