@@ -242,15 +242,6 @@ const Sidebar: React.FC<SidebarProps> = ({
         //   path: "/faculty/materials",
         //   roles: ["faculty"],
         // },
-        {
-          label: "New Attendance Session",
-          icon: "fa-plus-circle",
-          path:
-            userRole === "faculty"
-              ? "/faculty/attendance/create"
-              : "/admin/attendance/create",
-          roles: ["faculty", "super_admin"],
-        },
       ],
     },
 

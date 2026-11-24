@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { fitCertificateScale } from "./designerViewport";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import { useEligibleStudents } from "../../hooks/useCertificates";
@@ -52,6 +54,11 @@ export default function CertificateDesigner() {
   const [previewStudent, setPreviewStudent] = useState("");
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
+  const [fullscreen, setFullscreen] = useState(false);
+  const [libraryOpen, setLibraryOpen] = useState(false);
+  const [propertiesOpen, setPropertiesOpen] = useState(false);
+  const editorShell = useRef<HTMLDivElement>(null);
+  const fullscreenButton = useRef<HTMLButtonElement>(null);
   const [scale, setScale] = useState(0.6);
   const [undo, setUndo] = useState<CertificateDesign[]>([]);
   const [redo, setRedo] = useState<CertificateDesign[]>([]);
@@ -85,14 +92,46 @@ export default function CertificateDesigner() {
   }, [type, reload]);
   useEffect(() => {
     if (!viewport.current) return;
-    const observer = new ResizeObserver(([entry]) => setScale(Math.min(0.95, Math.max(0.15, (entry.contentRect.width - 48) / PAGE_WIDTH))));
+    const observer = new ResizeObserver(([entry]) => setScale(fitCertificateScale(entry.contentRect.width, entry.contentRect.height)));
     observer.observe(viewport.current); return () => observer.disconnect();
-  }, [loading, loadError]);
+  }, [loading, loadError, fullscreen]);
   useEffect(() => {
     const handler = (event: BeforeUnloadEvent) => { if (dirty && !loading) { event.preventDefault(); event.returnValue = ""; } };
     window.addEventListener("beforeunload", handler); return () => window.removeEventListener("beforeunload", handler);
   }, [dirty, loading]);
   useEffect(() => () => { if (previewUrl) URL.revokeObjectURL(previewUrl); }, [previewUrl]);
+
+  useEffect(() => {
+    if (!fullscreen) return;
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        if (previewUrl) setPreviewUrl(null); else setFullscreen(false);
+      }
+      if (event.key === "Tab" && !previewUrl) {
+        const controls = Array.from(editorShell.current?.querySelectorAll<HTMLElement>(
+          'button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex="0"]'
+        ) ?? []).filter(node => node.getClientRects().length > 0);
+        const first = controls[0], last = controls[controls.length - 1];
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    fullscreenButton.current?.focus();
+    return () => {
+      document.body.style.overflow = overflow;
+      window.removeEventListener("keydown", onKey);
+      requestAnimationFrame(() => fullscreenButton.current?.focus());
+    };
+  }, [fullscreen, previewUrl]);
+
+  const toggleFullscreen = () => {
+    setFullscreen(value => !value);
+    setLibraryOpen(false); setPropertiesOpen(false); setZoom(1);
+  };
 
   const commit = useCallback((next: CertificateDesign) => {
     setUndo((history) => [...history.slice(-39), current.current]); setRedo([]); setDesign(next);
@@ -184,11 +223,18 @@ export default function CertificateDesigner() {
   };
   const numberControl = (label: string, key: "x" | "y" | "width" | "height", min = 0) => selected && <label>{label}<input aria-label={label} type="number" min={min} max={key === "x" || key === "width" ? PAGE_WIDTH : PAGE_HEIGHT} value={selected[key]} onChange={(e) => patch({ [key]: Number(e.target.value) })} /></label>;
 
-  return <div className="certificate-designer">
+  const editor = <div ref={editorShell}
+    className={`certificate-designer ${fullscreen ? "cd-fullscreen" : ""} ${fullscreen && !libraryOpen ? "cd-hide-library" : ""} ${fullscreen && !propertiesOpen ? "cd-hide-properties" : ""}`}
+    role={fullscreen ? "dialog" : undefined} aria-modal={fullscreen ? true : undefined}
+    aria-label={fullscreen ? "Certificate designer fullscreen" : undefined}
+    style={fullscreen ? { "--cd-full-columns": `68px ${libraryOpen ? "220px " : ""}minmax(0,1fr)${propertiesOpen ? " 260px" : ""}` } as React.CSSProperties : undefined}>
     <header className="cd-header">
       <div><p className="cd-eyebrow">CERTIFICATES / DESIGN STUDIO</p><h2>Certificate Designer <span className="cd-beta">A4 LANDSCAPE</span></h2>
         <p>Create once. Personalize for every graduate.</p></div>
-      <div className="cd-actions"><button className="cd-button" disabled={loading || !!loadError || previewing} onClick={pdfPreview}><Icon name="fa-file-pdf" /> {previewing ? "Preparing…" : "PDF preview"}</button>
+      <div className="cd-actions">
+        <button ref={fullscreenButton} className="cd-button" onClick={toggleFullscreen} aria-pressed={fullscreen}><Icon name={fullscreen ? "fa-compress" : "fa-expand"} /> {fullscreen ? "Exit fullscreen" : "Fullscreen"}</button>
+        {fullscreen && <><button className="cd-button" aria-pressed={libraryOpen} onClick={() => setLibraryOpen(value => !value)}>Fields / tools</button><button className="cd-button" aria-pressed={propertiesOpen} onClick={() => setPropertiesOpen(value => !value)}>Settings</button></>}
+        <button className="cd-button" disabled={loading || !!loadError || previewing} onClick={pdfPreview}><Icon name="fa-file-pdf" /> {previewing ? "Preparing…" : "PDF preview"}</button>
         <button className="cd-button" disabled={loading || !!loadError || saving} onClick={() => save()}><Icon name="fa-save" /> {saving ? "Saving…" : "Save template"}</button>
         <button className="cd-button cd-primary" disabled={loading || !!loadError || saving} onClick={generate}>Use in Generate <Icon name="fa-arrow-right" /></button></div>
     </header>
@@ -201,7 +247,7 @@ export default function CertificateDesigner() {
         </select>
       </div>
       <div className="cd-workspace">
-        <nav className="cd-tools" aria-label="Design tools">{tools.map(([id, icon, label]) => <button key={id} aria-pressed={tool === id} onClick={() => setTool(id)}><Icon name={icon} /><span>{label}</span></button>)}</nav>
+        <nav className="cd-tools" aria-label="Design tools">{tools.map(([id, icon, label]) => <button key={id} aria-pressed={tool === id} onClick={() => { setTool(id); if (fullscreen) setLibraryOpen(true); }}><Icon name={icon} /><span>{label}</span></button>)}</nav>
         <aside className="cd-library">
           <h3>{tools.find(([id]) => id === tool)?.[2]}</h3>
           {tool === "fields" && <><p>Drag a field onto the page, or click to add it. Student details are filled automatically.</p><div className="cd-tip"><Icon name="fa-magic" /> One design, every graduate.</div>
@@ -259,4 +305,5 @@ export default function CertificateDesigner() {
     </>}
     {previewUrl && <div className="cd-modal" role="dialog" aria-modal="true" aria-label="Certificate PDF preview"><div className="cd-modal-body"><header><h3>PDF preview · not issued</h3><a className="cd-button" href={previewUrl} download="certificate-preview.pdf">Download preview</a><button className="cd-button" onClick={() => setPreviewUrl(null)}>Close</button></header><iframe src={previewUrl} title="Certificate PDF preview" /></div></div>}
   </div>;
+  return fullscreen ? createPortal(editor, document.body) : editor;
 }
