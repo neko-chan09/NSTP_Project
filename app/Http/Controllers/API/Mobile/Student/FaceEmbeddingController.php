@@ -71,6 +71,8 @@ class FaceEmbeddingController extends Controller
 
         try {
             DB::transaction(function () use ($student, $request, &$alreadyRegistered) {
+                $unique=app(\App\Services\FaceRegistrationUniqueness::class);
+                $unique->lock();
                 // Lock any existing rows so concurrent requests can't both pass.
                 $exists = FaceEmbedding::where('student_id', $student->id)
                     ->lockForUpdate()
@@ -81,6 +83,11 @@ class FaceEmbeddingController extends Controller
                     return;
                 }
 
+                $poses=[];
+                foreach (['front','left','right'] as $pose) $poses[$pose]=$this->matching->l2Normalize(array_map('floatval',$request->input("embeddings.{$pose}")));
+                if($unique->linkedToAnother($student->id,$poses)) {
+                    throw new \Illuminate\Http\Exceptions\HttpResponseException(response()->json(['success'=>false,'code'=>'FACE_ALREADY_LINKED','message'=>'This face may already be linked to another student account. Please ask the NSTP office to review your registration.'],409));
+                }
                 foreach (['front', 'left', 'right'] as $pose) {
                     $raw = $request->input("embeddings.{$pose}");
                     $normalized = $this->matching->l2Normalize(
@@ -95,6 +102,8 @@ class FaceEmbeddingController extends Controller
                     ]);
                 }
             });
+        } catch (\Illuminate\Http\Exceptions\HttpResponseException $e) {
+            throw $e;
         } catch (QueryException $e) {
             // Unique (student_id, pose) violated by a simultaneous request
             if (($e->errorInfo[0] ?? null) === '23000') {
