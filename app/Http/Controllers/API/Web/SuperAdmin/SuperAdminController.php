@@ -23,7 +23,7 @@ class SuperAdminController extends Controller
     public function index()
     {
         try {
-            $users = User::whereIn('role', ['admin', 'faculty'])
+            $users = User::whereIn('role', ['super_admin', 'admin', 'faculty'])
                 ->orderBy('created_at', 'desc')
                 ->get()
                 ->map(function ($user) {
@@ -77,7 +77,7 @@ class SuperAdminController extends Controller
                 ], 404);
             }
 
-            if (!in_array($user->role, ['admin', 'faculty'])) {
+            if (!in_array($user->role, ['super_admin', 'admin', 'faculty'])) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Cannot view this user',
@@ -126,8 +126,8 @@ class SuperAdminController extends Controller
             'first_name'     => 'required|string|max:255',
             'last_name'      => 'required|string|max:255',
             'email'          => 'required|email|unique:users,email',
-            'password'       => 'required|string|min:6',
-            'role'           => 'required|in:admin,faculty',
+            'password'       => $request->input('role') === 'super_admin' ? 'required|string|min:12' : 'required|string|min:6',
+            'role'           => 'required|in:super_admin,admin,faculty',
             'profile_photo'  => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
             'contact_number' => 'nullable|string|max:20|unique:users,contact_number',
             'nstp_component' => 'nullable|in:cwts,rotc,lts',
@@ -166,7 +166,11 @@ class SuperAdminController extends Controller
                 $userData['profile_photo'] = $filePath;
             }
 
-            $user = User::create($userData);
+            $user = \Illuminate\Support\Facades\DB::transaction(function() use ($userData,$request) {
+                $created = User::create($userData);
+                \App\Services\AuditTrail::record($request->user()->id,'account.created','user',$created->id,'Created user through User Management',['role'=>$created->role]);
+                return $created;
+            });
 
             return response()->json([
                 'success' => true,
