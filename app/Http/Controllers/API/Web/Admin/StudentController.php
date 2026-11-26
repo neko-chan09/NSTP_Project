@@ -53,6 +53,12 @@ class StudentController extends Controller
     {
         $query = Student::with('user');
 
+        // Exact OCC ID lookup must search the full database before pagination.
+        if ($request->filled('student_id')) {
+            $request->validate(['student_id' => 'string|max:255']);
+            $query->where('student_id', trim($request->input('student_id')));
+        }
+
         // Search by student_id, name, or email
         if ($request->filled('search')) {
             $search = $request->search;
@@ -773,7 +779,7 @@ class StudentController extends Controller
 
         $students = $query->orderBy('student_id')->get();
 
-        // Sort by gender (Male → Female → Other)
+        // Sort by gender (Male â†’ Female â†’ Other)
         $students = $students->sortBy(function ($student) {
             $g = strtolower($student->gender ?? '');
             if ($g === 'male') return 0;

@@ -1,6 +1,7 @@
 // src/pages/admin/Students/Component.tsx
-import React, { useState } from 'react';
-import { useStudents, useUpdateStudent } from '../../hooks/useStudents';
+import React, { useState, useRef } from 'react';
+import { useUpdateStudent } from '../../hooks/useStudents';
+import { secureRequest } from '../../../services/secureRequest';
 import RefreshButton from '../../components/common/RefreshButton';
 import toast from 'react-hot-toast';
 import type { Student } from '../../../types/api';
@@ -10,30 +11,38 @@ const StudentComponent: React.FC = () => {
   const [currentStudent, setCurrentStudent] = useState<Student | null>(null);
   const [notFound, setNotFound] = useState(false);
 
-  const { data, isLoading, refresh, isRefreshing } = useStudents({ per_page: 1000 });
   const updateMut = useUpdateStudent();
+  const [isLoading, setIsLoading] = useState(false);
+  const [lookupError, setLookupError] = useState('');
+  const [searchedId, setSearchedId] = useState('');
+  const latestRequest = useRef(0);
 
-  const allStudents = data?.data || [];
+  const lookupStudent = async (id: string) => {
+    const request = ++latestRequest.current;
+    const exactId = id.trim();
+    setCurrentStudent(null);
+    setNotFound(false);
+    setLookupError('');
+    setSearchedId(exactId);
+    if (!exactId) { setIsLoading(false); return; }
+    setIsLoading(true);
+    try {
+      const response = await secureRequest(`/admin/students?student_id=${encodeURIComponent(exactId)}&per_page=1&page=1`);
+      if (request !== latestRequest.current) return;
+      if (!Array.isArray(response?.data)) throw new Error('The student lookup returned an unexpected response. Please retry.');
+      const found = response.data.find((s: Student) => s.student_id.toLowerCase() === exactId.toLowerCase());
+      setCurrentStudent(found || null);
+      setNotFound(!found);
+    } catch (error: any) {
+      if (request === latestRequest.current) setLookupError(error.message || 'Could not load the student. Check your connection and retry.');
+    } finally {
+      if (request === latestRequest.current) setIsLoading(false);
+    }
+  };
 
   const handleLookup = (e: React.FormEvent) => {
     e.preventDefault();
-    setNotFound(false);
-    
-    if (!lookupId.trim()) {
-      setCurrentStudent(null);
-      return;
-    }
-
-    const found = allStudents.find(
-      (s) => s.student_id.toLowerCase() === lookupId.trim().toLowerCase()
-    );
-
-    if (found) {
-      setCurrentStudent(found);
-    } else {
-      setCurrentStudent(null);
-      setNotFound(true);
-    }
+    void lookupStudent(lookupId);
   };
 
   const handleComponentChange = async (studentId: number, component: string) => {
@@ -44,7 +53,7 @@ const StudentComponent: React.FC = () => {
       });
       
       setCurrentStudent((prev) => prev ? { ...prev, nstp_component_selected: component as any || undefined } : null);
-      refresh();
+
       toast.success('Component updated successfully');
     } catch (err: any) {
       toast.error(err.message || 'Failed to update component');
@@ -61,20 +70,12 @@ const StudentComponent: React.FC = () => {
     return colors[comp] || 'bg-slate-200 text-slate-600';
   };
 
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-16">
-        <div className="spinner" />
-        <span className="ml-3 text-slate-500">Loading student records...</span>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-5">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <h2 className="text-2xl font-bold text-navy-900">Component Selection Management</h2>
-        <RefreshButton onRefresh={refresh} isLoading={isRefreshing} />
+        <RefreshButton onRefresh={()=>void lookupStudent(lookupId)} isLoading={isLoading} />
       </div>
 
       {/* Lookup Form */}
@@ -85,19 +86,22 @@ const StudentComponent: React.FC = () => {
             type="text"
             placeholder="e.g. 2025-00001"
             value={lookupId}
-            onChange={(e) => setLookupId(e.target.value)}
+            onChange={(e) => { ++latestRequest.current; setLookupId(e.target.value); setCurrentStudent(null); setNotFound(false); setLookupError(''); setIsLoading(false); }}
+            disabled={updateMut.isPending}
             className="input flex-1"
           />
-          <button type="submit" className="btn btn-primary">
-            <i className="fas fa-search" /> Look Up
+          <button type="submit" className="btn btn-primary" disabled={isLoading || updateMut.isPending || !lookupId.trim()}>
+            <i className="fas fa-search" /> {isLoading ? "Looking up…" : "Look Up"}
           </button>
         </form>
       </div>
 
+      {isLoading && <div role="status">Looking up the student ID…</div>}
+      {lookupError && <div className="alert alert-danger" role="alert">Could not look up the student: {lookupError} <button type="button" className="btn" onClick={()=>void lookupStudent(lookupId)}>Retry</button></div>}
       {/* Not Found */}
       {notFound && (
         <div className="alert alert-danger">
-          No student found with ID: <strong>{lookupId}</strong>
+          No student found with ID: <strong>{searchedId}</strong>
         </div>
       )}
 
@@ -151,7 +155,7 @@ const StudentComponent: React.FC = () => {
       )}
 
       {/* Empty State */}
-      {!currentStudent && !notFound && (
+      {!currentStudent && !notFound && !lookupError && !isLoading && (
         <div className="empty-state">
           <i className="fas fa-id-card" />
           <p>Enter a Student OCC ID above to manage their NSTP component.</p>

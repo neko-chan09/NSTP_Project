@@ -33166,25 +33166,39 @@ const StudentComponent = () => {
   const [lookupId, setLookupId] = reactExports.useState("");
   const [currentStudent, setCurrentStudent] = reactExports.useState(null);
   const [notFound, setNotFound] = reactExports.useState(false);
-  const { data, isLoading, refresh, isRefreshing } = useStudents({ per_page: 1e3 });
   const updateMut = useUpdateStudent();
-  const allStudents = data?.data || [];
-  const handleLookup = (e2) => {
-    e2.preventDefault();
+  const [isLoading, setIsLoading] = reactExports.useState(false);
+  const [lookupError, setLookupError] = reactExports.useState("");
+  const [searchedId, setSearchedId] = reactExports.useState("");
+  const latestRequest = reactExports.useRef(0);
+  const lookupStudent = async (id) => {
+    const request2 = ++latestRequest.current;
+    const exactId = id.trim();
+    setCurrentStudent(null);
     setNotFound(false);
-    if (!lookupId.trim()) {
-      setCurrentStudent(null);
+    setLookupError("");
+    setSearchedId(exactId);
+    if (!exactId) {
+      setIsLoading(false);
       return;
     }
-    const found = allStudents.find(
-      (s2) => s2.student_id.toLowerCase() === lookupId.trim().toLowerCase()
-    );
-    if (found) {
-      setCurrentStudent(found);
-    } else {
-      setCurrentStudent(null);
-      setNotFound(true);
+    setIsLoading(true);
+    try {
+      const response = await secureRequest(`/admin/students?student_id=${encodeURIComponent(exactId)}&per_page=1&page=1`);
+      if (request2 !== latestRequest.current) return;
+      if (!Array.isArray(response?.data)) throw new Error("The student lookup returned an unexpected response. Please retry.");
+      const found = response.data.find((s2) => s2.student_id.toLowerCase() === exactId.toLowerCase());
+      setCurrentStudent(found || null);
+      setNotFound(!found);
+    } catch (error) {
+      if (request2 === latestRequest.current) setLookupError(error.message || "Could not load the student. Check your connection and retry.");
+    } finally {
+      if (request2 === latestRequest.current) setIsLoading(false);
     }
+  };
+  const handleLookup = (e2) => {
+    e2.preventDefault();
+    void lookupStudent(lookupId);
   };
   const handleComponentChange = async (studentId, component) => {
     try {
@@ -33193,7 +33207,6 @@ const StudentComponent = () => {
         payload: { nstp_component_selected: component || null }
       });
       setCurrentStudent((prev) => prev ? { ...prev, nstp_component_selected: component || void 0 } : null);
-      refresh();
       zt.success("Component updated successfully");
     } catch (err) {
       zt.error(err.message || "Failed to update component");
@@ -33208,16 +33221,10 @@ const StudentComponent = () => {
     };
     return colors[comp] || "bg-slate-200 text-slate-600";
   };
-  if (isLoading) {
-    return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-center py-16", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "spinner" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "ml-3 text-slate-500", children: "Loading student records..." })
-    ] });
-  }
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-5", children: [
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "text-2xl font-bold text-navy-900", children: "Component Selection Management" }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx(RefreshButton, { onRefresh: refresh, isLoading: isRefreshing })
+      /* @__PURE__ */ jsxRuntimeExports.jsx(RefreshButton, { onRefresh: () => void lookupStudent(lookupId), isLoading })
     ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "bg-white p-5 rounded-xl shadow-sm border border-slate-200", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("form", { onSubmit: handleLookup, className: "flex flex-col sm:flex-row gap-3", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "font-medium text-navy-700 self-center", children: "Enter Student ID:" }),
@@ -33227,18 +33234,34 @@ const StudentComponent = () => {
           type: "text",
           placeholder: "e.g. 2025-00001",
           value: lookupId,
-          onChange: (e2) => setLookupId(e2.target.value),
+          onChange: (e2) => {
+            ++latestRequest.current;
+            setLookupId(e2.target.value);
+            setCurrentStudent(null);
+            setNotFound(false);
+            setLookupError("");
+            setIsLoading(false);
+          },
+          disabled: updateMut.isPending,
           className: "input flex-1"
         }
       ),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { type: "submit", className: "btn btn-primary", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { type: "submit", className: "btn btn-primary", disabled: isLoading || updateMut.isPending || !lookupId.trim(), children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-search" }),
-        " Look Up"
+        " ",
+        isLoading ? "Looking up…" : "Look Up"
       ] })
     ] }) }),
+    isLoading && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { role: "status", children: "Looking up the student ID…" }),
+    lookupError && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "alert alert-danger", role: "alert", children: [
+      "Could not look up the student: ",
+      lookupError,
+      " ",
+      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "btn", onClick: () => void lookupStudent(lookupId), children: "Retry" })
+    ] }),
     notFound && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "alert alert-danger", children: [
       "No student found with ID: ",
-      /* @__PURE__ */ jsxRuntimeExports.jsx("strong", { children: lookupId })
+      /* @__PURE__ */ jsxRuntimeExports.jsx("strong", { children: searchedId })
     ] }),
     currentStudent && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "bg-white rounded-xl shadow-sm border border-slate-200 p-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-4", children: [
@@ -33292,7 +33315,7 @@ const StudentComponent = () => {
         updateMut.isPending && /* @__PURE__ */ jsxRuntimeExports.jsx("small", { className: "text-slate-400 text-xs", children: "Saving..." })
       ] })
     ] }),
-    !currentStudent && !notFound && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "empty-state", children: [
+    !currentStudent && !notFound && !lookupError && !isLoading && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "empty-state", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-id-card" }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "Enter a Student OCC ID above to manage their NSTP component." })
     ] })
@@ -51226,4 +51249,4 @@ startSyncEngine();
 ReactDOM.createRoot(document.getElementById("root")).render(
   /* @__PURE__ */ jsxRuntimeExports.jsx(React.StrictMode, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(App, {}) })
 );
-//# sourceMappingURL=main-C3u_BELK.js.map
+//# sourceMappingURL=main-BRkJbGDB.js.map
