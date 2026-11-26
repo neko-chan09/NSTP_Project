@@ -7751,6 +7751,7 @@ const superAdminApi = {
     });
   },
   updateUser: async (id, data) => {
+    data.set("_method", "PUT");
     return mutateWithQueue(`${API_URL}/superadmin/users/${id}`, "POST", {
       formData: data,
       label: `Update user ${id}`,
@@ -9750,7 +9751,7 @@ function SessionEditor({ session, onSaved }) {
     ] })
   ] });
 }
-requireReactDom();
+var reactDomExports = requireReactDom();
 function _extends$2() {
   return _extends$2 = Object.assign ? Object.assign.bind() : function(n2) {
     for (var e2 = 1; e2 < arguments.length; e2++) {
@@ -15235,13 +15236,7 @@ const Classes = () => {
   const createMutation = useCreateClass();
   const updateMutation = useUpdateClass();
   const toggleArchiveMutation = useToggleArchiveClass();
-  const filteredFaculty = reactExports.useMemo(() => {
-    if (!facultyList.length) return [];
-    if (formData.component_type === "all") return facultyList;
-    return facultyList.filter(
-      (f2) => f2.nstp_component === formData.component_type
-    );
-  }, [facultyList, formData.component_type]);
+  const filteredFaculty = facultyList;
   const filteredClasses = reactExports.useMemo(() => {
     if (!searchTerm.trim()) return classes;
     const q2 = searchTerm.toLowerCase();
@@ -15822,8 +15817,7 @@ const Classes = () => {
                         f2.first_name,
                         " ",
                         f2.last_name,
-                        " ",
-                        f2.nstp_component ? `(${f2.nstp_component.toUpperCase()})` : ""
+                        " "
                       ] }, f2.id))
                     ]
                   }
@@ -16226,6 +16220,25 @@ const OfflineBanner = () => {
     showPanel && /* @__PURE__ */ jsxRuntimeExports.jsx(SyncStatusPanel, { onClose: () => setShowPanel(false) })
   ] });
 };
+function PhilippineClock() {
+  const [now, setNow] = reactExports.useState(() => /* @__PURE__ */ new Date());
+  reactExports.useEffect(() => {
+    const tick = () => setNow(/* @__PURE__ */ new Date());
+    const timer = window.setInterval(tick, 1e3);
+    document.addEventListener("visibilitychange", tick);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", tick);
+    };
+  }, []);
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "hidden md:inline-block text-slate-500 text-xs bg-slate-100 px-3 py-1 rounded", children: now.toLocaleDateString("en-US", { timeZone: "Asia/Manila", month: "short", day: "numeric", year: "numeric" }) }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("time", { title: "Philippine Standard Time", dateTime: now.toISOString(), className: "text-slate-500 text-xs bg-slate-100 px-3 py-1 rounded font-mono", children: [
+      now.toLocaleTimeString("en-US", { timeZone: "Asia/Manila", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: true }),
+      " PHT"
+    ] })
+  ] });
+}
 const useAuth = () => {
   const [token, setToken2] = reactExports.useState(() => localStorage.getItem("token"));
   const [user, setUser] = reactExports.useState(() => {
@@ -16616,19 +16629,13 @@ const Sidebar = ({
           icon: "fa-chalkboard-teacher",
           path: "/faculty/classes",
           roles: ["faculty"]
-        },
+        }
         // {
         //   label: "Learning Materials",
         //   icon: "fa-folder-open",
         //   path: "/faculty/materials",
         //   roles: ["faculty"],
         // },
-        {
-          label: "New Attendance Session",
-          icon: "fa-plus-circle",
-          path: userRole === "faculty" ? "/faculty/attendance/create" : "/admin/attendance/create",
-          roles: ["faculty", "super_admin"]
-        }
       ]
     },
     // -------- Activities & Schedules (everyone) --------
@@ -17124,15 +17131,7 @@ const AdminLayoutInner = ({
                 }
               ),
               /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "hidden md:inline-block w-px h-6 bg-slate-200" }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "hidden md:inline-block text-slate-500 text-xs bg-slate-100 px-3 py-1 rounded", children: (/* @__PURE__ */ new Date()).toLocaleDateString("en-US", {
-                month: "short",
-                day: "numeric",
-                year: "numeric"
-              }) }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "hidden md:inline-block text-slate-500 text-xs bg-slate-100 px-3 py-1 rounded font-mono", children: (/* @__PURE__ */ new Date()).toLocaleTimeString("en-US", {
-                hour: "2-digit",
-                minute: "2-digit"
-              }) }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx(PhilippineClock, {}),
               /* @__PURE__ */ jsxRuntimeExports.jsx(
                 "button",
                 {
@@ -17155,6 +17154,125 @@ const AdminLayout = ({
 }) => {
   return /* @__PURE__ */ jsxRuntimeExports.jsx(SidebarProvider, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(AdminLayoutInner, { children }) });
 };
+function SemesterTrainingPanel() {
+  const cache = useQueryClient();
+  const query = useQuery({ queryKey: ["semester-training"], queryFn: () => secureRequest("/admin/training-semesters"), refetchOnWindowFocus: true });
+  const data = query.data?.data;
+  const [selected, setSelected] = reactExports.useState(""), [busy, setBusy] = reactExports.useState(false), [message, setMessage] = reactExports.useState("");
+  const [year, setYear] = reactExports.useState(""), [semester, setSemester] = reactExports.useState("1st"), [start, setStart] = reactExports.useState(""), [end, setEnd] = reactExports.useState("");
+  const [student, setStudent] = reactExports.useState(""), [hours, setHours] = reactExports.useState(""), [reason, setReason] = reactExports.useState(""), [logId, setLogId] = reactExports.useState("");
+  async function run(action) {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const result = await action();
+      setMessage(result?.message || "Semester settings updated.");
+      await cache.invalidateQueries();
+    } catch (e2) {
+      setMessage(e2.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "card space-y-3", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx("h3", { className: "text-lg font-semibold", children: "Semester training hours" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "54–90 credited hours: eligible. Each semester is capped at 90 hours; full attendance times remain recorded." }),
+    query.isError && /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn", onClick: () => query.refetch(), children: "Could not load semesters. Retry" }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { children: [
+      "Current semester: ",
+      /* @__PURE__ */ jsxRuntimeExports.jsx("strong", { children: data?.current ? `${data.current.academic_year} · ${data.current.semester}` : "Not selected — select one before recording attendance" })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-wrap gap-2", children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("select", { className: "input max-w-md", "aria-label": "Training semester", value: selected, onChange: (e2) => setSelected(e2.target.value), children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "", children: "Choose semester" }),
+        data?.periods?.map((p2) => /* @__PURE__ */ jsxRuntimeExports.jsxs("option", { value: p2.id, children: [
+          p2.academic_year,
+          " · ",
+          p2.semester,
+          " · ",
+          p2.start_date?.slice(0, 10),
+          " to ",
+          p2.end_date?.slice(0, 10)
+        ] }, p2.id))
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-primary", disabled: busy || !selected, onClick: () => {
+        if (window.confirm("Display and calculate hours for this semester? Other semesters remain saved.")) void run(() => secureRequest(`/admin/academic-years/${selected}`, "PUT", { is_current: true }));
+      }, children: "Use this semester" })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("details", { children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("summary", { children: "Create a semester" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("form", { className: "grid md:grid-cols-2 gap-3 mt-3", onSubmit: (e2) => {
+        e2.preventDefault();
+        void run(() => secureRequest("/admin/academic-years", "POST", { academic_year: year, semester, start_date: start, end_date: end, is_active: true }));
+      }, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
+          "Academic year",
+          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { className: "input", required: true, placeholder: "2026-2027", value: year, onChange: (e2) => setYear(e2.target.value) })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
+          "Semester",
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("select", { className: "input", value: semester, onChange: (e2) => setSemester(e2.target.value), children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "1st", children: "1st" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "2nd", children: "2nd" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "summer", children: "Summer" })
+          ] })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
+          "Actual semester start",
+          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { className: "input", required: true, type: "date", value: start, onChange: (e2) => setStart(e2.target.value) })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
+          "Actual semester end",
+          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { className: "input", required: true, type: "date", min: start, value: end, onChange: (e2) => setEnd(e2.target.value) })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn", disabled: busy, children: "Create semester" })
+      ] })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsxs("details", { children: [
+      /* @__PURE__ */ jsxRuntimeExports.jsx("summary", { children: "Review historical hours without a semester" }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "my-2", children: [
+        "Unassigned historical balances: ",
+        data?.unassigned_legacy_hours ?? 0,
+        " hours. Unassigned attendance: ",
+        data?.unassigned_attendance_hours ?? 0,
+        " hours. Assign only after checking the original records."
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("form", { className: "space-y-2", onSubmit: (e2) => {
+        e2.preventDefault();
+        if (window.confirm(`Assign ${hours} verified historical hours for ${student} to the selected semester?`)) void run(() => secureRequest("/admin/training-semesters/legacy", "POST", { student_id: student, academic_year_id: Number(selected), hours: Number(hours), reason }));
+      }, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
+          "Student ID",
+          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { className: "input", required: true, value: student, onChange: (e2) => setStudent(e2.target.value) })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
+          "Verified historical hours",
+          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { className: "input", type: "number", min: "0.01", step: "0.01", required: true, value: hours, onChange: (e2) => setHours(e2.target.value) })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
+          "Review reason",
+          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { className: "input", required: true, minLength: 3, value: reason, onChange: (e2) => setReason(e2.target.value) })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn", disabled: busy || !selected, children: "Assign historical balance" })
+      ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("form", { className: "space-y-2 border-t mt-4 pt-3", onSubmit: (e2) => {
+        e2.preventDefault();
+        void run(() => secureRequest(`/admin/training-semesters/attendance/${logId}`, "POST", { academic_year_id: Number(selected), reason }));
+      }, children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
+          "Unassigned attendance log ID",
+          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { className: "input", type: "number", min: "1", required: true, value: logId, onChange: (e2) => setLogId(e2.target.value) })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
+          "Review reason",
+          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { className: "input", required: true, minLength: 3, value: reason, onChange: (e2) => setReason(e2.target.value) })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn", disabled: busy || !selected, children: "Assign attendance record" })
+      ] })
+    ] }),
+    /* @__PURE__ */ jsxRuntimeExports.jsx("p", { role: "status", children: message })
+  ] });
+}
 const GRADES_KEY = ["grades"];
 function useGrades(filters) {
   const queryClient2 = useQueryClient();
@@ -17469,6 +17587,7 @@ const GradesManagement = () => {
     ] });
   }
   return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-5", children: [
+    /* @__PURE__ */ jsxRuntimeExports.jsx(SemesterTrainingPanel, {}),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("h2", { className: "text-2xl font-bold text-navy-900", children: "Grade Management" }),
@@ -31714,8 +31833,6 @@ const StudentDetailsModal = ({
   student,
   onClose
 }) => {
-  const { isAdmin, isSuperAdmin, isFaculty } = useAuth();
-  const canEdit = isAdmin || isSuperAdmin;
   const formatDate = (dateString) => {
     if (!dateString) return "N/A";
     return new Date(dateString).toLocaleDateString("en-US", {
@@ -31965,52 +32082,6 @@ const StudentDetailsModal = ({
             /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "font-medium text-navy-900", children: student.emergency_contact_number || "N/A" })
           ] })
         ] })
-      ] }),
-      canEdit && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("h4", { className: "text-sm font-semibold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-bolt text-gold-500" }),
-          "Quick Actions"
-        ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex flex-wrap gap-2", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsxs(
-            "button",
-            {
-              className: "btn btn-info btn-sm",
-              onClick: () => {
-                onClose();
-              },
-              children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-edit" }),
-                " Edit Student"
-              ]
-            }
-          ),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs(
-            "button",
-            {
-              className: "btn btn-primary btn-sm",
-              onClick: () => {
-                copyToClipboard(student.student_id);
-              },
-              children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-copy" }),
-                " Copy ID"
-              ]
-            }
-          ),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs(
-            "button",
-            {
-              className: "btn btn-success btn-sm",
-              onClick: () => {
-              },
-              children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-certificate" }),
-                " Generate Certificate"
-              ]
-            }
-          )
-        ] })
       ] })
     ] }),
     /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "modal-footer", children: [
@@ -32025,20 +32096,7 @@ const StudentDetailsModal = ({
           formatDate(student.updated_at)
         ] })
       ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-secondary", onClick: onClose, children: isFaculty ? "Close" : "Close" }),
-      canEdit && /* @__PURE__ */ jsxRuntimeExports.jsxs(
-        "button",
-        {
-          className: "btn btn-primary",
-          onClick: () => {
-            onClose();
-          },
-          children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-edit" }),
-            " Edit Student"
-          ]
-        }
-      )
+      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-secondary", onClick: onClose, children: "Close" })
     ] })
   ] }) });
 };
@@ -37673,6 +37731,10 @@ function clampElement(item) {
     y: Math.max(0, Math.min(PAGE_HEIGHT - height, item.y))
   };
 }
+function fitCertificateScale(width, height) {
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return 0.15;
+  return Math.max(0.1, Math.min(1, (width - 48) / PAGE_WIDTH, (height - 48) / PAGE_HEIGHT));
+}
 const tools = [
   ["templates", "fa-th-large", "Templates"],
   ["text", "fa-font", "Text"],
@@ -37725,6 +37787,11 @@ function CertificateDesigner() {
   const [previewStudent, setPreviewStudent] = reactExports.useState("");
   const [previewUrl, setPreviewUrl] = reactExports.useState(null);
   const [zoom, setZoom] = reactExports.useState(1);
+  const [fullscreen, setFullscreen] = reactExports.useState(false);
+  const [libraryOpen, setLibraryOpen] = reactExports.useState(false);
+  const [propertiesOpen, setPropertiesOpen] = reactExports.useState(false);
+  const editorShell = reactExports.useRef(null);
+  const fullscreenButton = reactExports.useRef(null);
   const [scale, setScale] = reactExports.useState(0.6);
   const [undo, setUndo] = reactExports.useState([]);
   const [redo, setRedo] = reactExports.useState([]);
@@ -37775,10 +37842,10 @@ function CertificateDesigner() {
   }, [type, reload]);
   reactExports.useEffect(() => {
     if (!viewport.current) return;
-    const observer = new ResizeObserver(([entry]) => setScale(Math.min(0.95, Math.max(0.15, (entry.contentRect.width - 48) / PAGE_WIDTH))));
+    const observer = new ResizeObserver(([entry]) => setScale(fitCertificateScale(entry.contentRect.width, entry.contentRect.height)));
     observer.observe(viewport.current);
     return () => observer.disconnect();
-  }, [loading, loadError]);
+  }, [loading, loadError, fullscreen]);
   reactExports.useEffect(() => {
     const handler = (event) => {
       if (dirty && !loading) {
@@ -37792,6 +37859,44 @@ function CertificateDesigner() {
   reactExports.useEffect(() => () => {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
   }, [previewUrl]);
+  reactExports.useEffect(() => {
+    if (!fullscreen) return;
+    const overflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        if (previewUrl) setPreviewUrl(null);
+        else setFullscreen(false);
+      }
+      if (event.key === "Tab" && !previewUrl) {
+        const controls = Array.from(editorShell.current?.querySelectorAll(
+          'button:not([disabled]),a[href],input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex="0"]'
+        ) ?? []).filter((node) => node.getClientRects().length > 0);
+        const first = controls[0], last = controls[controls.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last?.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first?.focus();
+        }
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    fullscreenButton.current?.focus();
+    return () => {
+      document.body.style.overflow = overflow;
+      window.removeEventListener("keydown", onKey);
+      requestAnimationFrame(() => fullscreenButton.current?.focus());
+    };
+  }, [fullscreen, previewUrl]);
+  const toggleFullscreen = () => {
+    setFullscreen((value) => !value);
+    setLibraryOpen(false);
+    setPropertiesOpen(false);
+    setZoom(1);
+  };
   const commit = reactExports.useCallback((next) => {
     setUndo((history) => [...history.slice(-39), current.current]);
     setRedo([]);
@@ -37946,326 +38051,350 @@ function CertificateDesigner() {
     label,
     /* @__PURE__ */ jsxRuntimeExports.jsx("input", { "aria-label": label, type: "number", min, max: key === "x" || key === "width" ? PAGE_WIDTH : PAGE_HEIGHT, value: selected[key], onChange: (e2) => patch({ [key]: Number(e2.target.value) }) })
   ] });
-  return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "certificate-designer", children: [
-    /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { className: "cd-header", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "cd-eyebrow", children: "CERTIFICATES / DESIGN STUDIO" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("h2", { children: [
-          "Certificate Designer ",
-          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "cd-beta", children: "A4 LANDSCAPE" })
-        ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "Create once. Personalize for every graduate." })
-      ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "cd-actions", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { className: "cd-button", disabled: loading || !!loadError || previewing, onClick: pdfPreview, children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-file-pdf" }),
-          " ",
-          previewing ? "Preparing…" : "PDF preview"
-        ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { className: "cd-button", disabled: loading || !!loadError || saving, onClick: () => save(), children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-save" }),
-          " ",
-          saving ? "Saving…" : "Save template"
-        ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { className: "cd-button cd-primary", disabled: loading || !!loadError || saving, onClick: generate, children: [
-          "Use in Generate ",
-          /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-arrow-right" })
-        ] })
-      ] })
-    ] }),
-    loading ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "cd-state", role: "status", children: "Loading your saved design…" }) : loadError ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "cd-state", role: "alert", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { children: [
-        "Could not load the certificate design: ",
-        loadError
-      ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "cd-button", onClick: () => setReload((n2) => n2 + 1), children: "Try again" })
-    ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "cd-documentbar", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("input", { "aria-label": "Template name", maxLength: 120, value: design.name, onChange: (e2) => commit({ ...design, name: e2.target.value }) }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: dirty ? "cd-unsaved" : "cd-saved", children: dirty ? "● Unsaved changes" : lastSaved ? "✓ Saved to server" : "Starter template" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("select", { "aria-label": "Certificate type", value: type, disabled: saving, onChange: (e2) => {
-          if (!dirty || window.confirm("Discard your unsaved changes and switch certificate type?")) setType(e2.target.value);
-        }, children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "completion", children: "Completion" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "participation", children: "Participation" }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "training", children: "Training" })
-        ] })
-      ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "cd-workspace", children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("nav", { className: "cd-tools", "aria-label": "Design tools", children: tools.map(([id, icon, label]) => /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { "aria-pressed": tool === id, onClick: () => setTool(id), children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: icon }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: label })
-        ] }, id)) }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("aside", { className: "cd-library", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsx("h3", { children: tools.find(([id]) => id === tool)?.[2] }),
-          tool === "fields" && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "Drag a field onto the page, or click to add it. Student details are filled automatically." }),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "cd-tip", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-magic" }),
-              " One design, every graduate."
+  const editor = /* @__PURE__ */ jsxRuntimeExports.jsxs(
+    "div",
+    {
+      ref: editorShell,
+      className: `certificate-designer ${fullscreen ? "cd-fullscreen" : ""} ${fullscreen && !libraryOpen ? "cd-hide-library" : ""} ${fullscreen && !propertiesOpen ? "cd-hide-properties" : ""}`,
+      role: fullscreen ? "dialog" : void 0,
+      "aria-modal": fullscreen ? true : void 0,
+      "aria-label": fullscreen ? "Certificate designer fullscreen" : void 0,
+      style: fullscreen ? { "--cd-full-columns": `68px ${libraryOpen ? "220px " : ""}minmax(0,1fr)${propertiesOpen ? " 260px" : ""}` } : void 0,
+      children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { className: "cd-header", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "cd-eyebrow", children: "CERTIFICATES / DESIGN STUDIO" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("h2", { children: [
+              "Certificate Designer ",
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "cd-beta", children: "A4 LANDSCAPE" })
             ] }),
-            FIELDS.map((field) => /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { className: "cd-field", draggable: true, onDragStart: (e2) => e2.dataTransfer.setData("application/nstp-field", field), onClick: () => add("text", { text: `{{${field}}}`, fontSize: field === "student_name" ? 44 : 20 }), children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-grip-vertical" }),
-              /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
-                fieldLabel(field),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("small", { children: `{{${field}}}` })
-              ] }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-plus" })
-            ] }, field))
+            /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "Create once. Personalize for every graduate." })
           ] }),
-          tool === "templates" && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "Start with an editable layout. All elements can be moved and changed." }),
-            [false, true].map((modern) => /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { className: "cd-template", onClick: () => replaceTemplate(modern), children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: modern ? "cd-mini modern" : "cd-mini", children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx("small", { children: "OPOL COMMUNITY COLLEGE" }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("strong", { children: "CERTIFICATE" }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("i", { children: "Student Name" }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "___________________" })
-              ] }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("b", { children: modern ? "Clean double border" : "Classic navy & gold" })
-            ] }, String(modern))),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "cd-button", onClick: () => {
-              if (window.confirm("Start with a blank canvas? You can undo this change.")) commit({ ...createDesign(type), border: "none", elements: [] });
-            }, children: "Start blank" })
-          ] }),
-          tool === "text" && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "Add text, then use the toolbar or properties to style it." }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "cd-text-add heading", onClick: () => add("text", { text: "Your heading", fontSize: 40, bold: true, height: 70 }), children: "Add a heading" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "cd-text-add", onClick: () => add("text", { text: "Your subheading", fontSize: 26 }), children: "Add a subheading" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "cd-text-add small", onClick: () => add("text", { text: "Add your certificate text", fontSize: 18 }), children: "Add body text" })
-          ] }),
-          tool === "elements" && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "cd-stack", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "Add finishing details to your certificate." }),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { className: "cd-button", onClick: () => add("line", { width: 300, height: 2, color: design.accent }), children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-minus" }),
-              " Divider line"
-            ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { className: "cd-button", onClick: () => add("qr", { width: 90, height: 90 }), children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-qrcode" }),
-              " Verification QR"
-            ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { className: "cd-button", onClick: () => {
-              add("text", { text: "Authorized Signatory\nProgram Coordinator", fontSize: 18, width: 300, height: 65, y: 670 });
-            }, children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-signature" }),
-              " Signatory text"
-            ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "Upload a transparent PNG signature in Uploads and position it above the signatory." })
-          ] }),
-          tool === "uploads" && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "cd-stack", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "Add your school logo, seal, or signature. PNG and JPG, up to 5 MB." }),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "cd-upload", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-cloud-upload-alt" }),
-              " Upload image",
-              /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "file", accept: "image/png,image/jpeg", onChange: (e2) => upload(e2) })
-            ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "cd-upload", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-image" }),
-              " Upload background",
-              /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "file", accept: "image/png,image/jpeg", onChange: (e2) => upload(e2, true) })
-            ] }),
-            design.backgroundImage && /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "cd-button", onClick: () => commit({ ...design, backgroundImage: "" }), children: "Remove background image" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "Background artwork fills the page. Logos and signatures keep their proportions inside their resize box." })
-          ] }),
-          tool === "layers" && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "Top layers appear in front. Select a layer to edit it." }),
-            [...design.elements].reverse().map((item) => /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { className: `cd-layer ${selectedId === item.id ? "active" : ""}`, onClick: () => {
-              setSelectedId(item.id);
-              setPreview(false);
-            }, children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: item.kind === "text" ? "fa-font" : item.kind === "image" ? "fa-image" : item.kind === "qr" ? "fa-qrcode" : "fa-minus" }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: item.kind === "text" ? item.text : item.kind === "qr" ? "Verification QR" : item.text || item.kind })
-            ] }, item.id))
-          ] })
-        ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "cd-editor", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "cd-toolbar", role: "toolbar", "aria-label": "Text formatting", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("button", { title: "Undo (Ctrl+Z)", "aria-label": "Undo", disabled: !undo.length, onClick: undoChange, children: /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-undo" }) }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("button", { title: "Redo (Ctrl+Shift+Z)", "aria-label": "Redo", disabled: !redo.length, onClick: redoChange, children: /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-redo" }) }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "cd-separator" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("select", { "aria-label": "Font family", disabled: selected?.kind !== "text", value: selected?.fontFamily ?? "serif", onChange: (e2) => patch({ fontFamily: e2.target.value }), children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "serif", children: "Classic serif" }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "sans-serif", children: "Modern sans" }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "monospace", children: "Monospace" })
-            ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("input", { "aria-label": "Font size", type: "number", min: 8, max: 96, disabled: selected?.kind !== "text", value: selected?.fontSize ?? 24, onChange: (e2) => patch({ fontSize: Math.max(8, Math.min(96, Number(e2.target.value))) }) }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("button", { "aria-label": "Bold", "aria-pressed": selected?.bold ?? false, disabled: selected?.kind !== "text", onClick: () => patch({ bold: !selected?.bold }), children: /* @__PURE__ */ jsxRuntimeExports.jsx("b", { children: "B" }) }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("button", { "aria-label": "Italic", "aria-pressed": selected?.italic ?? false, disabled: selected?.kind !== "text", onClick: () => patch({ italic: !selected?.italic }), children: /* @__PURE__ */ jsxRuntimeExports.jsx("i", { children: "I" }) }),
-            ["left", "center", "right"].map((align) => /* @__PURE__ */ jsxRuntimeExports.jsx("button", { "aria-label": `Align ${align}`, "aria-pressed": selected?.align === align, disabled: selected?.kind !== "text", onClick: () => patch({ align }), children: /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: `fa-align-${align}` }) }, align)),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("input", { "aria-label": "Element color", title: "Element color", type: "color", disabled: !selected, value: selected?.color ?? "#142440", onChange: (e2) => patch({ color: e2.target.value }) }),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { className: "cd-preview-toggle", "aria-pressed": preview, onClick: () => setPreview(!preview), children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-eye" }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "cd-actions", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { ref: fullscreenButton, className: "cd-button", onClick: toggleFullscreen, "aria-pressed": fullscreen, children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: fullscreen ? "fa-compress" : "fa-expand" }),
               " ",
-              preview ? "Edit fields" : "Live preview"
-            ] })
-          ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "cd-viewport", ref: viewport, children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "cd-paper-space", style: { width: PAGE_WIDTH * scale * zoom, height: PAGE_HEIGHT * scale * zoom }, children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
-            "div",
-            {
-              className: `cd-paper cd-border-${design.border}`,
-              ref: page,
-              style: { width: PAGE_WIDTH, height: PAGE_HEIGHT, transform: `scale(${scale * zoom})`, backgroundColor: design.background, "--cd-accent": design.accent },
-              onPointerDown: () => setSelectedId(null),
-              onDragOver: (e2) => e2.preventDefault(),
-              onDrop: (e2) => {
-                e2.preventDefault();
-                const field = e2.dataTransfer.getData("application/nstp-field");
-                if (!FIELDS.includes(field)) return;
-                const rect = page.current.getBoundingClientRect();
-                const factor = rect.width / PAGE_WIDTH;
-                add("text", { text: `{{${field}}}`, x: (e2.clientX - rect.left) / factor, y: (e2.clientY - rect.top) / factor, width: 400, height: 60 });
-              },
-              children: [
-                design.backgroundImage && /* @__PURE__ */ jsxRuntimeExports.jsx("img", { className: "cd-background", src: design.backgroundImage, alt: "Certificate background", draggable: false }),
-                design.border !== "none" && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "cd-border-art" }),
-                design.elements.map((item) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                  "div",
-                  {
-                    role: "button",
-                    tabIndex: preview ? -1 : 0,
-                    "aria-label": `${item.kind}: ${item.text || "Verification QR"}`,
-                    "aria-pressed": selectedId === item.id,
-                    className: `cd-element ${!preview && selectedId === item.id ? "selected" : ""} ${preview ? "preview" : ""}`,
-                    style: { left: item.x, top: item.y, width: item.width, height: item.height },
-                    onPointerDown: (e2) => gesture(e2, item),
-                    onFocus: () => {
-                      if (!preview) setSelectedId(item.id);
-                    },
-                    onClick: (e2) => e2.stopPropagation(),
-                    children: [
-                      item.kind === "text" && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "cd-element-text", style: { fontFamily: item.fontFamily === "serif" ? '"DejaVu Serif", Georgia, serif' : item.fontFamily === "sans-serif" ? '"DejaVu Sans", Arial, sans-serif' : '"DejaVu Sans Mono", monospace', fontSize: item.fontSize, color: item.color, fontWeight: item.bold ? 700 : 400, fontStyle: item.italic ? "italic" : "normal", textAlign: item.align }, children: preview ? substitute(item.text, values) : item.text }),
-                      item.kind === "image" && /* @__PURE__ */ jsxRuntimeExports.jsx("img", { src: item.src, alt: item.text || "Certificate artwork", draggable: false }),
-                      item.kind === "line" && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { width: "100%", height: "100%", background: item.color } }),
-                      item.kind === "qr" && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "cd-qr-placeholder", children: [
-                        /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-qrcode" }),
-                        /* @__PURE__ */ jsxRuntimeExports.jsx("small", { children: "Verify certificate" })
-                      ] }),
-                      !preview && selectedId === item.id && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
-                        /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "cd-element-label", children: item.kind === "text" ? `${item.fontSize}px` : item.kind }),
-                        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { "aria-label": "Resize selected element", className: "cd-resize", onPointerDown: (e2) => gesture(e2, item, true) })
-                      ] })
-                    ]
-                  },
-                  item.id
-                ))
-              ]
-            }
-          ) }) }),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("footer", { className: "cd-canvas-footer", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-lock" }),
-              " A4 · 297 × 210 mm ",
-              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "cd-footer-hint", children: " / Drag to move · corner to resize" })
+              fullscreen ? "Exit fullscreen" : "Fullscreen"
             ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx("button", { "aria-label": "Zoom out", disabled: zoom <= 0.5, onClick: () => setZoom(Math.max(0.5, +(zoom - 0.25).toFixed(2))), children: "−" }),
-              /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { title: "Fit page", onClick: () => setZoom(1), children: [
-                Math.round(scale * zoom * 100),
-                "%"
-              ] }),
-              /* @__PURE__ */ jsxRuntimeExports.jsx("button", { "aria-label": "Zoom in", disabled: zoom >= 2, onClick: () => setZoom(Math.min(2, zoom + 0.25)), children: "+" })
-            ] })
-          ] })
-        ] }),
-        /* @__PURE__ */ jsxRuntimeExports.jsxs("aside", { className: "cd-properties", children: [
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("h3", { children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-sliders-h" }),
-            " ",
-            selected ? "Element properties" : "Certificate settings"
-          ] }),
-          selected ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "cd-stack", children: [
-            selected.kind === "text" && /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
-              "Text content",
-              /* @__PURE__ */ jsxRuntimeExports.jsx("textarea", { "aria-label": "Text content", rows: 4, maxLength: 2e3, value: selected.text, onChange: (e2) => patch({ text: e2.target.value }) })
+            fullscreen && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "cd-button", "aria-pressed": libraryOpen, onClick: () => setLibraryOpen((value) => !value), children: "Fields / tools" }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "cd-button", "aria-pressed": propertiesOpen, onClick: () => setPropertiesOpen((value) => !value), children: "Settings" })
             ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "cd-number-grid", children: [
-              numberControl("Left", "x"),
-              numberControl("Top", "y"),
-              numberControl("Width", "width", 20),
-              numberControl("Height", "height", 1)
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { className: "cd-button", disabled: loading || !!loadError || previewing, onClick: pdfPreview, children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-file-pdf" }),
+              " ",
+              previewing ? "Preparing…" : "PDF preview"
             ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "cd-button-grid", children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { className: "cd-button", onClick: () => reorder(-1), children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-arrow-down" }),
-                " Backward"
-              ] }),
-              /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { className: "cd-button", onClick: () => reorder(1), children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-arrow-up" }),
-                " Forward"
-              ] })
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { className: "cd-button", disabled: loading || !!loadError || saving, onClick: () => save(), children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-save" }),
+              " ",
+              saving ? "Saving…" : "Save template"
             ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { className: "cd-button", onClick: () => add(selected.kind, { ...selected, id: uid(), x: selected.x + 20, y: selected.y + 20 }), children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-copy" }),
-              " Duplicate element"
-            ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { className: "cd-button cd-delete", onClick: deleteSelected, children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-trash" }),
-              " Delete element"
-            ] }),
-            selected.kind === "qr" && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "The actual QR code is generated in the PDF and links to this certificate’s verification page." }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "cd-link", onClick: () => setSelectedId(null), children: "Back to certificate settings" })
-          ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "cd-stack", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
-              "Page background",
-              /* @__PURE__ */ jsxRuntimeExports.jsx("input", { "aria-label": "Page background", type: "color", value: design.background, onChange: (e2) => commit({ ...design, background: e2.target.value }) })
-            ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
-              "Border style",
-              /* @__PURE__ */ jsxRuntimeExports.jsxs("select", { value: design.border, onChange: (e2) => commit({ ...design, border: e2.target.value }), children: [
-                /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "classic", children: "Classic navy & gold" }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "double", children: "Double border" }),
-                /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "none", children: "No border" })
-              ] })
-            ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
-              "Accent color",
-              /* @__PURE__ */ jsxRuntimeExports.jsx("input", { "aria-label": "Accent color", type: "color", value: design.accent, onChange: (e2) => commit({ ...design, accent: e2.target.value }) })
-            ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "Click an element to edit its content, position, or size." })
-          ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "cd-property-section", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("h4", { children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-user" }),
-              " Preview student"
-            ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("select", { "aria-label": "Preview student", value: previewStudent, onChange: (e2) => {
-              setPreviewStudent(e2.target.value);
-              setPreview(true);
-            }, children: [
-              /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "", children: "Sample: Maria Santos" }),
-              students.map((s2) => /* @__PURE__ */ jsxRuntimeExports.jsxs("option", { value: s2.id, children: [
-                s2.user.first_name,
-                " ",
-                s2.user.last_name
-              ] }, s2.id))
-            ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "Live preview uses sample dates and hours. PDF preview uses the student’s stored data and current academic year." })
-          ] }),
-          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "cd-graduates", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "ELIGIBLE GRADUATES" }),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("strong", { children: [
-              studentsError ? "—" : eligibleCount,
-              /* @__PURE__ */ jsxRuntimeExports.jsx("small", { children: " students" })
-            ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: studentsError ? "Student list unavailable. You can still design with sample data." : "Review and select recipients in Generate." }),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { className: "cd-button", disabled: saving, onClick: generate, children: [
-              "Review recipients ",
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { className: "cd-button cd-primary", disabled: loading || !!loadError || saving, onClick: generate, children: [
+              "Use in Generate ",
               /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-arrow-right" })
             ] })
           ] })
-        ] })
-      ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "cd-footnote", children: "Save a separate design for each certificate type. Issued certificates keep their original PDF when you update a template." })
-    ] }),
-    previewUrl && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "cd-modal", role: "dialog", "aria-modal": "true", "aria-label": "Certificate PDF preview", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "cd-modal-body", children: [
-      /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { children: [
-        /* @__PURE__ */ jsxRuntimeExports.jsx("h3", { children: "PDF preview · not issued" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("a", { className: "cd-button", href: previewUrl, download: "certificate-preview.pdf", children: "Download preview" }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "cd-button", onClick: () => setPreviewUrl(null), children: "Close" })
-      ] }),
-      /* @__PURE__ */ jsxRuntimeExports.jsx("iframe", { src: previewUrl, title: "Certificate PDF preview" })
-    ] }) })
-  ] });
+        ] }),
+        loading ? /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "cd-state", role: "status", children: "Loading your saved design…" }) : loadError ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "cd-state", role: "alert", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { children: [
+            "Could not load the certificate design: ",
+            loadError
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "cd-button", onClick: () => setReload((n2) => n2 + 1), children: "Try again" })
+        ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "cd-documentbar", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("input", { "aria-label": "Template name", maxLength: 120, value: design.name, onChange: (e2) => commit({ ...design, name: e2.target.value }) }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: dirty ? "cd-unsaved" : "cd-saved", children: dirty ? "● Unsaved changes" : lastSaved ? "✓ Saved to server" : "Starter template" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("select", { "aria-label": "Certificate type", value: type, disabled: saving, onChange: (e2) => {
+              if (!dirty || window.confirm("Discard your unsaved changes and switch certificate type?")) setType(e2.target.value);
+            }, children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "completion", children: "Completion" }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "participation", children: "Participation" }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "training", children: "Training" })
+            ] })
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "cd-workspace", children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("nav", { className: "cd-tools", "aria-label": "Design tools", children: tools.map(([id, icon, label]) => /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { "aria-pressed": tool === id, onClick: () => {
+              setTool(id);
+              if (fullscreen) setLibraryOpen(true);
+            }, children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: icon }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: label })
+            ] }, id)) }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("aside", { className: "cd-library", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsx("h3", { children: tools.find(([id]) => id === tool)?.[2] }),
+              tool === "fields" && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "Drag a field onto the page, or click to add it. Student details are filled automatically." }),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "cd-tip", children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-magic" }),
+                  " One design, every graduate."
+                ] }),
+                FIELDS.map((field) => /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { className: "cd-field", draggable: true, onDragStart: (e2) => e2.dataTransfer.setData("application/nstp-field", field), onClick: () => add("text", { text: `{{${field}}}`, fontSize: field === "student_name" ? 44 : 20 }), children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-grip-vertical" }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
+                    fieldLabel(field),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("small", { children: `{{${field}}}` })
+                  ] }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-plus" })
+                ] }, field))
+              ] }),
+              tool === "templates" && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "Start with an editable layout. All elements can be moved and changed." }),
+                [false, true].map((modern) => /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { className: "cd-template", onClick: () => replaceTemplate(modern), children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: modern ? "cd-mini modern" : "cd-mini", children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("small", { children: "OPOL COMMUNITY COLLEGE" }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("strong", { children: "CERTIFICATE" }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("i", { children: "Student Name" }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "___________________" })
+                  ] }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("b", { children: modern ? "Clean double border" : "Classic navy & gold" })
+                ] }, String(modern))),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "cd-button", onClick: () => {
+                  if (window.confirm("Start with a blank canvas? You can undo this change.")) commit({ ...createDesign(type), border: "none", elements: [] });
+                }, children: "Start blank" })
+              ] }),
+              tool === "text" && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "Add text, then use the toolbar or properties to style it." }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "cd-text-add heading", onClick: () => add("text", { text: "Your heading", fontSize: 40, bold: true, height: 70 }), children: "Add a heading" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "cd-text-add", onClick: () => add("text", { text: "Your subheading", fontSize: 26 }), children: "Add a subheading" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "cd-text-add small", onClick: () => add("text", { text: "Add your certificate text", fontSize: 18 }), children: "Add body text" })
+              ] }),
+              tool === "elements" && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "cd-stack", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "Add finishing details to your certificate." }),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { className: "cd-button", onClick: () => add("line", { width: 300, height: 2, color: design.accent }), children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-minus" }),
+                  " Divider line"
+                ] }),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { className: "cd-button", onClick: () => add("qr", { width: 90, height: 90 }), children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-qrcode" }),
+                  " Verification QR"
+                ] }),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { className: "cd-button", onClick: () => {
+                  add("text", { text: "Authorized Signatory\nProgram Coordinator", fontSize: 18, width: 300, height: 65, y: 670 });
+                }, children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-signature" }),
+                  " Signatory text"
+                ] }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "Upload a transparent PNG signature in Uploads and position it above the signatory." })
+              ] }),
+              tool === "uploads" && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "cd-stack", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "Add your school logo, seal, or signature. PNG and JPG, up to 5 MB." }),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "cd-upload", children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-cloud-upload-alt" }),
+                  " Upload image",
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "file", accept: "image/png,image/jpeg", onChange: (e2) => upload(e2) })
+                ] }),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "cd-upload", children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-image" }),
+                  " Upload background",
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "file", accept: "image/png,image/jpeg", onChange: (e2) => upload(e2, true) })
+                ] }),
+                design.backgroundImage && /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "cd-button", onClick: () => commit({ ...design, backgroundImage: "" }), children: "Remove background image" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "Background artwork fills the page. Logos and signatures keep their proportions inside their resize box." })
+              ] }),
+              tool === "layers" && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "Top layers appear in front. Select a layer to edit it." }),
+                [...design.elements].reverse().map((item) => /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { className: `cd-layer ${selectedId === item.id ? "active" : ""}`, onClick: () => {
+                  setSelectedId(item.id);
+                  setPreview(false);
+                }, children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: item.kind === "text" ? "fa-font" : item.kind === "image" ? "fa-image" : item.kind === "qr" ? "fa-qrcode" : "fa-minus" }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: item.kind === "text" ? item.text : item.kind === "qr" ? "Verification QR" : item.text || item.kind })
+                ] }, item.id))
+              ] })
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("section", { className: "cd-editor", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "cd-toolbar", role: "toolbar", "aria-label": "Text formatting", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx("button", { title: "Undo (Ctrl+Z)", "aria-label": "Undo", disabled: !undo.length, onClick: undoChange, children: /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-undo" }) }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("button", { title: "Redo (Ctrl+Shift+Z)", "aria-label": "Redo", disabled: !redo.length, onClick: redoChange, children: /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-redo" }) }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "cd-separator" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("select", { "aria-label": "Font family", disabled: selected?.kind !== "text", value: selected?.fontFamily ?? "serif", onChange: (e2) => patch({ fontFamily: e2.target.value }), children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "serif", children: "Classic serif" }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "sans-serif", children: "Modern sans" }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "monospace", children: "Monospace" })
+                ] }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("input", { "aria-label": "Font size", type: "number", min: 8, max: 96, disabled: selected?.kind !== "text", value: selected?.fontSize ?? 24, onChange: (e2) => patch({ fontSize: Math.max(8, Math.min(96, Number(e2.target.value))) }) }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("button", { "aria-label": "Bold", "aria-pressed": selected?.bold ?? false, disabled: selected?.kind !== "text", onClick: () => patch({ bold: !selected?.bold }), children: /* @__PURE__ */ jsxRuntimeExports.jsx("b", { children: "B" }) }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("button", { "aria-label": "Italic", "aria-pressed": selected?.italic ?? false, disabled: selected?.kind !== "text", onClick: () => patch({ italic: !selected?.italic }), children: /* @__PURE__ */ jsxRuntimeExports.jsx("i", { children: "I" }) }),
+                ["left", "center", "right"].map((align) => /* @__PURE__ */ jsxRuntimeExports.jsx("button", { "aria-label": `Align ${align}`, "aria-pressed": selected?.align === align, disabled: selected?.kind !== "text", onClick: () => patch({ align }), children: /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: `fa-align-${align}` }) }, align)),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("input", { "aria-label": "Element color", title: "Element color", type: "color", disabled: !selected, value: selected?.color ?? "#142440", onChange: (e2) => patch({ color: e2.target.value }) }),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { className: "cd-preview-toggle", "aria-pressed": preview, onClick: () => setPreview(!preview), children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-eye" }),
+                  " ",
+                  preview ? "Edit fields" : "Live preview"
+                ] })
+              ] }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "cd-viewport", ref: viewport, children: /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "cd-paper-space", style: { width: PAGE_WIDTH * scale * zoom, height: PAGE_HEIGHT * scale * zoom }, children: /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                "div",
+                {
+                  className: `cd-paper cd-border-${design.border}`,
+                  ref: page,
+                  style: { width: PAGE_WIDTH, height: PAGE_HEIGHT, transform: `scale(${scale * zoom})`, backgroundColor: design.background, "--cd-accent": design.accent },
+                  onPointerDown: () => setSelectedId(null),
+                  onDragOver: (e2) => e2.preventDefault(),
+                  onDrop: (e2) => {
+                    e2.preventDefault();
+                    const field = e2.dataTransfer.getData("application/nstp-field");
+                    if (!FIELDS.includes(field)) return;
+                    const rect = page.current.getBoundingClientRect();
+                    const factor = rect.width / PAGE_WIDTH;
+                    add("text", { text: `{{${field}}}`, x: (e2.clientX - rect.left) / factor, y: (e2.clientY - rect.top) / factor, width: 400, height: 60 });
+                  },
+                  children: [
+                    design.backgroundImage && /* @__PURE__ */ jsxRuntimeExports.jsx("img", { className: "cd-background", src: design.backgroundImage, alt: "Certificate background", draggable: false }),
+                    design.border !== "none" && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "cd-border-art" }),
+                    design.elements.map((item) => /* @__PURE__ */ jsxRuntimeExports.jsxs(
+                      "div",
+                      {
+                        role: "button",
+                        tabIndex: preview ? -1 : 0,
+                        "aria-label": `${item.kind}: ${item.text || "Verification QR"}`,
+                        "aria-pressed": selectedId === item.id,
+                        className: `cd-element ${!preview && selectedId === item.id ? "selected" : ""} ${preview ? "preview" : ""}`,
+                        style: { left: item.x, top: item.y, width: item.width, height: item.height },
+                        onPointerDown: (e2) => gesture(e2, item),
+                        onFocus: () => {
+                          if (!preview) setSelectedId(item.id);
+                        },
+                        onClick: (e2) => e2.stopPropagation(),
+                        children: [
+                          item.kind === "text" && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "cd-element-text", style: { fontFamily: item.fontFamily === "serif" ? '"DejaVu Serif", Georgia, serif' : item.fontFamily === "sans-serif" ? '"DejaVu Sans", Arial, sans-serif' : '"DejaVu Sans Mono", monospace', fontSize: item.fontSize, color: item.color, fontWeight: item.bold ? 700 : 400, fontStyle: item.italic ? "italic" : "normal", textAlign: item.align }, children: preview ? substitute(item.text, values) : item.text }),
+                          item.kind === "image" && /* @__PURE__ */ jsxRuntimeExports.jsx("img", { src: item.src, alt: item.text || "Certificate artwork", draggable: false }),
+                          item.kind === "line" && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { style: { width: "100%", height: "100%", background: item.color } }),
+                          item.kind === "qr" && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "cd-qr-placeholder", children: [
+                            /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-qrcode" }),
+                            /* @__PURE__ */ jsxRuntimeExports.jsx("small", { children: "Verify certificate" })
+                          ] }),
+                          !preview && selectedId === item.id && /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
+                            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "cd-element-label", children: item.kind === "text" ? `${item.fontSize}px` : item.kind }),
+                            /* @__PURE__ */ jsxRuntimeExports.jsx("button", { "aria-label": "Resize selected element", className: "cd-resize", onPointerDown: (e2) => gesture(e2, item, true) })
+                          ] })
+                        ]
+                      },
+                      item.id
+                    ))
+                  ]
+                }
+              ) }) }),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("footer", { className: "cd-canvas-footer", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-lock" }),
+                  " A4 · 297 × 210 mm ",
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "cd-footer-hint", children: " / Drag to move · corner to resize" })
+                ] }),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("button", { "aria-label": "Zoom out", disabled: zoom <= 0.5, onClick: () => setZoom(Math.max(0.5, +(zoom - 0.25).toFixed(2))), children: "−" }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { title: "Fit page", onClick: () => setZoom(1), children: [
+                    Math.round(scale * zoom * 100),
+                    "%"
+                  ] }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("button", { "aria-label": "Zoom in", disabled: zoom >= 2, onClick: () => setZoom(Math.min(2, zoom + 0.25)), children: "+" })
+                ] })
+              ] })
+            ] }),
+            /* @__PURE__ */ jsxRuntimeExports.jsxs("aside", { className: "cd-properties", children: [
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("h3", { children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-sliders-h" }),
+                " ",
+                selected ? "Element properties" : "Certificate settings"
+              ] }),
+              selected ? /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "cd-stack", children: [
+                selected.kind === "text" && /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
+                  "Text content",
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("textarea", { "aria-label": "Text content", rows: 4, maxLength: 2e3, value: selected.text, onChange: (e2) => patch({ text: e2.target.value }) })
+                ] }),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "cd-number-grid", children: [
+                  numberControl("Left", "x"),
+                  numberControl("Top", "y"),
+                  numberControl("Width", "width", 20),
+                  numberControl("Height", "height", 1)
+                ] }),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "cd-button-grid", children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { className: "cd-button", onClick: () => reorder(-1), children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-arrow-down" }),
+                    " Backward"
+                  ] }),
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { className: "cd-button", onClick: () => reorder(1), children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-arrow-up" }),
+                    " Forward"
+                  ] })
+                ] }),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { className: "cd-button", onClick: () => add(selected.kind, { ...selected, id: uid(), x: selected.x + 20, y: selected.y + 20 }), children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-copy" }),
+                  " Duplicate element"
+                ] }),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { className: "cd-button cd-delete", onClick: deleteSelected, children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-trash" }),
+                  " Delete element"
+                ] }),
+                selected.kind === "qr" && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "The actual QR code is generated in the PDF and links to this certificate’s verification page." }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "cd-link", onClick: () => setSelectedId(null), children: "Back to certificate settings" })
+              ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "cd-stack", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
+                  "Page background",
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("input", { "aria-label": "Page background", type: "color", value: design.background, onChange: (e2) => commit({ ...design, background: e2.target.value }) })
+                ] }),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
+                  "Border style",
+                  /* @__PURE__ */ jsxRuntimeExports.jsxs("select", { value: design.border, onChange: (e2) => commit({ ...design, border: e2.target.value }), children: [
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "classic", children: "Classic navy & gold" }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "double", children: "Double border" }),
+                    /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "none", children: "No border" })
+                  ] })
+                ] }),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { children: [
+                  "Accent color",
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("input", { "aria-label": "Accent color", type: "color", value: design.accent, onChange: (e2) => commit({ ...design, accent: e2.target.value }) })
+                ] }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "Click an element to edit its content, position, or size." })
+              ] }),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "cd-property-section", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("h4", { children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-user" }),
+                  " Preview student"
+                ] }),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("select", { "aria-label": "Preview student", value: previewStudent, onChange: (e2) => {
+                  setPreviewStudent(e2.target.value);
+                  setPreview(true);
+                }, children: [
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "", children: "Sample: Maria Santos" }),
+                  students.map((s2) => /* @__PURE__ */ jsxRuntimeExports.jsxs("option", { value: s2.id, children: [
+                    s2.user.first_name,
+                    " ",
+                    s2.user.last_name
+                  ] }, s2.id))
+                ] }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "Live preview uses sample dates and hours. PDF preview uses the student’s stored data and current academic year." })
+              ] }),
+              /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "cd-graduates", children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx("span", { children: "ELIGIBLE GRADUATES" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("strong", { children: [
+                  studentsError ? "—" : eligibleCount,
+                  /* @__PURE__ */ jsxRuntimeExports.jsx("small", { children: " students" })
+                ] }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: studentsError ? "Student list unavailable. You can still design with sample data." : "Review and select recipients in Generate." }),
+                /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { className: "cd-button", disabled: saving, onClick: generate, children: [
+                  "Review recipients ",
+                  /* @__PURE__ */ jsxRuntimeExports.jsx(Icon, { name: "fa-arrow-right" })
+                ] })
+              ] })
+            ] })
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "cd-footnote", children: "Save a separate design for each certificate type. Issued certificates keep their original PDF when you update a template." })
+        ] }),
+        previewUrl && /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "cd-modal", role: "dialog", "aria-modal": "true", "aria-label": "Certificate PDF preview", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "cd-modal-body", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("header", { children: [
+            /* @__PURE__ */ jsxRuntimeExports.jsx("h3", { children: "PDF preview · not issued" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("a", { className: "cd-button", href: previewUrl, download: "certificate-preview.pdf", children: "Download preview" }),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "cd-button", onClick: () => setPreviewUrl(null), children: "Close" })
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("iframe", { src: previewUrl, title: "Certificate PDF preview" })
+        ] }) })
+      ]
+    }
+  );
+  return fullscreen ? reactDomExports.createPortal(editor, document.body) : editor;
 }
 const IssuedCertificates = () => {
   const [busyId, setBusyId] = reactExports.useState(null);
@@ -39515,6 +39644,7 @@ const SuperAdminDashboard = () => {
   });
   const handleSubmit = async (e2) => {
     e2.preventDefault();
+    if (!editingId && formData.role === "super_admin" && !window.confirm("Create a Super Admin with full system access?")) return;
     try {
       if (editingId) {
         await updateMut.mutateAsync({ id: editingId, data: formData });
@@ -39568,7 +39698,6 @@ const SuperAdminDashboard = () => {
     }
   };
   const filteredUsers = users.filter((user) => {
-    if (user.role === "super_admin") return false;
     const matchesRole = filterRole === "all" || user.role === filterRole;
     const matchesSearch = `${user.first_name} ${user.last_name}`.toLowerCase().includes(searchTerm.toLowerCase()) || user.email.toLowerCase().includes(searchTerm.toLowerCase()) || (user.class_code || "").toLowerCase().includes(searchTerm.toLowerCase());
     return matchesRole && matchesSearch;
@@ -39825,6 +39954,7 @@ const SuperAdminDashboard = () => {
             onChange: (e2) => setFilterRole(e2.target.value),
             children: [
               /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "all", children: "All Roles" }),
+              /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "super_admin", children: "Super Admin" }),
               /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "admin", children: "Admin" }),
               /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "faculty", children: "Faculty" })
             ]
@@ -39878,7 +40008,7 @@ const SuperAdminDashboard = () => {
           /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: user.role === "faculty" && user.class_code ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "font-mono text-xs bg-slate-100 px-2 py-1 rounded", children: user.class_code }) : /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-slate-400", children: "—" }) }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: `badge ${user.is_active ? "badge-success" : "badge-danger"}`, children: user.is_active ? "Active" : "Inactive" }) }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: new Date(user.created_at).toLocaleDateString() }),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-1.5", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: user.role === "super_admin" ? /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-sm text-slate-500", children: "Protected account" }) : /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex gap-1.5", children: [
             /* @__PURE__ */ jsxRuntimeExports.jsx(
               "button",
               {
@@ -40188,7 +40318,7 @@ const SuperAdminDashboard = () => {
                 value: formData.password,
                 onChange: (e2) => setFormData({ ...formData, password: e2.target.value }),
                 ...!editingId ? { required: true } : {},
-                minLength: 6
+                minLength: formData.role === "super_admin" ? 12 : 6
               }
             )
           ] }) }),
@@ -40233,6 +40363,7 @@ const SuperAdminDashboard = () => {
                 }),
                 required: true,
                 children: [
+                  !editingId && /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "super_admin", children: "Super Admin" }),
                   /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "admin", children: "Admin" }),
                   /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "faculty", children: "Faculty" })
                 ]
@@ -42890,10 +43021,11 @@ const ACTIVITIES_KEY = ["activities"];
 function useActivities() {
   const queryClient2 = useQueryClient();
   const query = useQuery({
-    queryKey: ACTIVITIES_KEY,
+    queryKey: [...ACTIVITIES_KEY, getCurrentUserId()],
     queryFn: () => adminApi.getActivities(),
     staleTime: 3e4,
-    refetchInterval: 3e4,
+    refetchInterval: 1e4,
+    refetchIntervalInBackground: false,
     refetchOnWindowFocus: true
   });
   const refresh = () => {
@@ -43320,6 +43452,7 @@ const ActivityParticipants = ({
   ] }) });
 };
 const buildEmptyForm = (defaultComponent = "cwts") => ({
+  class_id: null,
   title: "",
   description: "",
   component_type: defaultComponent,
@@ -43379,6 +43512,8 @@ const Activities = () => {
     refresh,
     isRefreshing
   } = useActivities();
+  const sectionsQuery = useQuery({ queryKey: ["activity-sections", user?.id], queryFn: () => secureRequest("/activities/sections"), staleTime: 1e4, refetchOnWindowFocus: true });
+  const sections = sectionsQuery.data?.data ?? [];
   const createMut = useCreateActivity();
   const updateMut = useUpdateActivity();
   const deleteMut = useDeleteActivity();
@@ -43463,9 +43598,10 @@ const Activities = () => {
     const safeComponent = activity.component_type === "all" || activity.component_type == null ? facultyComponent || "cwts" : activity.component_type;
     setEditingId(activity.id);
     setFormData({
+      class_id: activity.class_id ?? null,
       title: activity.title,
       description: activity.description,
-      component_type: isFaculty && facultyComponent ? facultyComponent : safeComponent,
+      component_type: safeComponent,
       start_datetime: activity.start_datetime?.slice(0, 16) || "",
       end_datetime: activity.end_datetime?.slice(0, 16) || "",
       venue: activity.venue || "",
@@ -43505,7 +43641,11 @@ const Activities = () => {
       zt.error("Please fix the errors in the form");
       return;
     }
-    const resolvedComponent = isFaculty && facultyComponent ? facultyComponent : formData.component_type;
+    if (isFaculty && !formData.class_id) {
+      zt.error("Select an assigned section first");
+      return;
+    }
+    const resolvedComponent = formData.component_type;
     if (!resolvedComponent) {
       zt.error("Please select a component (CWTS, ROTC, or LTS)");
       return;
@@ -44382,56 +44522,32 @@ const Activities = () => {
                                 "Component ",
                                 /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-red-500", children: "*" })
                               ] }),
-                              isFaculty && facultyComponent ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
-                                /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "input bg-slate-50 cursor-not-allowed flex items-center gap-2", children: [
-                                  /* @__PURE__ */ jsxRuntimeExports.jsx(
-                                    "span",
-                                    {
-                                      className: `badge ${getComponentBadge2(
-                                        facultyComponent
-                                      )}`,
-                                      children: facultyComponent.toUpperCase()
-                                    }
-                                  ),
-                                  /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-xs text-slate-400 ml-auto", children: [
-                                    /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-lock mr-1" }),
-                                    "Locked"
-                                  ] })
-                                ] }),
-                                /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-xs text-slate-400 mt-1", children: [
-                                  /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-info-circle mr-1" }),
-                                  "Auto-detected from your faculty profile"
-                                ] })
-                              ] }) : /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
-                                /* @__PURE__ */ jsxRuntimeExports.jsxs(
-                                  "select",
-                                  {
-                                    className: `input ${touched.component_type && validation.component_type ? "border-red-500 focus:ring-red-500" : ""}`,
-                                    value: formData.component_type,
-                                    onChange: (e2) => updateField(
-                                      "component_type",
-                                      e2.target.value
-                                    ),
-                                    onBlur: () => setTouched((t2) => ({
-                                      ...t2,
-                                      component_type: true
-                                    })),
-                                    children: [
-                                      /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "cwts", children: "CWTS" }),
-                                      /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "rotc", children: "ROTC" }),
-                                      /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "lts", children: "LTS" })
-                                    ]
-                                  }
-                                ),
-                                touched.component_type && validation.component_type && /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-xs text-red-500 mt-1", children: [
-                                  /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-exclamation-circle mr-1" }),
-                                  validation.component_type
-                                ] }),
-                                /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-xs text-slate-400 mt-1", children: [
-                                  /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-info-circle mr-1" }),
-                                  "Component is required. “All Components” is no longer allowed."
-                                ] })
-                              ] })
+                              /* @__PURE__ */ jsxRuntimeExports.jsxs("select", { className: "input", value: formData.component_type, disabled: isFaculty || formData.class_id !== null, onChange: (e2) => updateField("component_type", e2.target.value), children: [
+                                /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "cwts", children: "CWTS" }),
+                                /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "rotc", children: "ROTC" }),
+                                /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "lts", children: "LTS" })
+                              ] }),
+                              /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-slate-500 mt-1", children: "Selecting a section sets its component automatically." })
+                            ] }),
+                            /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
+                              /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "label", children: [
+                                "Class / Section ",
+                                isFaculty ? "*" : "(optional)"
+                              ] }),
+                              /* @__PURE__ */ jsxRuntimeExports.jsxs("select", { className: "input", required: isFaculty, value: formData.class_id ?? "", disabled: sectionsQuery.isLoading, onChange: (e2) => {
+                                const section = sections.find((s2) => s2.id === Number(e2.target.value));
+                                setFormData((prev) => ({ ...prev, class_id: section?.id ?? null, component_type: section?.component_type ?? prev.component_type }));
+                              }, children: [
+                                /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "", children: isFaculty ? "Select a section assigned to you" : "All students in the selected component" }),
+                                sections.map((s2) => /* @__PURE__ */ jsxRuntimeExports.jsxs("option", { value: s2.id, children: [
+                                  s2.name,
+                                  " · ",
+                                  s2.component_type.toUpperCase()
+                                ] }, s2.id))
+                              ] }),
+                              sectionsQuery.isError && /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "btn", onClick: () => sectionsQuery.refetch(), children: "Could not load sections. Retry" }),
+                              isFaculty && !sectionsQuery.isLoading && sections.length === 0 && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-red-600", children: "Ask an administrator to assign an active class before creating an activity." }),
+                              /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-xs text-slate-500", children: "Students actively enrolled in this class will see the activity." })
                             ] }),
                             /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { children: [
                               /* @__PURE__ */ jsxRuntimeExports.jsx("label", { className: "label", children: "Venue" }),
@@ -51110,4 +51226,4 @@ startSyncEngine();
 ReactDOM.createRoot(document.getElementById("root")).render(
   /* @__PURE__ */ jsxRuntimeExports.jsx(React.StrictMode, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(App, {}) })
 );
-//# sourceMappingURL=main-BGZv43dy.js.map
+//# sourceMappingURL=main-C3u_BELK.js.map

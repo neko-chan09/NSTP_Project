@@ -1282,6 +1282,10 @@
     margin-inline: auto;
   }
 
+  .my-2 {
+    margin-block: calc(var(--spacing) * 2);
+  }
+
   .my-3 {
     margin-block: calc(var(--spacing) * 3);
   }
