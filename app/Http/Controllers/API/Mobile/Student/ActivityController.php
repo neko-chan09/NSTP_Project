@@ -13,7 +13,9 @@ class ActivityController extends Controller
 
 public function show($id)
 {
-    $activity = Activity::with('creator')->find($id);
+    $student=auth()->user()->student;
+    abort_unless($student,404,'Student profile not found');
+    $activity=app(\App\Services\ActivityAudience::class)->forStudent(Activity::with('creator'),$student)->find($id);
     
     if (!$activity) {
         return response()->json(['message' => 'Activity not found'], 404);
@@ -41,12 +43,10 @@ public function show($id)
     {
         // Status is time-based now, so don't rely on the stored column.
         // Shows upcoming + ongoing (not cancelled, not yet ended).
-        $activities = Activity::where('status', '!=', 'cancelled')
-            ->where('end_datetime', '>=', now())
-            ->where(function($query) use ($request) {
-                $query->where('component_type', 'all')
-                    ->orWhere('component_type', $request->user()->nstp_component);
-            })
+        $student=$request->user()->student;
+        abort_unless($student,404,'Student profile not found');
+        $activities=app(\App\Services\ActivityAudience::class)->forStudent(Activity::query(),$student)
+            ->whereNotIn('status',['cancelled','completed'])->where('end_datetime','>',now())
             ->orderBy('start_datetime', 'asc')
             ->get();
 
@@ -62,7 +62,9 @@ public function show($id)
 
     public function register(Request $request, $id)
 {
-    $activity = Activity::find($id);
+    $student=$request->user()->student;
+    abort_unless($student,404,'Student profile not found');
+    $activity=app(\App\Services\ActivityAudience::class)->forStudent(Activity::query(),$student)->find($id);
     if (!$activity) {
         return response()->json(['message' => 'Activity not found'], 404);
     }

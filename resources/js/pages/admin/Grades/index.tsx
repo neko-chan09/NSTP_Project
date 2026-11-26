@@ -1,3 +1,4 @@
+import SemesterTrainingPanel from '../../components/common/SemesterTrainingPanel';
 // src/pages/admin/Grades/index.tsx
 import React, { useState } from "react";
 import {
@@ -161,6 +162,7 @@ const GradesManagement: React.FC = () => {
 
   return (
     <div className="space-y-5">
+      <SemesterTrainingPanel />
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
         <div>

@@ -1,3 +1,4 @@
+import PhilippineClock from '../common/PhilippineClock';
 // src/components/layouts/AdminLayout.tsx
 import React from "react";
 import NotificationInbox from '../common/NotificationInbox';
@@ -100,19 +101,7 @@ const AdminLayoutInner: React.FC<{ children?: React.ReactNode }> = ({
   </span>
 </Link>
             <span className="hidden md:inline-block w-px h-6 bg-slate-200" />
-            <span className="hidden md:inline-block text-slate-500 text-xs bg-slate-100 px-3 py-1 rounded">
-              {new Date().toLocaleDateString("en-US", {
-                month: "short",
-                day: "numeric",
-                year: "numeric",
-              })}
-            </span>
-            <span className="hidden md:inline-block text-slate-500 text-xs bg-slate-100 px-3 py-1 rounded font-mono">
-              {new Date().toLocaleTimeString("en-US", {
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
-            </span>
+            <PhilippineClock />
             <button
               onClick={handleLogout}
               className="text-slate-400 hover:text-red-500 transition-colors p-2 rounded-lg hover:bg-red-50"

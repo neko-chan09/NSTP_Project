@@ -15,18 +15,19 @@ class ActivityController extends Controller
         $user = $request->user();
         $query = Activity::with('creator');
 
-        if ($user->role === 'faculty') {
-            $facultyComponent = $user->nstp_component;
-            $query->where('component_type', $facultyComponent);
-        }
+        app(\App\Services\ActivityAudience::class)->forFaculty($query,$user);
 
         $activities = $query->orderBy('created_at', 'desc')->get();
         return response()->json(['success' => true, 'data' => $activities]);
     }
 
+    public function sections(Request $request) {
+        return response()->json(['data'=>app(\App\Services\ActivityAudience::class)->sections($request->user())->orderBy('name')->get(['id','name','component_type'])]);
+    }
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
+            'class_id' => 'nullable|integer|exists:classes,id',
             'title' => 'required|string|max:255',
             'description' => 'required|string',
             // ✅ No "all" — component is required
@@ -48,16 +49,10 @@ class ActivityController extends Controller
         $user = $request->user();
         $componentType = $request->component_type;
 
-        if ($user->role === 'faculty') {
-            $facultyComponent = $user->nstp_component;
-            if ($componentType !== $facultyComponent) {
-                return response()->json([
-                    'message' => 'You can only create activities for your own component (' . $facultyComponent . ')'
-                ], 403);
-            }
-        }
+        $target=app(\App\Services\ActivityAudience::class)->target($user,$request->filled('class_id')?(int)$request->class_id:null,$componentType,$user->role==='faculty');
 
         $activity = Activity::create([
+            'class_id' => $target,
             'title' => $request->title,
             'description' => $request->description,
             'component_type' => $componentType,
@@ -108,18 +103,10 @@ class ActivityController extends Controller
                 ], 403);
             }
 
-            if ($request->has('component_type')) {
-                $facultyComponent = $user->nstp_component;
-                $newComponent = $request->component_type;
-                if ($newComponent !== $facultyComponent) {
-                    return response()->json([
-                        'message' => 'You can only set component to your own component (' . $facultyComponent . ')'
-                    ], 403);
-                }
-            }
         }
 
         $validator = Validator::make($request->all(), [
+            'class_id' => 'nullable|integer|exists:classes,id',
             'title' => 'sometimes|string|max:255',
             'status' => 'sometimes|in:upcoming,ongoing,completed,cancelled',
             'description' => 'sometimes|string',
@@ -139,6 +126,7 @@ class ActivityController extends Controller
             return response()->json(['errors' => $validator->errors()], 422);
         }
 
+        $target=app(\App\Services\ActivityAudience::class)->target($user,$request->has('class_id')?($request->filled('class_id')?(int)$request->class_id:null):$activity->class_id,$request->input('component_type',$activity->component_type),$user->role==='faculty' && $activity->class_id!==null);
         $data = $request->only([
             'title',
             'description',
@@ -151,6 +139,7 @@ class ActivityController extends Controller
             'status'
         ]);
 
+        $data['class_id']=$target;
         if ($request->has('latitude')) {
             $data['latitude'] = $request->filled('latitude') ? (float) $request->latitude : null;
         }

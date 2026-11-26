@@ -31,6 +31,11 @@ class ProjectReviewRegressionTest extends TestCase
         Schema::table('users', fn(Blueprint $t) => $t->boolean('must_change_password')->default(false));
         Schema::create('settings', function (Blueprint $t) { $t->id(); $t->string('key')->unique(); $t->text('value')->nullable(); $t->timestamps(); });
         Schema::create('activities', function (Blueprint $t) { $t->id(); $t->foreignId('created_by'); $t->string('component_type'); $t->decimal('latitude')->nullable(); $t->decimal('longitude')->nullable(); });
+        Schema::create('academic_years',function(Blueprint $t){$t->id();$t->string('academic_year');$t->string('semester');$t->date('start_date');$t->date('end_date');$t->boolean('is_current')->default(false);$t->boolean('is_active')->default(true);$t->timestamps();});
+        Schema::table('classes',fn(Blueprint $t)=>$t->unsignedBigInteger('academic_year_id')->nullable());
+        (require database_path('migrations/2026_11_26_000003_add_semester_training_balances.php'))->up();
+        \App\Models\AcademicYear::create(['academic_year'=>'2026-2027','semester'=>'1st','start_date'=>'2026-08-01','end_date'=>'2026-12-31','is_current'=>true,'is_active'=>true]);
+        (require database_path('migrations/2026_11_26_000002_add_activity_class_audience.php'))->up();
         Storage::fake('public'); Mail::fake();
         Carbon::setTestNow(Carbon::parse('2026-11-13 10:00:00 UTC'));
     }

@@ -166,7 +166,7 @@ class GradeController extends Controller
             'training_grade_percentage' => $request->percentage,
             'training_grade_remarks' => $request->remarks,
             'grade_updated_at' => now(),
-            'is_eligible_for_completion' => ($request->percentage ?? 0) >= 60,
+            'is_eligible_for_completion' => \App\Services\SemesterTraining::eligible((float)$student->completed_training_hours) && $student->training_academic_year_id!==null,
         ]);
 
         // Update completion status
@@ -221,8 +221,7 @@ class GradeController extends Controller
             'training_grade_percentage' => $request->percentage,
             'training_grade_remarks' => $request->remarks ?? $gradeData['description'],
             'grade_updated_at' => now(),
-            'is_eligible_for_completion' => $isPassing,
-            'completion_status' => $status,
+            // Eligibility and completion remain derived from approved semester hours.
         ]);
 
         return response()->json([

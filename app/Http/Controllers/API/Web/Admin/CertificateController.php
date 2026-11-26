@@ -98,7 +98,9 @@ class CertificateController extends Controller
 
     private function checkEligibility(Student $student, string $type): void
     {
-        if ($type === 'completion' && !$student->is_eligible_for_completion) {
+        $service=app(\App\Services\SemesterTraining::class);
+        $current=$service->current();
+        if ($type === 'completion' && (!$current || (int)$student->training_academic_year_id !== (int)$current->id || !$student->is_eligible_for_completion || !\App\Services\SemesterTraining::eligible((float)$student->completed_training_hours))) {
             throw \Illuminate\Validation\ValidationException::withMessages([
                 'student_ids' => "Student {$student->student_id} is not eligible for a completion certificate.",
             ]);

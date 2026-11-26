@@ -85,13 +85,8 @@ const Classes: React.FC = () => {
   const updateMutation = useUpdateClass();
   const toggleArchiveMutation = useToggleArchiveClass();
 
-  const filteredFaculty = useMemo(() => {
-    if (!facultyList.length) return [];
-    if (formData.component_type === "all") return facultyList;
-    return facultyList.filter(
-      (f) => f.nstp_component === formData.component_type,
-    );
-  }, [facultyList, formData.component_type]);
+  // Teaching assignments belong to classes, so one faculty may teach several components.
+  const filteredFaculty = facultyList;
 
   const filteredClasses = useMemo(() => {
     if (!searchTerm.trim()) return classes;
@@ -773,9 +768,7 @@ const Classes: React.FC = () => {
                       {filteredFaculty.map((f) => (
                         <option key={f.id} value={f.id}>
                           {f.first_name} {f.last_name}{" "}
-                          {f.nstp_component
-                            ? `(${f.nstp_component.toUpperCase()})`
-                            : ""}
+                          
                         </option>
                       ))}
                     </select>

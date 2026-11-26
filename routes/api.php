@@ -211,6 +211,7 @@ Route::middleware(['auth:sanctum', \App\Http\Middleware\RequireActiveUser::class
     // ACTIVITIES (shared admin + faculty)
     // ============================================================
     Route::middleware(RequireRoles::class . ':admin,super_admin,faculty')->prefix('activities')->group(function () {
+        Route::get('/sections', [AdminActivityController::class, 'sections']);
         Route::get('/', [AdminActivityController::class, 'index']);
         Route::post('/', [AdminActivityController::class, 'store']);
         Route::get('/{id}', [AdminActivityController::class, 'show']);
@@ -304,6 +305,9 @@ Route::middleware(['auth:sanctum', \App\Http\Middleware\RequireActiveUser::class
         Route::get('/reports/accomplishment/export', [AdminReportController::class, 'accomplishmentExport']);
 
         // ---------- ACADEMIC YEARS ----------
+        Route::get('/training-semesters', [\App\Http\Controllers\API\Web\Admin\SemesterTrainingController::class,'index']);
+        Route::post('/training-semesters/legacy', [\App\Http\Controllers\API\Web\Admin\SemesterTrainingController::class,'assignLegacy']);
+        Route::post('/training-semesters/attendance/{id}', [\App\Http\Controllers\API\Web\Admin\SemesterTrainingController::class,'assignLog']);
         Route::get('/academic-years', [AcademicYearController::class, 'index']);
         Route::post('/academic-years', [AcademicYearController::class, 'store']);
         Route::put('/academic-years/{id}', [AcademicYearController::class, 'update']);

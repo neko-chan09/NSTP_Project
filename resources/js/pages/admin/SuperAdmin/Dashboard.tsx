@@ -19,7 +19,7 @@ interface User {
   profile_photo: string;
   initials: string;
   full_name: string;
-  role: "super_admin" | "admin" | "faculty" | "student";
+  role: "super_admin" | "super_admin" | "admin" | "faculty" | "student";
   is_active: boolean;
   created_at: string;
   nstp_component?: string | null;
@@ -31,7 +31,7 @@ interface UserFormData {
   last_name: string;
   email: string;
   password: string;
-  role: "admin" | "faculty";
+  role: "super_admin" | "admin" | "faculty";
   profile_photo?: File | null;
   nstp_component?: string;
   class_code?: string;
@@ -187,6 +187,7 @@ const SuperAdminDashboard: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!editingId && formData.role === "super_admin" && !window.confirm("Create a Super Admin with full system access?")) return;
     try {
       if (editingId) {
         await updateMut.mutateAsync({ id: editingId, data: formData });
@@ -229,7 +230,7 @@ const SuperAdminDashboard: React.FC = () => {
       last_name: user.last_name,
       email: user.email,
       password: "",
-      role: user.role as "admin" | "faculty",
+      role: user.role as "super_admin" | "admin" | "faculty",
       profile_photo: null,
       nstp_component: user.nstp_component || "",
       class_code: user.class_code || "",
@@ -249,7 +250,6 @@ const SuperAdminDashboard: React.FC = () => {
   };
 
   const filteredUsers = users.filter((user: User) => {
-    if (user.role === "super_admin") return false;
     const matchesRole = filterRole === "all" || user.role === filterRole;
     const matchesSearch =
       `${user.first_name} ${user.last_name}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -542,6 +542,7 @@ const SuperAdminDashboard: React.FC = () => {
               onChange={(e) => setFilterRole(e.target.value)}
             >
               <option value="all">All Roles</option>
+              <option value="super_admin">Super Admin</option>
               <option value="admin">Admin</option>
               <option value="faculty">Faculty</option>
             </select>
@@ -634,6 +635,7 @@ const SuperAdminDashboard: React.FC = () => {
                         </td>
                         <td>{new Date(user.created_at).toLocaleDateString()}</td>
                         <td>
+                          {user.role === "super_admin" ? <span className="text-sm text-slate-500">Protected account</span> : (
                           <div className="flex gap-1.5">
                             <button
                               className="btn btn-info btn-sm"
@@ -662,6 +664,7 @@ const SuperAdminDashboard: React.FC = () => {
                               )}
                             </button>
                           </div>
+                          )}
                         </td>
                       </tr>
                     ))
@@ -951,7 +954,7 @@ const SuperAdminDashboard: React.FC = () => {
                     value={formData.password}
                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                     {...(!editingId ? { required: true } : {})}
-                    minLength={6}
+                    minLength={formData.role === "super_admin" ? 12 : 6}
                   />
                 </div>
 
@@ -990,13 +993,14 @@ const SuperAdminDashboard: React.FC = () => {
                     onChange={(e) =>
                       setFormData({
                         ...formData,
-                        role: e.target.value as "admin" | "faculty",
+                        role: e.target.value as "super_admin" | "admin" | "faculty",
                         nstp_component: e.target.value === "faculty" ? formData.nstp_component : "",
                         class_code: e.target.value === "faculty" ? formData.class_code : "",
                       })
                     }
                     required
                   >
+                    {!editingId && <option value="super_admin">Super Admin</option>}
                     <option value="admin">Admin</option>
                     <option value="faculty">Faculty</option>
                   </select>

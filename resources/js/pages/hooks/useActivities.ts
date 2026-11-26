@@ -1,3 +1,4 @@
+import {getCurrentUserId} from '../../lib/token';
 // src/hooks/useActivities.ts
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { adminApi, type Activity } from "../../services/api";
@@ -8,10 +9,11 @@ export function useActivities() {
   const queryClient = useQueryClient();
 
   const query = useQuery<Activity[]>({
-    queryKey: ACTIVITIES_KEY,
+    queryKey: [...ACTIVITIES_KEY,getCurrentUserId()],
     queryFn: () => adminApi.getActivities(),
     staleTime: 30000,
-    refetchInterval: 30000,
+    refetchInterval: 10000,
+    refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
   });
 

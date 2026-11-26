@@ -29,7 +29,7 @@ class AttendanceLog extends Model
     protected $casts = [
         'check_in_at' => 'datetime',
         'time_in_received_at'=>'datetime','time_out_received_at'=>'datetime',
-        'check_out_at'=>'datetime','credited_hours'=>'float',
+        'check_out_at'=>'datetime','credited_hours'=>'float','approved_hours'=>'float','academic_year_id'=>'integer',
         'face_confidence' => 'float',
         'location_lat' => 'float',
         'location_lng' => 'float',

@@ -518,6 +518,9 @@ export const superAdminApi = {
   },
 
   updateUser: async (id: number, data: FormData): Promise<any> => {
+    // PHP parses multipart POST uploads; Laravel routes this request as PUT.
+    // Set at the API boundary so every caller and queued retry includes it.
+    data.set("_method", "PUT");
     return mutateWithQueue(`${API_URL}/superadmin/users/${id}`, "POST", {
       formData: data,
       label: `Update user ${id}`,

@@ -26,7 +26,9 @@ class ActivityArchiveTest extends MonitorRepairTest
         }
         $this->assertSame('Archived title',DB::table('activities')->value('title'));
         $this->assertSame(1,DB::table('activity_participations')->count());
-        Sanctum::actingAs(User::where('role','student')->first());$this->postJson('/api/student/activities/'.$activity->id.'/register')->assertStatus(409);
+        // Give this fixture a valid legacy audience so the assertion reaches the archive guard.
+        $student=User::where('role','student')->first();$student->student->update(['nstp_component_selected'=>'cwts']);
+        Sanctum::actingAs($student);$this->postJson('/api/student/activities/'.$activity->id.'/register')->assertStatus(409);
     }
     public function test_activity_automatically_becomes_read_only_at_scheduled_end():void
     {

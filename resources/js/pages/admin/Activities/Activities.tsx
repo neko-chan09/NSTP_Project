@@ -1,3 +1,5 @@
+import {useQuery} from '@tanstack/react-query';
+import {secureRequest} from '../../../services/secureRequest';
 // src/pages/admin/Activities/Activities.tsx
 
 import React, { useState, useMemo } from "react";
@@ -14,6 +16,7 @@ import LocationPicker from "../../components/common/LocationPicker";
 import toast from "react-hot-toast";
 
 interface ActivityFormData {
+  class_id: number | null;
   title: string;
   description: string;
   component_type: "cwts" | "rotc" | "lts";
@@ -30,6 +33,7 @@ interface ActivityFormData {
 const buildEmptyForm = (
   defaultComponent: "cwts" | "rotc" | "lts" = "cwts"
 ): ActivityFormData => ({
+  class_id: null,
   title: "",
   description: "",
   component_type: defaultComponent,
@@ -113,6 +117,8 @@ const Activities: React.FC = () => {
     refresh,
     isRefreshing,
   } = useActivities();
+  const sectionsQuery=useQuery<{data:Array<{id:number;name:string;component_type:'cwts'|'rotc'|'lts'}>}>({queryKey:['activity-sections',user?.id],queryFn:()=>secureRequest('/activities/sections'),staleTime:10000,refetchOnWindowFocus:true});
+  const sections=sectionsQuery.data?.data??[];
   const createMut = useCreateActivity();
   const updateMut = useUpdateActivity();
   const deleteMut = useDeleteActivity();
@@ -226,12 +232,10 @@ const Activities: React.FC = () => {
 
     setEditingId(activity.id);
     setFormData({
+      class_id: activity.class_id ?? null,
       title: activity.title,
       description: activity.description,
-      component_type:
-        isFaculty && facultyComponent
-          ? (facultyComponent as "cwts" | "rotc" | "lts")
-          : safeComponent,
+      component_type: safeComponent,
       start_datetime: activity.start_datetime?.slice(0, 16) || "",
       end_datetime: activity.end_datetime?.slice(0, 16) || "",
       venue: activity.venue || "",
@@ -278,10 +282,8 @@ const Activities: React.FC = () => {
     }
 
     // ✅ Component is now required — no "all"
-    const resolvedComponent: "cwts" | "rotc" | "lts" =
-      isFaculty && facultyComponent
-        ? (facultyComponent as "cwts" | "rotc" | "lts")
-        : (formData.component_type as "cwts" | "rotc" | "lts");
+    if(isFaculty && !formData.class_id){toast.error("Select an assigned section first");return;}
+    const resolvedComponent: "cwts" | "rotc" | "lts" = formData.component_type;
 
     if (!resolvedComponent) {
       toast.error("Please select a component (CWTS, ROTC, or LTS)");
@@ -1290,66 +1292,20 @@ const Activities: React.FC = () => {
                           Component <span className="text-red-500">*</span>
                         </label>
 
-                        {isFaculty && facultyComponent ? (
-                          <>
-                            <div className="input bg-slate-50 cursor-not-allowed flex items-center gap-2">
-                              <span
-                                className={`badge ${getComponentBadge(
-                                  facultyComponent
-                                )}`}
-                              >
-                                {facultyComponent.toUpperCase()}
-                              </span>
-                              <span className="text-xs text-slate-400 ml-auto">
-                                <i className="fas fa-lock mr-1" />
-                                Locked
-                              </span>
-                            </div>
-                            <p className="text-xs text-slate-400 mt-1">
-                              <i className="fas fa-info-circle mr-1" />
-                              Auto-detected from your faculty profile
-                            </p>
-                          </>
-                        ) : (
-                          <>
-                            <select
-                              className={`input ${touched.component_type &&
-                                validation.component_type
-                                ? "border-red-500 focus:ring-red-500"
-                                : ""
-                                }`}
-                              value={formData.component_type}
-                              onChange={(e) =>
-                                updateField(
-                                  "component_type",
-                                  e.target.value as "cwts" | "rotc" | "lts"
-                                )
-                              }
-                              onBlur={() =>
-                                setTouched((t) => ({
-                                  ...t,
-                                  component_type: true,
-                                }))
-                              }
-                            >
-                              <option value="cwts">CWTS</option>
-                              <option value="rotc">ROTC</option>
-                              <option value="lts">LTS</option>
-                            </select>
-                            {touched.component_type &&
-                              validation.component_type && (
-                                <p className="text-xs text-red-500 mt-1">
-                                  <i className="fas fa-exclamation-circle mr-1" />
-                                  {validation.component_type}
-                                </p>
-                              )}
-                            <p className="text-xs text-slate-400 mt-1">
-                              <i className="fas fa-info-circle mr-1" />
-                              Component is required. “All Components” is no
-                              longer allowed.
-                            </p>
-                          </>
-                        )}
+                        <select className="input" value={formData.component_type} disabled={isFaculty || formData.class_id!==null} onChange={e=>updateField('component_type',e.target.value as 'cwts'|'rotc'|'lts')}>
+                          <option value="cwts">CWTS</option><option value="rotc">ROTC</option><option value="lts">LTS</option>
+                        </select>
+                        <p className="text-xs text-slate-500 mt-1">Selecting a section sets its component automatically.</p>
+                      </div>
+                      <div>
+                        <label className="label">Class / Section {isFaculty ? '*' : '(optional)'}</label>
+                        <select className="input" required={isFaculty} value={formData.class_id??''} disabled={sectionsQuery.isLoading} onChange={e=>{const section=sections.find(s=>s.id===Number(e.target.value));setFormData(prev=>({...prev,class_id:section?.id??null,component_type:section?.component_type??prev.component_type}))}}>
+                          <option value="">{isFaculty?'Select a section assigned to you':'All students in the selected component'}</option>
+                          {sections.map(s=><option key={s.id} value={s.id}>{s.name} · {s.component_type.toUpperCase()}</option>)}
+                        </select>
+                        {sectionsQuery.isError&&<button type="button" className="btn" onClick={()=>sectionsQuery.refetch()}>Could not load sections. Retry</button>}
+                        {isFaculty && !sectionsQuery.isLoading && sections.length===0 && <p className="text-sm text-red-600">Ask an administrator to assign an active class before creating an activity.</p>}
+                        <p className="text-xs text-slate-500">Students actively enrolled in this class will see the activity.</p>
                       </div>
 
                       <div>

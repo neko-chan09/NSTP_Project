@@ -48,6 +48,9 @@ class DashboardController extends Controller
             'success' => true,
             'data' => [
                 'completed_hours' => $student->completed_training_hours,
+                'training_academic_year_id' => $student->training_academic_year_id,
+                'minimum_eligible_hours' => 54,
+                'maximum_credited_hours' => 90,
                 'required_hours' => 90,
                 'completion_percentage' => round(($student->completed_training_hours / 90) * 100, 2),
                 'status' => $student->completion_status,

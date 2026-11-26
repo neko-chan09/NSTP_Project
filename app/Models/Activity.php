@@ -12,6 +12,7 @@ class Activity extends Model
         'title',
         'description',
         'component_type',
+        'class_id',
         'start_datetime',
         'end_datetime',
         'venue',
@@ -35,6 +36,8 @@ class Activity extends Model
         'training_hours' => 'integer',
         'max_participants' => 'integer',
     ];
+
+    public function classGroup() { return $this->belongsTo(ClassGroup::class, 'class_id'); }
 
     public function creator()
     {

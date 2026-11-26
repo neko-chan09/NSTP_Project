@@ -22,9 +22,7 @@ class ActivityMapController extends Controller
 
             // Fetch activity with participants and nested user models
             $query = Activity::with(['creator', 'participations.student.user']);
-            if ($request->user()->role === 'faculty') {
-                $query->where(fn($q) => $q->where('created_by', $request->user()->id)->orWhere('component_type', $request->user()->nstp_component));
-            }
+            app(\App\Services\ActivityAudience::class)->forFaculty($query,$request->user());
             $activity = $query->find($id);
 
             if (!$activity) {
@@ -209,9 +207,7 @@ class ActivityMapController extends Controller
                 ->whereNotNull('latitude')
                 ->whereNotNull('longitude');
 
-            if ($request->user()->role === 'faculty') {
-                $query->where(fn($q) => $q->where('created_by', $request->user()->id)->orWhere('component_type', $request->user()->nstp_component));
-            }
+            app(\App\Services\ActivityAudience::class)->forFaculty($query,$request->user());
 
             // Filter by status
 

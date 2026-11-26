@@ -23,6 +23,7 @@ class Student extends Model
         'year_level',
         'section',
         'nstp_component_selected',
+        'training_academic_year_id',
         'total_training_hours',
         'completed_training_hours',
         'is_eligible_for_completion',
@@ -47,6 +48,15 @@ class Student extends Model
         'serial_no' => 'string',
     ];
 
+    protected static function booted():void {
+        static::saving(function(Student $student){
+            $hours=\App\Services\SemesterTraining::capped((float)($student->completed_training_hours??0));
+            $student->completed_training_hours=$hours;$student->total_training_hours=90;
+            $student->is_eligible_for_completion=\App\Services\SemesterTraining::eligible($hours) && $student->training_academic_year_id!==null;
+            $student->completion_status=$hours>=90?'completed':($hours>=54?'in_progress':'deficient');
+        });
+    }
+
     // ============================================================
     // GRADE SYSTEM METHODS
     // ============================================================
@@ -56,8 +66,8 @@ class Student extends Model
      */
     public function calculateTrainingGrade(): array
     {
-        $required = $this->total_training_hours ?? 90;
-        $completed = $this->completed_training_hours ?? 0;
+        $required = \App\Services\SemesterTraining::MAXIMUM;
+        $completed = \App\Services\SemesterTraining::capped((float)($this->completed_training_hours ?? 0));
 
         // Calculate percentage
         $percentage = $required > 0 ? round(($completed / $required) * 100, 2) : 0;
@@ -70,7 +80,7 @@ class Student extends Model
             'grade' => $grade['grade'],
             'grade_label' => $grade['label'],
             'grade_description' => $grade['description'],
-            'is_passing' => $percentage >= 60,
+            'is_passing' => \App\Services\SemesterTraining::eligible($completed),
             'is_excellent' => $percentage >= 90,
             'is_good' => $percentage >= 75,
         ];
@@ -140,7 +150,7 @@ class Student extends Model
      */
     private function determineCompletionStatus(array $gradeData): string
     {
-        if ($gradeData['is_excellent']) {
+        if (($this->completed_training_hours??0) >= 90) {
             return 'completed';
         }
 

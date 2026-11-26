@@ -1,7 +1,6 @@
 // src/components/common/StudentDetailsModal.tsx
 import React from "react";
 import type { Student } from "../../../types/api";
-import { useAuth } from "../../hooks/useAuth";
 import toast from "react-hot-toast";
 
 interface StudentDetailsModalProps {
@@ -13,10 +12,7 @@ const StudentDetailsModal: React.FC<StudentDetailsModalProps> = ({
   student,
   onClose,
 }) => {
-  const { user, isAdmin, isSuperAdmin, isFaculty } = useAuth();
 
-  // Check if user has edit permissions (Admin or Super Admin only)
-  const canEdit = isAdmin || isSuperAdmin;
 
   // Format date
   const formatDate = (dateString?: string) => {
@@ -351,44 +347,6 @@ const StudentDetailsModal: React.FC<StudentDetailsModalProps> = ({
             </div>
           )}
 
-          {/* Quick Actions - HIDDEN FOR FACULTY */}
-          {canEdit && (
-            <div>
-              <h4 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-3 flex items-center gap-2">
-                <i className="fas fa-bolt text-gold-500" />
-                Quick Actions
-              </h4>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  className="btn btn-info btn-sm"
-                  onClick={() => {
-                    onClose();
-                    // Navigate to edit - you can implement this
-                  }}
-                >
-                  <i className="fas fa-edit" /> Edit Student
-                </button>
-                <button
-                  className="btn btn-primary btn-sm"
-                  onClick={() => {
-                    copyToClipboard(student.student_id);
-                  }}
-                >
-                  <i className="fas fa-copy" /> Copy ID
-                </button>
-                <button
-                  className="btn btn-success btn-sm"
-                  onClick={() => {
-                    // Generate certificate - you can implement this
-                  }}
-                >
-                  <i className="fas fa-certificate" /> Generate Certificate
-                </button>
-              </div>
-            </div>
-          )}
-
-          
         </div>
 
         {/* Footer */}
@@ -399,19 +357,9 @@ const StudentDetailsModal: React.FC<StudentDetailsModalProps> = ({
             <span>Updated: {formatDate(student.updated_at)}</span>
           </div>
           <button className="btn btn-secondary" onClick={onClose}>
-            {isFaculty ? "Close" : "Close"}
+            Close
           </button>
-          {canEdit && (
-            <button
-              className="btn btn-primary"
-              onClick={() => {
-                onClose();
-                // Navigate to edit - you can implement this
-              }}
-            >
-              <i className="fas fa-edit" /> Edit Student
-            </button>
-          )}
+
         </div>
       </div>
     </div>

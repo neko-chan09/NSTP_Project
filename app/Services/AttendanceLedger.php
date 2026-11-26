@@ -16,9 +16,12 @@ class AttendanceLedger {
             $out=$end && $log->check_out_at->gt($end) ? $end : $log->check_out_at;
             $hours=round(max(0,$in->diffInSeconds($out,false))/3600,2);
         }
-        $delta=round($hours-(float)$log->credited_hours,2);
-        $log->credited_hours=$hours;$log->save();
-        if($delta!=0){$student->completed_training_hours=max(0,(float)$student->completed_training_hours+$delta);$student->save();$student->updateTrainingGrade();}
+        $service=app(SemesterTraining::class);
+        $period=$service->periodFor($session,$log->academic_year_id?(int)$log->academic_year_id:null);
+        $log->forceFill(['academic_year_id'=>$period,'approved_hours'=>$hours]);$log->save();
+        $service->rebuild($student,$period);
+        $log->refresh();
+
     }
     public function afterEnd(AttendanceSession $session, Carbon $time): bool {
         $end=$session->scheduled_end ?? $session->end_time;
