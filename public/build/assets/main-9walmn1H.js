@@ -7913,9 +7913,10 @@ const adminApi = {
         }
       });
     }
+    query.set("_fresh", `${Date.now()}-${Math.random().toString(36).slice(2)}`);
     const response = await fetch(
       `${API_URL}/admin/students?${query.toString()}`,
-      { headers: headers() }
+      { headers: headers(), cache: "no-store" }
     );
     const result = await handleResponse(response);
     return {
@@ -37363,7 +37364,7 @@ const GenerateCertificate = () => {
   const [filterCourse, setFilterCourse] = reactExports.useState("");
   const [filterSection, setFilterSection] = reactExports.useState("");
   const [filterEligibility, setFilterEligibility] = reactExports.useState("");
-  const { data, isLoading, isFetching, refresh, isRefreshing } = useStudents({
+  const { data, isLoading, isFetching, isError, refresh, isRefreshing } = useStudents({
     search: search || void 0,
     component: filterComponent || void 0,
     course: filterCourse || void 0,
@@ -37437,6 +37438,12 @@ const GenerateCertificate = () => {
     setPage(1);
   };
   const hasActiveFilters = filterComponent || filterCourse || filterSection || filterEligibility || search;
+  if (isError) {
+    return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { role: "alert", className: "p-6 text-red-700", children: [
+      "Could not load students. Check your connection and try again. ",
+      /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "underline", onClick: () => refresh(), children: "Retry" })
+    ] });
+  }
   if (isLoading) {
     return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-center py-16", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "spinner" }),
@@ -51270,4 +51277,4 @@ startSyncEngine();
 ReactDOM.createRoot(document.getElementById("root")).render(
   /* @__PURE__ */ jsxRuntimeExports.jsx(React.StrictMode, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(App, {}) })
 );
-//# sourceMappingURL=main-CMAO8-Ub.js.map
+//# sourceMappingURL=main-9walmn1H.js.map

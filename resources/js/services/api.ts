@@ -715,9 +715,11 @@ export const adminApi = {
         }
       });
     }
+    // Unique URL also bypasses older installed service workers caching student lists.
+    query.set("_fresh", `${Date.now()}-${Math.random().toString(36).slice(2)}`);
     const response = await fetch(
       `${API_URL}/admin/students?${query.toString()}`,
-      { headers: headers() },
+      { headers: headers(), cache: "no-store" },
     );
     const result = await handleResponse(response);
     return {

@@ -25,7 +25,7 @@ const GenerateCertificate: React.FC = () => {
   const [filterEligibility, setFilterEligibility] = useState('');
 
   // Fetch students with filters
-  const { data, isLoading, isFetching, refresh, isRefreshing } = useStudents({
+  const { data, isLoading, isFetching, isError, refresh, isRefreshing } = useStudents({
     search: search || undefined,
     component: filterComponent || undefined,
     course: filterCourse || undefined,
@@ -116,6 +116,10 @@ const GenerateCertificate: React.FC = () => {
   };
 
   const hasActiveFilters = filterComponent || filterCourse || filterSection || filterEligibility || search;
+
+  if (isError) {
+    return <div role="alert" className="p-6 text-red-700">Could not load students. Check your connection and try again. <button className="underline" onClick={() => refresh()}>Retry</button></div>;
+  }
 
   if (isLoading) {
     return (

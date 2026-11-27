@@ -85,7 +85,11 @@ class StudentController extends Controller
 
         // Filter by eligibility
         if ($request->filled('eligible')) {
-            $query->where('is_eligible_for_completion', $request->eligible === 'true');
+            $eligible = filter_var($request->input('eligible'), FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+            if ($eligible === null) {
+                return response()->json(['message' => 'Eligibility must be true, false, 1 or 0.'], 422);
+            }
+            $query->where('is_eligible_for_completion', $eligible);
         }
 
         // Filter by course
@@ -159,7 +163,7 @@ class StudentController extends Controller
                 'from' => $paginatedData->isEmpty() ? 0 : (($currentPage - 1) * $perPage) + 1,
                 'to' => $paginatedData->isEmpty() ? 0 : (($currentPage - 1) * $perPage) + $paginatedData->count(),
             ]
-        ]);
+        ], 200, ['Cache-Control' => 'private, no-store, max-age=0']);
     }
 
     /**
