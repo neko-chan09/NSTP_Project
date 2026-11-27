@@ -22,6 +22,7 @@ const GenerateCertificate: React.FC = () => {
   const [filterComponent, setFilterComponent] = useState('');
   const [filterCourse, setFilterCourse] = useState('');
   const [filterSection, setFilterSection] = useState('');
+  const [filterEligibility, setFilterEligibility] = useState('');
 
   // Fetch students with filters
   const { data, isLoading, isFetching, refresh, isRefreshing } = useStudents({
@@ -29,6 +30,7 @@ const GenerateCertificate: React.FC = () => {
     component: filterComponent || undefined,
     course: filterCourse || undefined,
     section: filterSection || undefined,
+    eligible: filterEligibility || undefined,
     page,
     per_page: 20,
   });
@@ -96,6 +98,8 @@ const GenerateCertificate: React.FC = () => {
 
   const handleFilterChange = (type: string, value: string) => {
     setPage(1);
+    setSelectedStudents([]);
+    if (type === 'eligibility') setFilterEligibility(value);
     if (type === 'component') setFilterComponent(value);
     if (type === 'course') setFilterCourse(value);
     if (type === 'section') setFilterSection(value);
@@ -105,11 +109,13 @@ const GenerateCertificate: React.FC = () => {
     setFilterComponent('');
     setFilterCourse('');
     setFilterSection('');
+    setFilterEligibility('');
+    setSelectedStudents([]);
     setSearch('');
     setPage(1);
   };
 
-  const hasActiveFilters = filterComponent || filterCourse || filterSection || search;
+  const hasActiveFilters = filterComponent || filterCourse || filterSection || filterEligibility || search;
 
   if (isLoading) {
     return (
@@ -139,7 +145,7 @@ const GenerateCertificate: React.FC = () => {
           <button
             className="btn btn-primary"
             onClick={handleGenerate}
-            disabled={generateMut.isPending || selectedStudents.length === 0 || (templateMode === 'saved' && (!designQuery.data || designQuery.isFetching || designQuery.isError))}
+            disabled={isFetching || generateMut.isPending || selectedStudents.length === 0 || (templateMode === 'saved' && (!designQuery.data || designQuery.isFetching || designQuery.isError))}
           >
             {generateMut.isPending ? (
               <><i className="fas fa-spinner fa-spin" /> Generating...</>
@@ -175,6 +181,7 @@ const GenerateCertificate: React.FC = () => {
               value={search}
               onChange={(e) => {
                 setSearch(e.target.value);
+                setSelectedStudents([]);
                 setPage(1);
               }}
             />
@@ -217,6 +224,16 @@ const GenerateCertificate: React.FC = () => {
         <div className="flex justify-between items-center mt-3 pt-3 border-t border-slate-100 flex-wrap gap-2">
           <div className="flex gap-3 flex-wrap">
             <select
+              aria-label="Filter by eligibility"
+              className="px-4 py-2 border border-slate-200 rounded-lg bg-white text-sm focus:outline-none focus:ring-2 focus:ring-gold-500"
+              value={filterEligibility}
+              onChange={(e) => handleFilterChange('eligibility', e.target.value)}
+            >
+              <option value="">All Eligibility</option>
+              <option value="true">Eligible</option>
+              <option value="false">Not Eligible</option>
+            </select>
+            <select
               className="px-4 py-2 border border-slate-200 rounded-lg bg-white text-sm focus:outline-none focus:ring-2 focus:ring-gold-500"
               value={certType}
               onChange={(e) => { setCertType(e.target.value as CertificateType); setSelectedStudents([]); setTemplateMode('default'); }}
@@ -225,7 +242,7 @@ const GenerateCertificate: React.FC = () => {
               <option value="participation">Participation</option>
               <option value="training">Training</option>
             </select>
-            <button className="btn btn-secondary btn-sm" onClick={handleSelectAll}>
+            <button className="btn btn-secondary btn-sm" onClick={handleSelectAll} disabled={isFetching || selectable.length === 0}>
               {allSelected
                 ? 'Deselect All'
                 : 'Select All'}
@@ -259,7 +276,7 @@ const GenerateCertificate: React.FC = () => {
                     checked={allSelected}
                     onChange={handleSelectAll}
                     className="w-4 h-4 accent-gold-500"
-                    disabled={selectable.length === 0}
+                    disabled={isFetching || selectable.length === 0}
                   />
                 </th>
                 <th>OCC ID</th>
@@ -295,7 +312,7 @@ const GenerateCertificate: React.FC = () => {
                         checked={selectedStudents.includes(student.id)}
                         onChange={() => handleSelect(student.id)}
                         className="w-4 h-4 accent-gold-500"
-                        disabled={certType === 'completion' && !student.is_eligible_for_completion}
+                        disabled={isFetching || (certType === 'completion' && !student.is_eligible_for_completion)}
                       />
                     </td>
                     <td className="font-bold text-navy-900">{student.student_id}</td>

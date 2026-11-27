@@ -37362,11 +37362,13 @@ const GenerateCertificate = () => {
   const [filterComponent, setFilterComponent] = reactExports.useState("");
   const [filterCourse, setFilterCourse] = reactExports.useState("");
   const [filterSection, setFilterSection] = reactExports.useState("");
+  const [filterEligibility, setFilterEligibility] = reactExports.useState("");
   const { data, isLoading, isFetching, refresh, isRefreshing } = useStudents({
     search: search || void 0,
     component: filterComponent || void 0,
     course: filterCourse || void 0,
     section: filterSection || void 0,
+    eligible: filterEligibility || void 0,
     page,
     per_page: 20
   });
@@ -37419,6 +37421,8 @@ const GenerateCertificate = () => {
   };
   const handleFilterChange = (type, value) => {
     setPage(1);
+    setSelectedStudents([]);
+    if (type === "eligibility") setFilterEligibility(value);
     if (type === "component") setFilterComponent(value);
     if (type === "course") setFilterCourse(value);
     if (type === "section") setFilterSection(value);
@@ -37427,10 +37431,12 @@ const GenerateCertificate = () => {
     setFilterComponent("");
     setFilterCourse("");
     setFilterSection("");
+    setFilterEligibility("");
+    setSelectedStudents([]);
     setSearch("");
     setPage(1);
   };
-  const hasActiveFilters = filterComponent || filterCourse || filterSection || search;
+  const hasActiveFilters = filterComponent || filterCourse || filterSection || filterEligibility || search;
   if (isLoading) {
     return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center justify-center py-16", children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "spinner" }),
@@ -37457,7 +37463,7 @@ const GenerateCertificate = () => {
           {
             className: "btn btn-primary",
             onClick: handleGenerate,
-            disabled: generateMut.isPending || selectedStudents.length === 0 || templateMode === "saved" && (!designQuery.data || designQuery.isFetching || designQuery.isError),
+            disabled: isFetching || generateMut.isPending || selectedStudents.length === 0 || templateMode === "saved" && (!designQuery.data || designQuery.isFetching || designQuery.isError),
             children: generateMut.isPending ? /* @__PURE__ */ jsxRuntimeExports.jsxs(jsxRuntimeExports.Fragment, { children: [
               /* @__PURE__ */ jsxRuntimeExports.jsx("i", { className: "fas fa-spinner fa-spin" }),
               " Generating..."
@@ -37504,6 +37510,7 @@ const GenerateCertificate = () => {
               value: search,
               onChange: (e2) => {
                 setSearch(e2.target.value);
+                setSelectedStudents([]);
                 setPage(1);
               }
             }
@@ -37556,6 +37563,20 @@ const GenerateCertificate = () => {
           /* @__PURE__ */ jsxRuntimeExports.jsxs(
             "select",
             {
+              "aria-label": "Filter by eligibility",
+              className: "px-4 py-2 border border-slate-200 rounded-lg bg-white text-sm focus:outline-none focus:ring-2 focus:ring-gold-500",
+              value: filterEligibility,
+              onChange: (e2) => handleFilterChange("eligibility", e2.target.value),
+              children: [
+                /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "", children: "All Eligibility" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "true", children: "Eligible" }),
+                /* @__PURE__ */ jsxRuntimeExports.jsx("option", { value: "false", children: "Not Eligible" })
+              ]
+            }
+          ),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs(
+            "select",
+            {
               className: "px-4 py-2 border border-slate-200 rounded-lg bg-white text-sm focus:outline-none focus:ring-2 focus:ring-gold-500",
               value: certType,
               onChange: (e2) => {
@@ -37570,7 +37591,7 @@ const GenerateCertificate = () => {
               ]
             }
           ),
-          /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-secondary btn-sm", onClick: handleSelectAll, children: allSelected ? "Deselect All" : "Select All" })
+          /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-secondary btn-sm", onClick: handleSelectAll, disabled: isFetching || selectable.length === 0, children: allSelected ? "Deselect All" : "Select All" })
         ] }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "flex items-center gap-3 flex-wrap", children: [
           /* @__PURE__ */ jsxRuntimeExports.jsxs("span", { className: "text-sm text-slate-500", children: [
@@ -37598,7 +37619,7 @@ const GenerateCertificate = () => {
             checked: allSelected,
             onChange: handleSelectAll,
             className: "w-4 h-4 accent-gold-500",
-            disabled: selectable.length === 0
+            disabled: isFetching || selectable.length === 0
           }
         ) }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "OCC ID" }),
@@ -37623,7 +37644,7 @@ const GenerateCertificate = () => {
             checked: selectedStudents.includes(student.id),
             onChange: () => handleSelect(student.id),
             className: "w-4 h-4 accent-gold-500",
-            disabled: certType === "completion" && !student.is_eligible_for_completion
+            disabled: isFetching || certType === "completion" && !student.is_eligible_for_completion
           }
         ) }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("td", { className: "font-bold text-navy-900", children: student.student_id }),
@@ -51249,4 +51270,4 @@ startSyncEngine();
 ReactDOM.createRoot(document.getElementById("root")).render(
   /* @__PURE__ */ jsxRuntimeExports.jsx(React.StrictMode, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(App, {}) })
 );
-//# sourceMappingURL=main-BRkJbGDB.js.map
+//# sourceMappingURL=main-CMAO8-Ub.js.map
