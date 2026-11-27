@@ -9752,6 +9752,27 @@ function SessionEditor({ session, onSaved }) {
     ] })
   ] });
 }
+const attendanceStatuses = ["all", "present", "late", "absent", "excused", "not_recorded"];
+const attendanceLabel = (value) => ({ all: "All", present: "Present", late: "Late", absent: "Absent", excused: "Excused", not_recorded: "Not recorded" })[value] ?? value;
+function classRecordRows(students, logs) {
+  const byStudent = /* @__PURE__ */ new Map();
+  for (const log2 of logs) {
+    const previous = byStudent.get(Number(log2.student_id));
+    if (!previous || log2.id > previous.id) byStudent.set(Number(log2.student_id), log2);
+  }
+  return students.map((student) => {
+    const log2 = byStudent.get(Number(student.id));
+    return { student, log: log2, status: log2 ? log2.attendance_mark || log2.status || "not_recorded" : "not_recorded" };
+  });
+}
+function filterClassRecordRows(rows, search, status) {
+  const words = search.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
+  return rows.filter((row) => {
+    const { student } = row;
+    const text = [student.student_id, student.user?.first_name, student.user?.middle_name, student.user?.last_name].filter(Boolean).join(" ").toLocaleLowerCase();
+    return (status === "all" || row.status === status) && words.every((word) => text.includes(word));
+  });
+}
 var reactDomExports = requireReactDom();
 function _extends$2() {
   return _extends$2 = Object.assign ? Object.assign.bind() : function(n2) {
@@ -14868,6 +14889,8 @@ function DirectoryFilters({ course, section, onCourse, onSection }) {
 const localInput = phtInput;
 function ClassRecord({ classId }) {
   const [sessionPage, setSessionPage] = reactExports.useState(1);
+  const [search, setSearch] = reactExports.useState("");
+  const [statusFilter, setStatusFilter] = reactExports.useState("all");
   const params = useParams();
   const id = classId ?? Number(params.id);
   const [course, setCourse] = reactExports.useState(""), [section, setSection] = reactExports.useState(""), [session, setSession] = reactExports.useState(""), [student, setStudent] = reactExports.useState(""), [mark, setMark] = reactExports.useState("present"), [timeIn, setTimeIn] = reactExports.useState(""), [timeOut, setTimeOut] = reactExports.useState(""), [review, setReview] = reactExports.useState("approved"), [reason, setReason] = reactExports.useState(""), [busy, setBusy] = reactExports.useState(false), [message, setMessage] = reactExports.useState("");
@@ -14876,8 +14899,15 @@ function ClassRecord({ classId }) {
   const data = query.data?.data;
   const sessionId = Number(session || data?.sessions[0]?.id);
   const current = data?.sessions.find((s2) => s2.id === sessionId);
-  const people = new Set(data?.students.map((s2) => s2.id));
-  const logs = current?.logs.filter((l2) => people.has(l2.student_id)) ?? [];
+  const roster = current ? classRecordRows(data?.students ?? [], current.logs ?? []) : [];
+  const visibleRows = filterClassRecordRows(roster, search, statusFilter);
+  reactExports.useEffect(() => {
+    setStudent("");
+    setTimeIn("");
+    setTimeOut("");
+    setReason("");
+    setMessage("");
+  }, [id, sessionId]);
   async function save(e2) {
     e2.preventDefault();
     if (lock.current) return;
@@ -14896,10 +14926,7 @@ function ClassRecord({ classId }) {
     }
   }
   function csv() {
-    const rows = [["Student ID", "Name", "Course", "Section", "Time in (PHT)", "Time out (PHT)", "Status", "Review", "Hours"], ...logs.map((l2) => {
-      const s2 = data.students.find((s22) => s22.id === l2.student_id);
-      return [s2.student_id, `${s2.user?.first_name ?? ""} ${s2.user?.last_name ?? ""}`, s2.course, s2.section, phtTime(l2.check_in_at), phtTime(l2.check_out_at), l2.attendance_mark || l2.status, l2.review_status, l2.credited_hours];
-    })];
+    const rows = [["Student ID", "Name", "Course", "Section", "Time in (PHT)", "Time out (PHT)", "Status", "Review", "Hours"], ...visibleRows.map(({ student: s2, log: l2, status }) => [s2.student_id, `${s2.user?.first_name ?? ""} ${s2.user?.last_name ?? ""}`, s2.course, s2.section, phtTime(l2?.check_in_at), phtTime(l2?.check_out_at), attendanceLabel(status), l2?.review_status ?? "No submission", l2?.review_status === "approved" && l2?.check_in_at && l2?.check_out_at ? l2.credited_hours ?? 0 : 0])];
     const content = rows.map((r) => r.map((v2) => '"' + String(v2 ?? "").replace(/^[=+@-]/, "'").replaceAll('"', '""') + '"').join(",")).join("\r\n");
     const url = URL.createObjectURL(new Blob([content], { type: "text/csv" }));
     const a2 = document.createElement("a");
@@ -14955,6 +14982,24 @@ function ClassRecord({ classId }) {
         /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-secondary", onClick: () => query.refetch(), children: "Refresh" }),
         /* @__PURE__ */ jsxRuntimeExports.jsx("button", { className: "btn btn-secondary", onClick: csv, disabled: !current, children: "Export filtered CSV" })
       ] }),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "space-y-3", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("label", { className: "block text-sm font-medium", children: [
+          "Search student name or ID",
+          /* @__PURE__ */ jsxRuntimeExports.jsx("input", { type: "search", className: "input w-full", placeholder: "Search name or student ID", value: search, onChange: (e2) => setSearch(e2.target.value) })
+        ] }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "flex gap-2 flex-wrap", role: "group", "aria-label": "Attendance status filters", children: attendanceStatuses.map((status) => /* @__PURE__ */ jsxRuntimeExports.jsxs("button", { type: "button", "aria-pressed": statusFilter === status, className: `btn ${statusFilter === status ? "btn-primary" : "btn-secondary"}`, onClick: () => setStatusFilter(status), children: [
+          attendanceLabel(status),
+          " · ",
+          status === "all" ? roster.length : roster.filter((row) => row.status === status).length
+        ] }, status)) }),
+        /* @__PURE__ */ jsxRuntimeExports.jsxs("p", { className: "text-sm text-slate-600", role: "status", children: [
+          visibleRows.length,
+          " of ",
+          roster.length,
+          " enrolled students shown",
+          query.isFetching ? " · Updating…" : ""
+        ] })
+      ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "overflow-x-auto", children: /* @__PURE__ */ jsxRuntimeExports.jsxs("table", { className: "w-full text-sm", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("thead", { children: /* @__PURE__ */ jsxRuntimeExports.jsxs("tr", { children: [
           /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Student" }),
@@ -14965,53 +15010,51 @@ function ClassRecord({ classId }) {
           /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Hours" }),
           /* @__PURE__ */ jsxRuntimeExports.jsx("th", { children: "Action" })
         ] }) }),
-        /* @__PURE__ */ jsxRuntimeExports.jsx("tbody", { children: logs.map((l2) => {
-          const s2 = data.students.find((s22) => s22.id === l2.student_id);
-          return /* @__PURE__ */ jsxRuntimeExports.jsxs("tr", { className: "border-b", children: [
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("td", { className: "p-2", children: [
-              s2?.user?.first_name,
-              " ",
-              s2?.user?.last_name,
-              /* @__PURE__ */ jsxRuntimeExports.jsx("br", {}),
-              s2?.student_id
-            ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("td", { children: [
-              s2?.course,
-              " / ",
-              s2?.section
-            ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("td", { children: [
-              l2.check_in_at ? phtTime(l2.check_in_at) : "—",
-              l2.time_in_received_at && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-xs text-slate-500", children: [
-                "Received: ",
-                phtTime(l2.time_in_received_at)
-              ] })
-            ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("td", { children: [
-              l2.check_out_at ? phtTime(l2.check_out_at) : "—",
-              l2.time_out_received_at && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-xs text-slate-500", children: [
-                "Received: ",
-                phtTime(l2.time_out_received_at)
-              ] })
-            ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsxs("td", { children: [
-              l2.attendance_mark || l2.status,
-              " · ",
-              l2.review_status === "pending" ? "Pending faculty review" : l2.review_status
-            ] }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: l2.check_in_at && !l2.check_out_at ? "Waiting for time-out" : l2.credited_hours }),
-            /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "btn btn-sm", onClick: () => {
-              setStudent(String(l2.student_id));
-              setMark(l2.attendance_mark || l2.status);
-              setTimeIn(localInput(l2.check_in_at));
-              setTimeOut(localInput(l2.check_out_at));
-              setReview("approved");
-              setReason("");
-            }, children: "Review / correct" }) })
-          ] }, l2.id);
-        }) })
+        /* @__PURE__ */ jsxRuntimeExports.jsx("tbody", { children: visibleRows.map(({ student: s2, log: l2, status }) => /* @__PURE__ */ jsxRuntimeExports.jsxs("tr", { className: "border-b", children: [
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("td", { className: "p-2", children: [
+            s2.user?.first_name,
+            " ",
+            s2.user?.last_name,
+            /* @__PURE__ */ jsxRuntimeExports.jsx("br", {}),
+            s2.student_id
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("td", { children: [
+            s2.course,
+            " / ",
+            s2.section
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("td", { children: [
+            phtTime(l2?.check_in_at),
+            l2?.time_in_received_at && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-xs text-slate-500", children: [
+              "Received: ",
+              phtTime(l2.time_in_received_at)
+            ] })
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("td", { children: [
+            phtTime(l2?.check_out_at),
+            l2?.time_out_received_at && /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "text-xs text-slate-500", children: [
+              "Received: ",
+              phtTime(l2.time_out_received_at)
+            ] })
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsxs("td", { children: [
+            attendanceLabel(status),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("br", {}),
+            /* @__PURE__ */ jsxRuntimeExports.jsx("span", { className: "text-xs text-slate-500", children: !l2 ? "No submission" : l2.review_status === "pending" ? "Pending faculty review" : l2.review_status })
+          ] }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: !l2 ? "0" : l2.check_in_at && !l2.check_out_at ? "Waiting for time-out" : l2.review_status !== "approved" ? "0 · No approved credit" : l2.credited_hours ?? 0 }),
+          /* @__PURE__ */ jsxRuntimeExports.jsx("td", { children: /* @__PURE__ */ jsxRuntimeExports.jsx("button", { type: "button", className: "btn btn-sm", onClick: () => {
+            setStudent(String(s2.id));
+            setMark(["present", "late", "absent", "excused"].includes(status) ? status : "present");
+            setTimeIn(localInput(l2?.check_in_at));
+            setTimeOut(localInput(l2?.check_out_at));
+            setReview("approved");
+            setReason("");
+          }, children: l2 ? "Review / correct" : "Record attendance" }) })
+        ] }, s2.id)) })
       ] }) }),
-      logs.length === 0 && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: "No attendance recorded for this selection." }),
+      visibleRows.length === 0 && /* @__PURE__ */ jsxRuntimeExports.jsx("p", { children: !current ? "Select an attendance session to view its roster." : "No students match these filters." }),
+      /* @__PURE__ */ jsxRuntimeExports.jsx("p", { className: "text-sm text-slate-600", children: "Not recorded means no attendance submission. Confirm Absent or Excused through a recorded correction with a reason." }),
       /* @__PURE__ */ jsxRuntimeExports.jsxs("form", { onSubmit: save, className: "space-y-3 border-t pt-4", children: [
         /* @__PURE__ */ jsxRuntimeExports.jsx("h3", { className: "font-semibold", children: "Manual attendance / correction" }),
         /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "grid sm:grid-cols-2 gap-3", children: [
@@ -51277,4 +51320,4 @@ startSyncEngine();
 ReactDOM.createRoot(document.getElementById("root")).render(
   /* @__PURE__ */ jsxRuntimeExports.jsx(React.StrictMode, { children: /* @__PURE__ */ jsxRuntimeExports.jsx(App, {}) })
 );
-//# sourceMappingURL=main-9walmn1H.js.map
+//# sourceMappingURL=main-DoQ1B9lR.js.map
